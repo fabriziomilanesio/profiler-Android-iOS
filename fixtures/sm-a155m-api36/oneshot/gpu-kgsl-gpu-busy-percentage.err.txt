@@ -1,0 +1,3 @@
+# comando: cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage
+# exit code: 1
+cat: /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage: No such file or directory

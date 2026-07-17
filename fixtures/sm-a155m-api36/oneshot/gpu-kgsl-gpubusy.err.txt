@@ -1,0 +1,3 @@
+# comando: cat /sys/class/kgsl/kgsl-3d0/gpubusy
+# exit code: 1
+cat: /sys/class/kgsl/kgsl-3d0/gpubusy: No such file or directory

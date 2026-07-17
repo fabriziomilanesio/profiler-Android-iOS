@@ -1,0 +1,2 @@
+ ------------RE GLES (Ganesh)------------
+GLES: ARM, Mali-G57 MC2, OpenGL ES 3.2 v1.r54p1-12eac0.31596c752a7e2ed34e05ad43c82dd58d

@@ -1,0 +1,72 @@
+Applications Memory Usage (in Kilobytes):
+Uptime: 34230038 Realtime: 377247024
+
+** MEMINFO in pid 18078 [com.evermore.oda.qa] **
+                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap    43239    43200        4    18279    44092    81036    74925     6110
+  Dalvik Heap    13561     8096     5316      100    14660    19425     9713     9712
+ Dalvik Other     7147     6936      172     5042     7612                           
+        Stack     4148     4148        0     1360     4152                           
+       Ashmem       46        0        0        0      648                           
+    Other dev       40        4       20        0      512                           
+     .so mmap    93979    34812    46300    11333   132844                           
+    .jar mmap     2841        0      704        0    26236                           
+    .apk mmap     2584        0      640        0     8360                           
+    .dex mmap    41776       16    41672       12    42664                           
+    .oat mmap      703        0       40        0    12704                           
+    .art mmap     6164     2136     2844      200    19560                           
+   Other mmap    12410        4    12336        0    13160                           
+   EGL mtrack    22170    22170        0        0    22170                           
+    GL mtrack   422916   422916        0        0   422916                           
+      Unknown   145674   144988      640    81808   146244                           
+        TOTAL   937532   689426   110688   118134   918534   100461    84638    15822
+ 
+ App Summary
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:    13076                          34220
+         Native Heap:    43200                          44092
+                Code:   124184                         222844
+               Stack:     4148                           4152
+            Graphics:   445086                         445086
+       Private Other:   170420
+              System:   137418
+             Unknown:                                  168140
+ 
+           TOTAL PSS:   937532            TOTAL RSS:   918534       TOTAL SWAP PSS:   118134
+ 
+ Objects
+               Views:       15         ViewRootImpl:        1
+         AppContexts:       23           Activities:        1
+              Assets:       42        AssetManagers:        0
+       Local Binders:      101        Proxy Binders:       94
+       Parcel memory:       48         Parcel count:      171
+    Death Recipients:        6             WebViews:        0
+ 
+ Native Allocations
+                         Count                       Total(kB)
+                        ------                         ------
+    Other (malloced):      403                             37
+ Other (nonmalloced):      210                            133
+ 
+ SQL
+         MEMORY_USED:      783
+  PAGECACHE_OVERFLOW:      359          MALLOC_SIZE:       46
+ 
+ DATABASES
+      pgsz     dbsz   Lookaside(b) cache hits cache misses cache size  Dbname
+PER CONNECTION STATS
+         4       84             95   225    42    10  /data/user/0/com.evermore.oda.qa/databases/ttopensdk.db
+         4       56            122    56    78    17  /data/user/0/com.evermore.oda.qa/databases/com.google.android.datatransport.events
+         4      104            114     5    69     7  /data/user/0/com.evermore.oda.qa/no_backup/androidx.work.workdb
+         4        8                    0     0     0    (attached) temp
+         4      104             21     1    25     1  /data/user/0/com.evermore.oda.qa/no_backup/androidx.work.workdb (3)
+         4      220            123   567   155    22  /data/user/0/com.evermore.oda.qa/databases/firestore.%5BDEFAULT%5D.evermore-qa-oda.%28default%29
+POOL STATS
+     cache hits  cache misses    cache size  Dbname
+            225            43           268  /data/user/0/com.evermore.oda.qa/databases/ttopensdk.db
+             56            79           135  /data/user/0/com.evermore.oda.qa/databases/com.google.android.datatransport.events
+             12           122           134  /data/user/0/com.evermore.oda.qa/no_backup/androidx.work.workdb
+            567           156           723  /data/user/0/com.evermore.oda.qa/databases/firestore.%5BDEFAULT%5D.evermore-qa-oda.%28default%29

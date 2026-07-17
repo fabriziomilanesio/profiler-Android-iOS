@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.env*
+.logs/
+coverage/
+# exports del inspector (contienen headers/cookies del tráfico capturado)
+*.har
+# capturas de device sin redactar: scrubear antes de mover a fixtures/
+fixtures/**/raw/

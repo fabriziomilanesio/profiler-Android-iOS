@@ -1,0 +1,92 @@
+// Tipos del dominio del profiler (ticket 021). El shape de `Sample` es el contrato
+// entre el sampler (backend) y el dashboard (UI): cada tick emite un `Sample`.
+//
+// Convención "no disponible" = null explícito. Un collector que no pudo leer su
+// métrica en este device marca su campo (o sub-campo) null; el UI lo dibuja como
+// N/A. Nunca se usa 0 para "no disponible" (0 es un valor legítimo).
+
+/** Composición de memoria (PSS por categoría, en MB). null = categoría no reportada. */
+export interface MemBreakdown {
+  /** Java Heap (App Summary) */
+  java: number | null
+  /** Native Heap */
+  native: number | null
+  /** Graphics (EGL + GL mtrack; 0 real ⇒ memtrack HAL ausente ⇒ null) */
+  graphics: number | null
+  /** Code (.so/.dex/.oat/.apk/.art) */
+  code: number | null
+  /** Stack */
+  stack: number | null
+  /** Private Other + System (todo lo demás del App Summary) */
+  other: number | null
+}
+
+/** Muestra de memoria: total PSS + breakdown. */
+export interface MemSample {
+  /** TOTAL PSS del App Summary, en MB */
+  pss: number | null
+  java: number | null
+  native: number | null
+  graphics: number | null
+  code: number | null
+  stack: number | null
+  other: number | null
+}
+
+/** Estado de batería (`dumpsys battery`). */
+export interface BatterySample {
+  /** nivel 0–100 (%) */
+  levelPct: number | null
+  /** temperatura en °C (deci-°C ÷ 10) */
+  tempC: number | null
+  /** corriente instantánea en mA (positivo ⇒ carga, negativo ⇒ drena; el signo/OEM varía) */
+  mA: number | null
+  /** true si está enchufado (AC/USB/wireless) — cargando, no hay drenaje real */
+  charging: boolean | null
+}
+
+/**
+ * Una muestra completa del profiler en un tick (≈1 Hz). Todo campo puede ser null
+ * ("no disponible en este device / falló el collector este tick").
+ */
+export interface Sample {
+  /** segundo de sesión (0-based) */
+  t: number
+  /** timestamp epoch (ms) del tick */
+  ts: number
+  /** CPU del proceso, share-of-device 0–100 (%) */
+  cpu: number | null
+  /** GPU utilization 0–100 (%) */
+  gpu: number | null
+  /** FPS promedio (averageFPS de SurfaceFlinger timestats) */
+  fps: number | null
+  /** temperatura principal (CPU/AP) en °C */
+  tempC: number | null
+  /** memoria PSS + breakdown */
+  mem: MemSample
+  /** batería */
+  battery: BatterySample
+  /** red rx este segundo (KB/s) — null hasta que exista fuente realtime confiable */
+  netRxKb: number | null
+  /** red tx este segundo (KB/s) */
+  netTxKb: number | null
+}
+
+/** Ficha del device, capturada una vez al conectar. */
+export interface DeviceInfo {
+  serial: string
+  /** ro.product.model (ej. SM-A155M) */
+  model: string | null
+  /** ro.product.manufacturer (ej. samsung) */
+  manufacturer: string | null
+  /** ro.build.version.release (ej. 16) */
+  androidRelease: string | null
+  /** ro.build.version.sdk (ej. 36) */
+  apiLevel: number | null
+  /** ro.board.platform / ro.soc.model (ej. mt6789) */
+  soc: string | null
+  /** nombre limpio de la GPU (ej. Mali-G57 MC2) */
+  gpu: string | null
+  /** RAM total en MB (MemTotal de /proc/meminfo) */
+  ramTotalMb: number | null
+}

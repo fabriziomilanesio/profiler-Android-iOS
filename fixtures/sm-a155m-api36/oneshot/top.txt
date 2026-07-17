@@ -1,0 +1,890 @@
+Tasks: 885 total,   7 running, 878 sleeping,   0 stopped,   0 zombie
+  Mem:  3754184K total,  3669424K used,    84760K free,     1752K buffers
+ Swap:  8388604K total,  1717148K used,  6671456K free,   657376K cached
+800%cpu 181%user   3%nice 200%sys 384%idle   3%iow  25%irq   3%sirq   0%host
+  PID USER         PR  NI VIRT  RES  SHR S[%CPU] %MEM     TIME+ ARGS
+   95 root         20   0    0    0    0 R 65.6   0.0   9:17.21 [kswapd0]
+ 2162 u0_a65       10 -10  11G 277M 137M R 50.0   7.5   7:00.65 com.android.systemui
+ 1694 system       18  -2  19G 309M 144M S 43.7   8.4  49:10.89 system_server
+ 1160 system       -3  -8 3.1G  23M  14M S 43.7   0.6   7:21.68 surfaceflinger
+18078 u0_a340      10 -10  17G 869M 598M S 37.5  23.7   0:41.64 com.evermore.oda.qa
+ 1102 system       -3  -8 2.6G 7.5M 4.8M S 25.0   0.2   4:23.33 android.hardware.graphics.composer@3.4-service
+18939 shell        20   0 2.1G 4.9M 3.7M R 18.7   0.1   0:00.09 top -b -n 1
+ 1097 audioserver  20   0 3.0G 9.2M 6.4M S 18.7   0.2   5:32.71 android.hardware.audio.service-aidl.mediatek
+13042 u0_a76       20   0 8.7G  71M  49M R 12.5   1.9   0:04.13 com.facebook.services
+ 5560 system       20   0 8.3G  52M  35M S 12.5   1.4   0:16.86 com.sec.android.diagmonagent
+ 1141 audioserver  20   0 2.8G  15M  10M S  9.3   0.3   4:12.13 audioserver
+12400 root          0 -20    0    0    0 I  6.2   0.0   0:02.82 [kworker/u33:2-ged_notify_sw_vsync]
+ 3038 bluetooth    20   0 8.8G  57M  40M S  6.2   1.5   0:47.03 com.android.bluetooth
+  452 logd         30  10 2.1G 5.4M 4.0M S  6.2   0.1   2:02.30 logd
+15268 root          0 -20    0    0    0 I  3.1   0.0   0:00.11 [kworker/1:1H-kblockd]
+15206 root          0 -20    0    0    0 I  3.1   0.0   0:01.56 [kworker/u33:0-mali_jd]
+13677 root         20   0    0    0    0 I  3.1   0.0   0:00.11 [kworker/7:8-events]
+ 7609 root          0 -20    0    0    0 R  3.1   0.0   0:08.43 [kworker/u33:1-ufs_clk_gating_0]
+31076 u0_a101      20   0 9.0G  73M  51M S  3.1   1.9   0:11.57 com.samsung.android.rubin.app
+18546 u0_a235      20   0 8.5G  52M  39M S  3.1   1.4   0:04.33 com.google.android.apps.messaging:rcs
+ 5578 system       20   0 8.7G  58M  38M S  3.1   1.5   2:02.22 com.sec.android.sdhms
+ 2327 network_stack 20  0 8.4G  53M  37M S  3.1   1.4   0:25.70 com.android.networkstack.process
+ 1098 bluetooth    20   0 2.1G 3.3M 3.3M S  3.1   0.0   0:04.35 android.hardware.bluetooth-service-mediatek
+  211 root         RT   0    0    0    0 S  3.1   0.0   0:29.37 [signal_fence]
+  164 root         39  19    0    0    0 S  3.1   0.0   0:02.34 [dmabuf-deferred-free-worker]
+   19 root         -2   0    0    0    0 S  3.1   0.0   0:06.67 [rcuog/0]
+18816 u0_a186      20   0 8.0G  59M  43M S  0.0   1.6   0:00.19 com.samsung.android.privateaccesstokens
+18813 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/1:4H]
+18765 root          0 -20    0    0    0 I  0.0   0.0   0:00.02 [kworker/2:6H-kverityd]
+18751 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/5:6H-kverityd]
+18749 root          0 -20    0    0    0 I  0.0   0.0   0:00.02 [kworker/4:7H-kverityd]
+18698 root          0 -20    0    0    0 I  0.0   0.0   0:00.03 [kworker/5:5H-fsverity_read_queue]
+18687 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+18681 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/3:8H-kverityd]
+18680 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/3:7H]
+18679 root          0 -20    0    0    0 I  0.0   0.0   0:00.06 [kworker/3:6H-kverityd]
+18678 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/3:5H-kverityd]
+18650 u0_a234      20   0 8.0G  63M  47M S  0.0   1.7   0:00.36 com.google.android.apps.turbo
+18581 u0_a203      20   0 9.4G  91M  67M S  0.0   2.4   0:01.13 com.sec.android.daemonapp
+18483 u0_a251      20   0  32G  62M  49M S  0.0   1.6   0:00.39 com.android.chrome
+18293 root          0 -20    0    0    0 I  0.0   0.0   0:00.01 [kworker/7:7H-kverityd]
+18284 root          0 -20    0    0    0 I  0.0   0.0   0:00.01 [kworker/6:7H-kverityd]
+18255 root          0 -20    0    0    0 I  0.0   0.0   0:00.04 [kworker/7:6H-kverityd]
+18227 u0_a132      20   0 8.0G  57M  41M S  0.0   1.5   0:00.37 com.sec.android.app.soundalive
+18223 root          0 -20    0    0    0 I  0.0   0.0   0:00.03 [kworker/6:5H-kverityd]
+18211 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+18130 root          0 -20    0    0    0 I  0.0   0.0   0:00.07 [kworker/4:6H-kverityd]
+18010 u0_a312      12  -8  10G  74M  59M S  0.0   2.0   0:01.08 com.microsoft.office.officehubrow
+17937 u0_a236      20   0 9.0G  93M  61M S  0.0   2.5   0:00.73 com.android.vending:background
+17798 u0_a108      20   0  10G  67M  53M S  0.0   1.8   0:00.79 com.osp.app.signin
+17747 vendor_mdxkit 20  0 8.7G  52M  37M S  0.0   1.4   0:00.18 com.samsung.android.mdx.kit
+17698 vendor_sharelive 20 0 9.2G 65M 45M S  0.0   1.7   0:00.68 com.samsung.android.app.sharelive
+17642 root          0 -20    0    0    0 I  0.0   0.0   0:00.01 [kworker/2:5H-kverityd]
+17470 u0_a111      20   0 9.2G  56M  42M S  0.0   1.5   0:00.43 com.samsung.android.mobileservice
+17412 root          0 -20    0    0    0 I  0.0   0.0   0:00.03 [kworker/4:5H-kverityd]
+17204 u0_a236      20   0 9.2G  94M  70M S  0.0   2.5   0:02.48 com.android.vending
+17172 u0_a74       20   0 8.0G  49M  36M S  0.0   1.3   0:00.11 com.facebook.system
+17053 vendor_cmhservice 20 0 8.1G 54M 39M S 0.0   1.4   0:00.31 com.samsung.storyservice
+17033 u0_a164      20   0 8.5G  62M  47M S  0.0   1.6   0:02.02 com.facebook.appmanager
+17000 u0_a230      20   0 8.1G  53M  40M S  0.0   1.4   0:00.36 com.google.android.partnersetup
+16952 system       20   0 8.2G  57M  44M S  0.0   1.5   0:00.89 com.samsung.android.dqagent
+16575 vendor_cmhservice 20 0 9.1G 57M 41M S 0.0   1.5   0:00.64 com.samsung.cmh
+16512 u0_a248      20   0 8.1G  54M  40M S  0.0   1.4   0:00.24 com.google.android.webview:webview_service
+16062 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+15992 root          0 -20    0    0    0 I  0.0   0.0   0:00.02 [kworker/6:4H-kverityd]
+15918 u0_a66       20   0 8.7G  60M  45M S  0.0   1.6   0:00.74 android.process.media
+15916 u0_a270      10 -10 8.5G  63M  46M S  0.0   1.7   0:01.57 com.google.android.adservices.api
+15907 root          0 -20    0    0    0 I  0.0   0.0   0:00.04 [kworker/2:4H-kverityd]
+15887 root          0 -20    0    0    0 I  0.0   0.0   0:00.02 [kworker/0:4H-kverityd]
+15813 root          0 -20    0    0    0 I  0.0   0.0   0:00.10 [kworker/7:5H-kverityd]
+15743 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+15612 u0_a280      20   0 8.1G  51M  38M S  0.0   1.3   0:00.23 com.google.android.rkpdapp
+15590 root          0 -20    0    0    0 I  0.0   0.0   0:00.09 [kworker/6:3H-kverityd]
+15448 root          0 -20    0    0    0 I  0.0   0.0   0:00.03 [kworker/5:4H-fsverity_read_queue]
+15398 u0_a237      20   0 8.7G  78M  60M S  0.0   2.1   0:08.96 com.google.android.gms.unstable
+15354 u0_a238      20   0  35G  91M  71M S  0.0   2.4   0:05.18 com.google.android.googlequicksearchbox:googleapp
+15347 root          0 -20    0    0    0 I  0.0   0.0   0:00.06 [kworker/3:4H-kverityd]
+15344 root          0 -20    0    0    0 I  0.0   0.0   0:00.07 [kworker/0:2H-kverityd]
+15276 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/0:3-pm]
+15275 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/5:2-pm]
+15269 root          0 -20    0    0    0 I  0.0   0.0   0:00.04 [kworker/5:3H-kverityd]
+15266 root          0 -20    0    0    0 I  0.0   0.0   0:00.06 [kworker/4:3H-fsverity_read_queue]
+15256 root          0 -20    0    0    0 I  0.0   0.0   0:00.08 [kworker/2:2H-kverityd]
+15254 root          0 -20    0    0    0 I  0.0   0.0   0:00.01 [kworker/3:3H-kverityd]
+15252 root          0 -20    0    0    0 I  0.0   0.0   0:00.07 [kworker/6:2H-kverityd]
+15250 root          0 -20    0    0    0 I  0.0   0.0   0:00.13 [kworker/1:0H-kverityd]
+15249 root          0 -20    0    0    0 I  0.0   0.0   0:00.11 [kworker/4:2H-fsverity_read_queue]
+15244 root          0 -20    0    0    0 I  0.0   0.0   0:00.05 [kworker/2:1H-kverityd]
+15243 root          0 -20    0    0    0 I  0.0   0.0   0:00.14 [kworker/5:2H-kverityd]
+15242 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/3:2H-kverityd]
+15241 root          0 -20    0    0    0 I  0.0   0.0   0:00.01 [kworker/4:1H-fsverity_read_queue]
+15240 root          0 -20    0    0    0 I  0.0   0.0   0:00.08 [kworker/0:1H-kblockd]
+15239 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/1:2-pm]
+15231 root          0 -20    0    0    0 I  0.0   0.0   0:00.06 [kworker/7:1H-kverityd]
+15212 root         20   0    0    0    0 I  0.0   0.0   0:00.04 [kworker/7:1-kdmflush/254:63]
+15143 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/0:1-pm]
+15127 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/4:1-pm]
+15126 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/3:3-pm]
+15046 root         20   0    0    0    0 I  0.0   0.0   0:00.05 [kworker/1:1-events]
+15045 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/2:1-pm]
+15038 root         20   0    0    0    0 I  0.0   0.0   0:00.15 [kworker/3:1-pm]
+15037 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/4:0-pm]
+14854 root         20   0    0    0    0 I  0.0   0.0   0:00.07 [kworker/6:8-events_freezable_pwr_efficient]
+14846 root         20   0    0    0    0 I  0.0   0.0   0:00.09 [kworker/5:0-pm]
+14671 u0_a112      20   0 9.2G  54M  40M S  0.0   1.4   0:01.41 com.samsung.android.app.contacts
+14558 root          0 -20    0    0    0 I  0.0   0.0   0:00.02 [kworker/7:3H-kverityd]
+14543 root          0 -20    0    0    0 I  0.0   0.0   0:00.27 [kworker/5:0H-kverityd]
+14505 u0_a55       20   0 9.1G  59M  43M S  0.0   1.6   0:02.51 android.process.acore
+14480 root          0 -20    0    0    0 I  0.0   0.0   0:00.03 [kworker/7:2H-kblockd]
+14416 root          0 -20    0    0    0 I  0.0   0.0   0:00.07 [kworker/6:0H-kverityd]
+14062 root          0 -20    0    0    0 I  0.0   0.0   0:00.18 [kworker/7:0H-kverityd]
+13272 root         20   0    0    0    0 I  0.0   0.0   0:01.01 [kworker/u32:20-async]
+13213 u0_a269      20   0 8.9G  63M  48M S  0.0   1.7   0:05.21 com.dti.amx
+13161 root          0 -20    0    0    0 I  0.0   0.0   0:00.12 [kworker/4:4H-fsverity_read_queue]
+13000 system       20   0 8.3G  61M  46M S  0.0   1.6   0:01.53 com.samsung.android.fmm
+12999 root         20   0    0    0    0 I  0.0   0.0   0:01.34 [kworker/u32:18-async]
+12960 root         20   0    0    0    0 I  0.0   0.0   0:00.03 [kworker/0:0-pm]
+12941 root         20   0    0    0    0 I  0.0   0.0   0:00.09 [kworker/6:4-kdmflush/254:63]
+12926 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/1:0-pm]
+12836 root         20   0    0    0    0 I  0.0   0.0   0:00.02 [kworker/2:4-pm]
+12809 root          0 -20    0    0    0 I  0.0   0.0   0:00.20 [kworker/0:3H-kverityd]
+12787 root          0 -20    0    0    0 I  0.0   0.0   0:00.41 [kworker/1:5H-kverityd]
+12397 root         20   0    0    0    0 I  0.0   0.0   0:00.08 [kworker/7:0-events_freezable_pwr_efficient]
+12396 root         20   0    0    0    0 I  0.0   0.0   0:00.09 [kworker/5:4-pm]
+12360 root          0 -20    0    0    0 I  0.0   0.0   0:00.20 [kworker/2:3H-kverityd]
+12215 u0_a235      20   0  10G  88M  64M S  0.0   2.4   0:15.24 com.google.android.apps.messaging
+11989 root          0 -20    0    0    0 I  0.0   0.0   0:00.19 [kworker/1:2H-kverityd]
+10940 root          0 -20    0    0    0 I  0.0   0.0   0:00.36 [kworker/0:0H-kverityd]
+10876 root          0 -20    0    0    0 I  0.0   0.0   0:00.51 [kworker/3:1H-kverityd]
+10588 root         20   0    0    0    0 I  0.0   0.0   0:00.09 [kworker/4:5-pm]
+10531 root         20   0    0    0    0 I  0.0   0.0   0:00.21 [kworker/6:3-events]
+10379 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [kworker/2:0-pm]
+10104 root         20   0    0    0    0 I  0.0   0.0   0:00.49 [kworker/3:0-pm]
+ 9928 root         20   0    0    0    0 I  0.0   0.0   0:02.30 [kworker/u32:19-async]
+ 9926 root         20   0    0    0    0 I  0.0   0.0   0:02.85 [kworker/u32:17-ged_fence]
+ 9925 root         20   0    0    0    0 I  0.0   0.0   0:02.18 [kworker/u32:16-async]
+ 9840 root          0 -20    0    0    0 I  0.0   0.0   0:00.12 [kworker/1:3H-kverityd]
+ 9554 root          0 -20    0    0    0 I  0.0   0.0   0:00.12 [kworker/3:0H-kverityd]
+ 9451 root         20   0    0    0    0 I  0.0   0.0   0:00.23 [kworker/7:7-events_freezable_pwr_efficient]
+ 9315 root         20   0    0    0    0 I  0.0   0.0   0:02.21 [kworker/u32:15-async]
+ 9314 root         20   0    0    0    0 I  0.0   0.0   0:03.26 [kworker/u32:14-ged_fence]
+ 9313 root         20   0    0    0    0 I  0.0   0.0   0:03.11 [kworker/u32:13-ged_fence]
+ 9304 root         20   0    0    0    0 I  0.0   0.0   0:00.36 [kworker/6:7-events_freezable_pwr_efficient]
+ 9297 root         20   0    0    0    0 I  0.0   0.0   0:00.27 [kworker/7:6-events]
+ 9291 root         20   0    0    0    0 I  0.0   0.0   0:00.10 [kworker/7:5-events_freezable_pwr_efficient]
+ 9288 root         20   0    0    0    0 I  0.0   0.0   0:00.23 [kworker/7:4-events]
+ 9287 root         20   0    0    0    0 I  0.0   0.0   0:00.37 [kworker/7:2-events_freezable_pwr_efficient]
+ 9285 root         20   0    0    0    0 I  0.0   0.0   0:00.14 [kworker/6:6-events]
+ 9283 root         20   0    0    0    0 I  0.0   0.0   0:01.94 [kworker/u32:11-async]
+ 9277 root         20   0    0    0    0 I  0.0   0.0   0:00.46 [kworker/6:0-events_freezable_pwr_efficient]
+ 9275 root         20   0    0    0    0 I  0.0   0.0   0:02.37 [kworker/u32:8-async]
+ 9274 root         20   0    0    0    0 I  0.0   0.0   0:02.37 [kworker/u32:7-async]
+ 9273 root         20   0    0    0    0 I  0.0   0.0   0:02.68 [kworker/u32:6-async]
+ 9057 root          0 -20    0    0    0 I  0.0   0.0   0:00.19 [kworker/6:6H-kverityd]
+ 9053 root          0 -20    0    0    0 I  0.0   0.0   0:03.87 [kworker/u33:3-mali_jd]
+ 9017 root         20   0    0    0    0 I  0.0   0.0   0:01.63 [kworker/1:3-events]
+ 9016 root         20   0    0    0    0 I  0.0   0.0   0:00.98 [kworker/2:3-events]
+ 8812 root         20   0    0    0    0 I  0.0   0.0   0:02.82 [kworker/u32:2-events_unbound]
+ 7633 root         20   0    0    0    0 I  0.0   0.0   0:00.75 [kworker/6:1-events]
+ 7568 root          0 -20    0    0    0 I  0.0   0.0   0:00.41 [kworker/6:1H-kverityd]
+ 7167 root         20   0    0    0    0 I  0.0   0.0   0:05.29 [kworker/u32:1-ged_kpi]
+ 7166 root         20   0    0    0    0 I  0.0   0.0   0:00.20 [kworker/6:2-events]
+ 7162 root         20   0    0    0    0 I  0.0   0.0   0:01.86 [kworker/0:2-events]
+ 7152 root         20   0    0    0    0 I  0.0   0.0   0:02.64 [kworker/4:2-pm]
+ 7130 root         20   0    0    0    0 I  0.0   0.0   0:04.65 [kworker/u32:3-async]
+ 6527 root         20   0    0    0    0 I  0.0   0.0   0:02.18 [kworker/5:1-pm]
+ 6520 root          0 -20    0    0    0 I  0.0   0.0   0:00.64 [kworker/2:0H-kverityd]
+ 6438 root          0 -20    0    0    0 I  0.0   0.0   0:00.43 [kworker/4:0H-fsverity_read_queue]
+ 6425 root          0 -20    0    0    0 I  0.0   0.0   0:00.29 [kworker/7:4H-kverityd]
+ 5966 root          0 -20    0    0    0 I  0.0   0.0   0:00.34 [kworker/5:1H-kblockd]
+31471 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+31090 u0_a237      20   0  10G 125M  75M S  0.0   3.4   1:08.24 com.google.android.gms
+31064 u0_a237      20   0  10G 149M  89M S  0.0   4.0   2:30.84 com.google.android.gms.persistent
+30210 u0_a231      20   0 8.9G  55M  41M S  0.0   1.5   0:05.97 com.google.android.as
+30078 webview_zygote 20 0 8.4G  30M  20M S  0.0   0.8   0:00.30 webview_zygote
+25989 root         20   0    0    0    0 I  0.0   0.0   0:03.42 [kworker/3:2-pm]
+17718 u0_a238      20   0 9.4G  56M  40M S  0.0   1.5   0:05.60 com.google.android.googlequicksearchbox:interactor
+ 9597 root         20   0 2.0G 2.3M 2.0M S  0.0   0.0   0:01.61 ip6tables-restore --noflush -w -v
+ 4672 root         20   0    0    0    0 I  0.0   0.0   0:16.68 [kworker/u32:0-ged_fence]
+ 3468 system       20   0 8.2G  42M  33M S  0.0   1.1   0:01.19 com.sec.android.soagent
+28784 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+26392 wifi         20   0 2.1G 4.4M 4.1M S  0.0   0.1   0:02.54 wpa_supplicant -O/data/vendor/wifi/wpa/sockets -dd -g@android:wpa_wlan0
+24129 shell        20   0 2.1G 3.6M 3.4M S  0.0   0.0   0:00.03 abb
+24068 shell        20   0 2.3G 3.8M 3.1M S  0.0   0.1   0:30.72 adbd --root_seclabel=u:r:su:s0 --tim_seclabel=u:r:adbd_tradeinmode:s0
+20605 u0_a109      20   0  10G  49M  37M S  0.0   1.3   0:21.83 com.samsung.android.scs
+26708 u0_a285      20   0 8.6G  48M  37M S  0.0   1.3   0:05.87 com.google.android.permissioncontroller
+21323 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+15714 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-dio/dm-63]
+11028 vendor_bcmgr 20   0 8.0G  39M  28M S  0.0   1.0   0:02.96 com.samsung.android.beaconmanager
+ 8567 u0_a66       20   0 8.4G  39M  29M S  0.0   1.0   0:03.21 com.samsung.android.providers.media
+ 6146 u0_a198      10 -10  10G  67M  50M S  0.0   1.8   0:32.20 com.samsung.android.honeyboard
+ 5847 vendor_spay  20   0 7.9G  35M  26M S  0.0   0.9   0:01.04 com.samsung.android.spayfw
+ 5843 root         20   0    0    0    0 S  0.0   0.0   0:00.15 [fuse-wd0:160]
+ 5759 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+ 5606 u0_a92       20   0 8.2G  45M  34M S  0.0   1.2   0:03.39 com.samsung.android.mcfds
+ 5474 u0_a277      20   0 8.6G  44M  33M S  0.0   1.2   0:12.59 com.google.android.providers.media.module
+ 4049 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-fs_suspend_syssync]
+ 3701 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+ 3351 u0_a116      20   0 8.2G  44M  32M S  0.0   1.2   0:02.82 com.samsung.android.mcfserver
+ 3302 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [zram0_prefetchd]
+ 3287 system       20   0 2.1G 3.4M 3.4M S  0.0   0.0   0:01.62 perfsdkserver
+ 3272 system       20   0 2.1G 4.8M 4.7M S  0.0   0.1   0:01.02 pageboostd
+ 3218 oem_5013     20   0 8.1G  44M  32M S  0.0   1.1   0:16.48 com.sec.location.nsflp2
+ 3217 u0_a281      20   0 8.5G  49M  33M S  0.0   1.3   0:07.38 com.google.android.ext.services
+ 3118 system       20   0 2.4G 3.4M 3.4M S  0.0   0.0   0:05.89 eris
+ 2836 u0_a142      20   0  10G 131M  99M S  0.0   3.5   1:19.98 com.sec.android.app.launcher
+ 2653 nfc          20   0 2.1G 3.9M 3.8M S  0.0   0.1   0:00.07 android.hardware.nfc-service.nxp
+ 2648 system       20   0 9.3G  39M  29M S  0.0   1.0   0:02.41 com.sec.imsservice:ImsUpdateService
+ 2616 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+ 2515 system       20   0 8.5G  50M  35M S  0.0   1.3   0:27.33 com.sec.epdg
+ 2434 system       20   0 8.0G  36M  26M S  0.0   0.9   0:02.27 com.samsung.sec.android.teegris.tui_service
+ 2427 secure_element 20 0 8.0G  36M  27M S  0.0   0.9   0:01.33 com.android.se
+ 2422 system       20   0  10G  50M  37M S  0.0   1.3   1:39.18 com.sec.imsservice
+ 2408 nfc          20   0 8.3G  42M  30M S  0.0   1.1   0:10.38 com.android.nfc
+ 2393 system       20   0 8.3G  38M  28M S  0.0   1.0   0:02.97 com.sec.sve
+ 2145 radio        20   0 9.3G  75M  47M R  0.0   2.0   2:50.62 com.android.phone
+ 2126 root         10 -10    0    0    0 S  0.0   0.0   0:03.02 [rx_thread]
+ 2125 root         10 -10    0    0    0 S  0.0   0.0   0:57.98 [hif_thread]
+ 2123 root         10 -10    0    0    0 S  0.0   0.0   0:37.23 [main_thread]
+ 2120 wifi         20   0 2.3G 3.5M 3.4M S  0.0   0.0   0:01.34 android.hardware.wifi-service-lazy
+ 1555 radio        20   0 2.0G 3.4M 3.4M S  0.0   0.0   0:01.48 multiclientd -s 1
+ 1419 system       20   0 2.2G 4.1M 3.9M S  0.0   0.1   0:00.87 vendor.samsung.hardware.biometrics.fingerprint-service
+ 1417 system       20   0 2.1G 3.9M 3.9M S  0.0   0.1   0:00.12 netdagent
+ 1409 system       20   0 2.1G 3.9M 3.7M S  0.0   0.1   0:00.18 gatekeeperd /data/misc/gatekeeper
+ 1407 mediacodec   20   0 3.0G 4.9M 4.8M S  0.0   0.1   0:01.24 media.swcodec oid.media.swcodec/bin/mediaswcodec
+ 1395 radio        20   0 2.5G 6.2M 5.0M S  0.0   0.1   0:39.44 rild
+ 1356 system       20   0 2.3G 3.7M 3.6M S  0.0   0.1   0:02.84 vendor.samsung.hardware.gnss-service
+ 1351 system       20   0 2.3G 4.1M 3.9M S  0.0   0.1   0:05.32 vendor.mediatek.hardware.pq_aidl-service
+ 1350 media        20   0 2.2G 3.1M 3.1M S  0.0   0.0   0:00.04 v3avpud-64b -f
+ 1348 gps          20   0 2.9G 2.9M 2.8M S  0.0   0.0   0:02.38 mtk_agpsd
+ 1347 root         20   0 2.1G 3.9M 3.9M S  0.0   0.1   0:00.67 eara_io_service
+ 1346 shell        20   0 2.1G 2.9M 2.8M S  0.0   0.0   0:00.66 netdiag
+ 1345 system       20   0 2.0G 3.1M 2.9M S  0.0   0.0   0:01.25 mobile_log_d
+ 1344 system       20   0 2.0G 3.2M 3.1M S  0.0   0.0   0:00.04 thermald
+ 1343 shell        20   0 2.2G 2.7M 2.7M S  0.0   0.0   0:03.62 emdlogger
+ 1342 wifi         20   0 2.1G 3.4M 3.2M S  0.0   0.0   0:15.08 wificond
+ 1340 root         30  10 2.1G 3.5M 3.5M S  0.0   0.0   0:14.63 storaged
+ 1322 system       20   0 2.1G 3.5M 3.4M S  0.0   0.0   0:00.02 spqr_service
+ 1315 media        20   0 116M 1.0M 1.0M S  0.0   0.0   0:02.73 mediaserver32
+ 1312 media        20   0 2.3G 4.3M 3.8M S  0.0   0.1   0:00.31 media.metrics diametrics
+ 1309 mediaex      20   0 2.9G 4.8M 4.8M S  0.0   0.1   0:00.87 media.extractor aextractor
+ 1308 root         20   0 2.3G 4.2M 4.2M S  0.0   0.1   0:29.27 installd
+ 1306 system       20   0 2.1G 3.3M 3.3M S  0.0   0.0   0:02.11 connfwexe
+ 1304 system       20   0 2.2G 2.9M 2.7M S  0.0   0.0   0:03.40 ddexe
+ 1303 system       20   0 2.0G 3.6M 3.6M S  0.0   0.1   0:01.50 smdexe
+ 1302 incidentd    20   0 2.2G 3.4M 3.3M S  0.0   0.0   0:00.64 incidentd
+ 1301 system       20   0 2.2G 3.2M 3.2M S  0.0   0.0   0:00.77 imsd
+ 1299 system       20   0 2.1G 3.8M 3.6M S  0.0   0.1   0:00.02 fabric_crypto /data/misc/fabric_crypto
+ 1298 cameraserver 20   0 2.7G 5.3M 4.8M S  0.0   0.1   0:01.92 cameraserver
+ 1297 gps          20   0 2.5G 3.9M 3.9M S  0.0   0.1   0:13.26 mnld
+ 1296 wifi         20   0 2.1G 2.7M 2.7M S  0.0   0.0   0:00.67 wlan_assistant
+ 1295 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [wlan_rst_thread]
+ 1272 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_event]
+ 1266 root         20   0 2.1G 3.5M 3.5M S  0.0   0.0   0:15.15 thermal_core
+ 1251 nobody       20   0 2.1G 2.2M 2.0M S  0.0   0.0   0:02.49 traced
+ 1250 nobody       20   0 2.1G 2.0M 2.0M S  0.0   0.0   0:01.49 traced_probes
+ 1232 system       20   0 2.2G 3.6M 3.6M S  0.0   0.0   0:00.26 fpsgo
+ 1231 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [dpmaif_txq3_done_kt]
+ 1230 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [dpmaif_txq2_done_kt]
+ 1228 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [dpmaif_txq1_done_kt]
+ 1226 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [dpmaif_txq0_done_kt]
+ 1224 root         20   0    0    0    0 S  0.0   0.0   0:00.23 [skb_alloc_thread]
+ 1223 root         20   0    0    0    0 S  0.0   0.0   0:00.28 [bat_alloc_thread]
+ 1222 root         20   0    0    0    0 S  0.0   0.0   0:02.08 [dpmaif_rxq0_push]
+ 1221 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx15_worker]
+ 1220 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx14_worker]
+ 1219 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx13_worker]
+ 1218 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx12_worker]
+ 1217 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx11_worker]
+ 1216 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx10_worker]
+ 1215 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx9_worker]
+ 1214 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx8_worker]
+ 1211 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx7_worker]
+ 1210 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx6_worker]
+ 1209 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx5_worker]
+ 1208 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx4_worker]
+ 1206 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx3_worker]
+ 1205 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx2_worker]
+ 1204 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx1_worker]
+ 1203 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rx0_worker]
+ 1202 vendor_dsms  20   0 2.1G 3.1M 3.1M S  0.0   0.0   0:00.63 dsms
+ 1174 system        0 -20 2.2G 3.3M 3.2M S  0.0   0.0   0:07.57 ccci_mdinit 0
+ 1171 radio        20   0 2.1G 3.4M 3.4M S  0.0   0.0   0:01.40 ccci_rpcd 0
+ 1162 audioserver  20   0 2.2G 3.4M 3.3M S  0.0   0.0   0:00.06 android.hardware.audio.parameter_parser.service
+ 1158 system       20   0 2.3G 2.9M 2.9M S  0.0   0.0   0:10.35 perfmond
+ 1152 system_kumiho_dec 20 0 3.1G 4.8M 4.8M S 0.0 0.1   0:00.46 kumiho.decoder ihodecoder
+ 1151 system       20   0 2.1G 2.7M 2.7M S  0.0   0.0   0:00.93 heatmap
+ 1150 gpu_service  20   0 2.3G 3.4M 3.4M S  0.0   0.0   0:00.69 gpuservice
+ 1146 credstore    20   0 2.1G 3.9M 3.7M S  0.0   0.1   0:00.01 credstore /data/misc/credstore
+ 1139 media        20   0 2.2G 3.8M 3.8M S  0.0   0.1   0:00.20 android.hardware.drm-service.widevine
+ 1138 wifi         20   0 2.1G 3.8M 3.8M S  0.0   0.1   0:00.05 vendor.samsung.hardware.wifi-service
+ 1137 system       20   0 2.1G 3.4M 3.4M S  0.0   0.0   0:00.25 vendor.samsung.hardware.vibrator-service
+ 1136 system       20   0 2.1G 4.1M 3.8M S  0.0   0.1   0:20.67 vendor.samsung.hardware.thermal-service
+ 1135 system       12  -8 2.2G 3.1M 3.1M S  0.0   0.0   0:02.97 vendor.samsung.hardware.sysinput-service
+ 1134 system       20   0 2.2G 3.6M 3.6M S  0.0   0.0   0:00.19 vendor.samsung.hardware.security.drk@2.0-service
+ 1133 system       20   0 2.0G 3.6M 3.4M S  0.0   0.0   1:00.39 vendor.samsung.hardware.health-service
+ 1131 cameraserver 20   0 4.0G 4.9M 4.8M S  0.0   0.1   0:06.63 vendor.samsung.hardware.camera.provider-service_64
+ 1130 root         20   0 2.1G 3.7M 3.7M S  0.0   0.1   0:00.04 vendor.mediatek.hardware.nvram-service
+ 1129 root         20   0 2.2G 5.3M 3.8M S  0.0   0.1   0:05.51 vendor.mediatek.hardware.mtkpower-service.mediatek
+ 1126 audioserver  20   0 2.1G 3.9M 3.9M S  0.0   0.1   0:00.02 secaudiohalaidl
+ 1125 mediacodec   20   0 3.1G 4.4M 4.4M S  0.0   0.1   0:00.47 samsung.software.media.c2@1.0-service
+ 1124 system       20   0 2.2G 3.5M 3.5M S  0.0   0.0   0:00.43 vendor.mediatek.hardware.mtkpower_applist-service.mediatek
+ 1121 system       20   0 2.0G 3.4M 3.4M S  0.0   0.0   0:06.40 android.hardware.memtrack-service.mediatek
+ 1115 system       20   0 2.1G 3.6M 3.6M S  0.0   0.1   0:01.37 vendor.samsung.hardware.light-service
+ 1113 system       20   0 2.3G 4.0M 3.6M S  0.0   0.1   0:11.66 vendor.samsung.hardware.hyper-service
+ 1112 system       20   0 2.1G 4.0M 3.8M S  0.0   0.1   0:01.25 hermesd /data/vendor/gatekeeper
+ 1111 system       20   0 2.3G 3.9M 3.8M S  0.0   0.1   0:00.06 vendor.samsung.hardware.biometrics.face-service
+ 1110 system       20   0 2.1G 4.0M 3.7M S  0.0   0.1   0:38.25 android.hardware.usb-aidl-service.mediatek
+ 1107 system       20   0 2.2G 3.8M 3.5M S  0.0   0.1   1:17.66 android.hardware.sensors-service.multihal
+ 1103 mediacodec   20   0 3.1G 4.7M 4.7M S  0.0   0.1   0:01.33 android.hardware.media.c2-mediatek-64b
+ 1101 system       20   0 2.1G 3.8M 3.7M S  0.0   0.1   0:03.23 android.hardware.graphics.allocator-V2-service-mediatek
+ 1100 system       20   0 2.1G 2.4M 2.4M S  0.0   0.0   0:00.09 android.hardware.gatekeeper@1.0-service
+ 1099 media        20   0 2.1G 3.5M 3.4M S  0.0   0.0   0:00.03 android.hardware.drm-service.clearkey
+ 1096 system       20   0 2.0G 2.9M 2.9M S  0.0   0.0   0:00.02 android.hidl.allocator@1.0-service
+ 1091 root         20   0 2.0G 2.8M 2.3M S  0.0   0.0   0:07.30 iptables-restore --noflush -w -v
+ 1086 root         20   0 1.7G 8.8M 8.8M S  0.0   0.2   0:02.74 zygote
+ 1085 root         20   0 6.5G  42M  33M S  0.0   1.1   0:22.96 zygote64
+ 1084 statsd       20   0 2.4G 8.3M 3.9M S  0.0   0.2   2:28.38 statsd
+ 1083 root         20   0 2.4G 5.7M 4.6M S  0.0   0.1   2:07.83 netd
+ 1075 system       20   0 2.1G 3.7M 3.7M S  0.0   0.1   0:00.05 rttsservice
+ 1072 system       20   0 2.2G 4.1M 3.5M S  0.0   0.1   0:01.11 emservice
+ 1071 system       20   0 2.3G 3.7M 3.7M S  0.0   0.1   0:01.24 cass
+ 1006 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+ 1005 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+ 1004 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+ 1003 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+ 1002 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+ 1001 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+ 1000 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  999 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  995 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  994 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  993 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  992 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  988 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  987 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  986 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  985 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  984 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  980 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  979 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  978 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  977 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  976 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  975 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  974 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  972 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  970 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  969 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  968 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  967 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  966 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  965 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  963 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  962 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  961 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  960 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  959 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  958 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  957 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  955 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  954 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  952 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  951 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  950 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  948 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  947 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  945 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  944 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  943 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  942 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  941 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  940 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  939 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  938 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  937 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  936 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  935 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  932 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  931 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  930 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  929 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  928 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  927 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  926 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  925 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  924 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  922 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  921 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  920 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  919 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  918 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  917 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  916 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  845 tombstoned   20   0 2.0G 2.5M 2.5M S  0.0   0.0   0:00.55 tombstoned
+  832 root         20   0    0    0    0 S  0.0   0.0   0:00.04 [mtk_wmtd_worker]
+  831 root         20   0    0    0    0 S  0.0   0.0   0:06.29 [mtk_wmtd]
+  830 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [mtk_stp_btm]
+  829 root         20   0    0    0    0 S  0.0   0.0   0:02.17 [mtk_stp_psm]
+  822 system       20   0 2.0G 3.0M 3.0M S  0.0   0.0   0:01.19 vaultkeeperd
+  820 system       20   0 2.0G 2.9M 2.9M S  0.0   0.0   0:02.03 vendor.samsung.hardware.security.proca@2.0-service
+  814 root         RT   0    0    0    0 S  0.0   0.0   0:00.01 [irq/29-SX9385]
+  813 root         20   0    0    0    0 S  0.0   0.0   0:04.42 [f2fs_gc-254:63]
+  809 root         RT   0    0    0    0 S  0.0   0.0   0:07.82 [irq/27-zt_ts_device]
+  807 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-esd_tmr_workqueue]
+  806 root         20   0    0    0    0 S  0.0   0.0   0:07.25 [f2fs_discard-254:63]
+  805 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [f2fs_flush-254:63]
+  804 root         20   0    0    0    0 S  0.0   0.0   0:18.99 [f2fs_ckpt-254:63]
+  803 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-f2fs_truncate_wq]
+  782 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-sec_input_irq_wq]
+  779 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-fingerprint_debug_wq]
+  778 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [irq/34-goodix_fp_irq]
+  775 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-swpm_common_wq]
+  774 system       20   0 2.2G 4.0M 4.0M S  0.0   0.1   0:00.07 vendor.samsung.hardware.security.vaultkeeper-service
+  773 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-vdec-fmt]
+  772 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  769 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  768 system       20   0 2.1G 4.1M 4.1M S  0.0   0.1   0:00.05 vendor.samsung.hardware.security.rtts-service
+  767 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-task_exec_wq_9]
+  766 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  765 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-task_exec_wq_8]
+  762 system       20   0 2.0G 4.2M 4.1M S  0.0   0.1   0:00.04 vendor.samsung.hardware.security.hdcp.wifidisplay-service
+  761 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-fm_eint_wq]
+  760 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-fm_timer_wq]
+  759 system       20   0 2.1G 5.4M 5.3M S  0.0   0.1   0:00.02 vendor.samsung.hardware.security.fkeymaster-service
+  757 system       20   0 2.1G 4.1M 3.9M S  0.0   0.1   0:00.22 vendor.samsung.hardware.security.engmode-service
+  756 system       20   0 2.1G 4.9M 4.4M S  0.0   0.1   0:06.18 android.hardware.security.keymint-service
+  755 keystore     20   0 2.5G 9.1M 7.5M S  0.0   0.2   0:12.01 keystore2 /data/misc/keystore
+  753 system       20   0 2.2G 4.8M 3.9M S  0.0   0.1   5:53.50 android.system.suspend-service
+  752 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  751 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-RSC-CMDQ-WQ]
+  749 system       20   0 2.1G 2.9M 2.9M S  0.0   0.0   0:00.50 wmt_launcher -p /vendor/firmware/ -o 1
+  748 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  747 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-task_exec_wq_11]
+  746 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  743 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [core_ctl_v5/6]
+  741 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [core_ctl_v5/0]
+  735 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-lt_wq]
+  730 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-shub_debug_wq]
+  729 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-shub_dev_wq]
+  720 system       20   0 2.2G 2.7M 2.7M S  0.0   0.0   0:03.76 tzts_daemon
+  716 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cfg80211]
+  714 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  713 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-task_exec_wq_12]
+  712 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  711 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  710 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  709 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_mdp_task]
+  708 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_resource]
+  707 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  706 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  705 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  704 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  703 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  702 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  701 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  700 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  699 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  698 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  697 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  696 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  695 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  694 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  693 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  692 system       20   0 2.0G 3.2M 3.2M S  0.0   0.0   0:02.13 tzdaemon
+  691 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  690 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  689 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  688 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  687 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  686 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  685 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  684 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  683 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_auto_release_thread]
+  682 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  681 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  680 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  679 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  678 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  677 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-task_exec_wq_10]
+  675 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_sec_timeout_wq]
+  674 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_sec_notify_wq]
+  672 root          2 -18    0    0    0 S  0.0   0.0   0:00.00 [venc_worker]
+  671 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-uclamp_singlethread_wq]
+  669 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [pause_drain_rqs]
+  668 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-vdec_buf_dump]
+  667 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-vdec_check_alive]
+  666 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-vdec_set_frame]
+  665 root          2 -18    0    0    0 S  0.0   0.0   0:00.00 [vdec_worker]
+  659 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [mddp_rx]
+  657 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-aw882xx]
+  654 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [irq/28-aw882xx]
+  652 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-audio_ipi_dump_workqueue]
+  650 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-accdet_eint]
+  649 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-dismicQueue]
+  648 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-accdet]
+  647 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-delay_init]
+  643 root         RT   0    0    0    0 S  0.0   0.0   0:02.87 [btif_rxd]
+  640 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-mcupm_ts_wq]
+  637 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [bp_notify_thread]
+  635 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [pt_notify_thread]
+  634 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-uether_rps]
+  633 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-uether_rx1]
+  632 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-uether]
+  630 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-usb_audio_wq]
+  629 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-vcore_wq]
+  628 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-dram_vcore_wq]
+  627 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cpu_core_wq]
+  626 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cpu_freq_wq]
+  625 root         20   0    0    0    0 S  0.0   0.0   0:00.12 [ccci_spd]
+  624 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-smem_ul_worker]
+  622 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [ccci_ctrl]
+  621 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [ccci_sys]
+  620 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [ccci_ipc_8]
+  619 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [ccci_ipc_7]
+  618 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [ccci_ipc_6]
+  617 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [ccci_ipc_3]
+  616 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [ccci_udc]
+  615 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [ccci_rpc_k]
+  614 root         20   0    0    0    0 D  0.0   0.0   0:00.04 [ccci_poll]
+  613 root         20   0    0    0    0 S  0.0   0.0   0:00.01 [ccci_fsm]
+  612 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-pool_reload_work]
+  610 system       20   0 2.1G 2.9M 2.9M S  0.0   0.0   0:00.71 aee_aedv64_v2
+  609 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni29_rx_q_worker]
+  608 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni28_rx_q_worker]
+  607 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni27_rx_q_worker]
+  606 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni26_rx_q_worker]
+  605 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni25_rx_q_worker]
+  603 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni24_rx_q_worker]
+  602 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni23_rx_q_worker]
+  601 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni22_rx_q_worker]
+  600 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni21_rx_q_worker]
+  599 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni20_rx_q_worker]
+  598 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni19_rx_q_worker]
+  597 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni18_rx_q_worker]
+  596 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni17_rx_q_worker]
+  595 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni16_rx_q_worker]
+  594 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni15_rx_q_worker]
+  593 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni14_rx_q_worker]
+  592 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni13_rx_q_worker]
+  591 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni12_rx_q_worker]
+  590 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni11_rx_q_worker]
+  589 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni10_rx_q_worker]
+  588 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni9_rx_q_worker]
+  587 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni8_rx_q_worker]
+  586 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni7_rx_q_worker]
+  585 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni6_rx_q_worker]
+  584 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni5_rx_q_worker]
+  583 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni4_rx_q_worker]
+  582 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni3_rx_q_worker]
+  581 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni2_rx_q_worker]
+  580 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni1_rx_q_worker]
+  579 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ccmni0_rx_q_worker]
+  577 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kbase_job_fault_resume_work_que]
+  576 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-free_pages_workq]
+  574 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ged_fence]
+  573 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ged_kpi]
+  572 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ged_notify_sw_vsync]
+  569 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-sspm_ts_wq]
+  568 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-SSPM_WQ]
+  564 root         20   0 2.1G 3.1M 3.1M S  0.0   0.0   0:22.98 iod
+  563 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-thermal_task]
+  561 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-SCP_THERMAL_WQ]
+  560 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-SCP_RESET_WQ]
+  559 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-SCP_LOG_WQ]
+  558 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-SCP_WQ]
+  557 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [irq/347-MBOX_SCP_ISR]
+  556 root         RT   0    0    0    0 S  0.0   0.0   0:23.68 [irq/346-MBOX_SCP_ISR]
+  555 root         RT   0    0    0    0 S  0.0   0.0   0:01.56 [irq/345-MBOX_SCP_ISR]
+  554 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [irq/344-MBOX_SCP_ISR]
+  552 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  551 root         20   0    0    0    0 S  0.0   0.0   0:00.21 [jbd2/sdc57-8]
+  550 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-tmem_regmgr_defer_off_17]
+  549 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-tmem_regmgr_defer_off_16]
+  548 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-tmem_regmgr_defer_off_13]
+  547 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-tmem_regmgr_defer_off_12]
+  546 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-tmem_regmgr_defer_off_8]
+  545 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-tmem_regmgr_defer_off_2]
+  543 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-tmem_regmgr_defer_off_1]
+  542 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-tmem_regmgr_defer_off_0]
+  539 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  538 root         20   0    0    0    0 S  0.0   0.0   0:00.44 [jbd2/sdc3-8]
+  536 root          0 -20    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_c/0]
+  535 root          0 -20    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_k/2]
+  534 root          0 -20    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_k/1]
+  533 root          0 -20    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_k/0]
+  532 root          0 -20    0    0    0 S  0.0   0.0   0:00.00 [trusty_poll_task]
+  531 root          1 -19    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_n/7]
+  530 root          1 -19    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_n/6]
+  529 root          1 -19    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_n/5]
+  528 root          1 -19    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_n/4]
+  527 root          1 -19    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_n/3]
+  526 root          1 -19    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_n/2]
+  525 root          1 -19    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_n/1]
+  524 root          1 -19    0    0    0 S  0.0   0.0   0:00.00 [id0_trusty_n/0]
+  521 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-blk_sec_common]
+  520 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  519 root         20   0    0    0    0 S  0.0   0.0   0:00.30 [jbd2/sdc2-8]
+  514 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  513 root         20   0    0    0    0 S  0.0   0.0   0:00.19 [jbd2/sdc28-8]
+  503 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:63]
+  502 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  501 root         20   0    0    0    0 S  0.0   0.0   0:00.25 [jbd2/sdc29-8]
+  495 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  494 root         20   0    0    0    0 S  0.0   0.0   0:00.25 [jbd2/sdc20-8]
+  491 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  490 root         20   0    0    0    0 S  0.0   0.0   0:00.29 [jbd2/sdc19-8]
+  486 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  485 root         20   0    0    0    0 S  0.0   0.0   0:00.34 [jbd2/sdc56-8]
+  484 root         10 -10    0    0    0 S  0.0   0.0   0:00.00 [krfcommd]
+  481 root         20   0 2.3G 4.8M 4.6M S  0.0   0.1   0:04.57 vold --blkid_context=u:r:blkid:s0 --blkid_untrusted_context=u:r:blkid_untrusted:s0 --fsck_context=u:r:fsck:s0 --fsck_untrusted_context=u:r:fsck_untrusted:s0
+  460 root         -2   0    0    0    0 S  0.0   0.0   0:02.86 [psimon]
+  457 system       20   0 2.1G 3.2M 3.2M S  0.0   0.0   0:01.17 vndservicemanager /dev/vndbinder
+  456 system       20   0 2.1G 2.4M 2.3M S  0.0   0.0   0:01.72 hwservicemanager
+  455 system       20   0 2.1G 3.6M 2.9M S  0.0   0.1   0:14.77 servicemanager
+  453 lmkd         -2   0 2.1G 4.2M 3.3M S  0.0   0.1   0:36.08 lmkd
+  442 prng_seeder  20   0 2.1G 3.3M 3.1M S  0.0   0.0   0:02.41 prng_seeder
+  425 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  424 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  423 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  422 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  416 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:61]
+  415 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:60]
+  414 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:59]
+  413 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:58]
+  405 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:50]
+  402 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:47]
+  399 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:44]
+  398 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:43]
+  397 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:42]
+  396 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:41]
+  395 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:40]
+  393 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:38]
+  392 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:37]
+  389 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:34]
+  388 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:33]
+  387 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:32]
+  386 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:31]
+  385 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:30]
+  384 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:29]
+  383 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:28]
+  382 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:27]
+  381 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:26]
+  380 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:25]
+  379 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:24]
+  378 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:23]
+  377 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:22]
+  376 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:21]
+  313 root         20   0 2.1G 3.5M 2.1M S  0.0   0.0   1:10.56 ueventd
+  312 root         20   0 2.1G 2.6M 2.2M S  0.0   0.0   0:01.18 init subcontext u:r:vendor_init:s0 16
+  303 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  302 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  301 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:17]
+  300 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  299 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  298 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:16]
+  297 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  296 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:15]
+  295 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  294 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:14]
+  293 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  292 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:13]
+  291 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  290 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:12]
+  289 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  288 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:11]
+  287 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  286 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:10]
+  285 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  284 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:9]
+  283 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kverityd]
+  282 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:8]
+  281 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:7]
+  280 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:6]
+  279 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:5]
+  278 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:4]
+  277 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:3]
+  276 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:2]
+  275 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:1]
+  274 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kdmflush/254:0]
+  272 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ext4-rsv-conversion]
+  271 root         20   0    0    0    0 S  0.0   0.0   0:00.28 [jbd2/sdc30-8]
+  268 root         20   0    0    0    0 S  0.0   0.0   0:00.01 [sec_vibrator]
+  267 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [irq/18-pn547_clk_req]
+  266 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-pass-through]
+  265 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-sm5461-PD-DC]
+  264 root         RT   0    0    0    0 S  0.0   0.0   0:02.08 [irq/329-mtk_tinysys_mbox]
+  263 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [irq/328-mtk_tinysys_mbox]
+  262 root         RT   0    0    0    0 S  0.0   0.0   0:00.17 [irq/25-sm5714-usbpd]
+  261 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-pdic_irq_event]
+  260 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-sm5714-charger]
+  259 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-samsung_mobile_device:battery]
+  258 root         RT   0    0    0    0 S  0.0   0.0   0:00.05 [irq/24-sm5714-irq]
+  257 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-usb_notify]
+  256 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-blkdev_flush_wq]
+  254 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ufs_clk_gating_0]
+  253 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ufs_eh_wq_0]
+  252 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ufs_mtk_mb_wq]
+  251 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ufs_mtk_eh_wq]
+  250 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-scsi_tmf_0]
+  249 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [scsi_eh_0]
+  248 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-lbat_service]
+  247 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [irq/26-11240000.mmc cd]
+  246 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [irq/287-11240000.mmc]
+  244 root         20   0    0    0    0 D  0.0   0.0   0:00.29 [teegris rpmb]
+  243 root         RT   0    0    0    0 D  0.0   0.0   0:00.25 [tz_iwsock]
+  242 root         20   0    0    0    0 D  0.0   0.0   0:00.32 [tz_iwlog_thread]
+  241 root         20   0    0    0    0 D  0.0   0.0   0:00.00 [ree_time]
+  240 root         20   0    0    0    0 D  0.0   0.0   0:00.95 [tz_worker_thread/7]
+  239 root         20   0    0    0    0 D  0.0   0.0   0:00.73 [tz_worker_thread/6]
+  238 root         20   0    0    0    0 D  0.0   0.0   0:00.54 [tz_worker_thread/5]
+  237 root         20   0    0    0    0 D  0.0   0.0   0:00.55 [tz_worker_thread/4]
+  236 root         20   0    0    0    0 D  0.0   0.0   0:01.12 [tz_worker_thread/3]
+  235 root         20   0    0    0    0 D  0.0   0.0   0:00.47 [tz_worker_thread/2]
+  234 root         20   0    0    0    0 D  0.0   0.0   0:00.86 [tz_worker_thread/1]
+  233 root         20   0    0    0    0 D  0.0   0.0   0:00.95 [tz_worker_thread/0]
+  232 root         RT   0    0    0    0 S  0.0   0.0   0:00.38 [irq/154-mt6358-irq]
+  231 root         RT   0    0    0    0 S  0.0   0.0   0:09.14 [irq/220-musb-hdrc]
+  230 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-usb20_st_wq]
+  229 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [aal_sof_0]
+  228 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-aal_refresh_trigger]
+  227 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-pure_detect_wq]
+  226 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [mtk_drm_bind]
+  225 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [smi_info_dump_thread]
+  224 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [mode_switch]
+  223 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [signal_fence]
+  222 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [sf_pf_release_thread]
+  221 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [pf_release_thread]
+  220 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  219 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [smi_info_dump_thread]
+  218 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [mode_switch]
+  217 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [signal_fence]
+  216 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [sf_pf_release_thread]
+  215 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [pf_release_thread]
+  214 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  213 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [smi_info_dump_thread]
+  212 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [mode_switch]
+  210 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [sf_pf_release_thread]
+  209 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [pf_release_thread]
+  208 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [ddp_cmdq_trig]
+  207 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [ddp_repaint]
+  206 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [ddp_trig_d]
+  205 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [ddp_trig]
+  204 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [mtk_drm_fake_vsync:0]
+  203 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [mtk_drm_cwb]
+  202 root         20   0    0    0    0 S  0.0   0.0   0:00.08 [enable_vblank]
+  201 root         RT   0    0    0    0 S  0.0   0.0   0:01.88 [dis_ki-0]
+  200 root         20   0    0    0    0 S  0.0   0.0   0:02.26 [mtk_drm_disp_idlemgr-0]
+  199 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  198 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  197 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-typec_manager_muic_event]
+  196 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-typec_manager_event]
+  195 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  194 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  193 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [card0-crtc3]
+  192 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [card0-crtc2]
+  191 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [card0-crtc1]
+  190 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [card0-crtc0]
+  189 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-wq_panel_probe]
+  188 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-wq_dispon]
+  187 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-wq_fsync]
+  186 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-wq_vsync]
+  185 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-abd_blank_workqueue]
+  184 root         20   0    0    0    0 S  0.0   0.0   0:00.01 [panel-bl-thread]
+  183 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-panel0:late_probe]
+  182 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-panel0:evasion-disp-det]
+  181 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-panel0:panel-update]
+  180 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-panel0:panel-condition-check]
+  179 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-panel0:conn-det]
+  178 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-panel0:err-fg]
+  177 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-panel0:pcd]
+  176 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-panel0:disp-det]
+  175 root         20   0    0    0    0 D  0.0   0.0   0:00.00 [cmdq_buffer_usage]
+  174 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_pkt_destroy_wq]
+  173 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_vcp_power_handler]
+  172 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_flushq]
+  171 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_timeout_handler]
+  170 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-cmdq_buf_dump]
+  169 root         20   0    0    0    0 S  0.0   0.0   0:05.19 [cmdq_irq_thread]
+  165 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [dma_pool_fill_thread]
+  163 root         20   0    0    0    0 S  0.0   0.0   0:00.05 [spi5]
+  162 root         20   0    0    0    0 S  0.0   0.0   0:00.05 [spi4]
+  161 root         20   0    0    0    0 S  0.0   0.0   0:00.04 [spi3]
+  160 root         20   0    0    0    0 S  0.0   0.0   0:00.08 [spi2]
+  159 root         20   0    0    0    0 S  0.0   0.0   0:00.09 [spi1]
+  158 root         20   0    0    0    0 S  0.0   0.0   0:00.09 [spi0]
+  155 root         20   0    0    0    0 S  0.0   0.0   0:00.71 [hwrng]
+  154 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [hang_detect1]
+  153 root         RT   0    0    0    0 D  0.0   0.0   0:00.04 [hang_detect]
+  152 root         RT   0    0    0    0 D  0.0   0.0   0:02.20 [wdtk-7]
+  151 root         RT   0    0    0    0 D  0.0   0.0   0:02.22 [wdtk-6]
+  150 root         RT   0    0    0    0 D  0.0   0.0   0:06.42 [wdtk-5]
+  149 root         RT   0    0    0    0 D  0.0   0.0   0:06.25 [wdtk-4]
+  148 root         RT   0    0    0    0 D  0.0   0.0   0:05.87 [wdtk-3]
+  147 root         RT   0    0    0    0 D  0.0   0.0   0:05.48 [wdtk-2]
+  146 root         RT   0    0    0    0 D  0.0   0.0   0:04.78 [wdtk-1]
+  145 root         RT   0    0    0    0 D  0.0   0.0   0:04.62 [wdtk-0]
+  144 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-mt-wdk]
+  143 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-bootc_wq]
+  142 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-sec_abc_wq]
+  139 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-five_wq]
+  137 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kstrp]
+  136 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-ipv6_addrconf]
+  135 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-mld]
+  134 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-dm_bufio_cache]
+  133 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-uas]
+  132 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-vfio-irqfd-cleanup]
+  131 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-nvme-delete-wq]
+  130 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-nvme-reset-wq]
+  129 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-nvme-wq]
+  104 root         -2   0    0    0    0 S  0.0   0.0   0:00.00 [erofs_worker/7]
+  103 root         -2   0    0    0    0 S  0.0   0.0   0:00.00 [erofs_worker/6]
+  102 root         -2   0    0    0    0 S  0.0   0.0   0:00.00 [erofs_worker/5]
+  101 root         -2   0    0    0    0 S  0.0   0.0   0:00.00 [erofs_worker/4]
+  100 root         -2   0    0    0    0 S  0.0   0.0   0:00.00 [erofs_worker/3]
+   99 root         -2   0    0    0    0 S  0.0   0.0   0:00.00 [erofs_worker/2]
+   98 root         -2   0    0    0    0 S  0.0   0.0   0:00.00 [erofs_worker/1]
+   97 root         -2   0    0    0    0 S  0.0   0.0   0:00.00 [erofs_worker/0]
+   91 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-quota_release_wq]
+   90 root         RT   0    0    0    0 S  0.0   0.0   0:00.09 [watchdogd]
+   89 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-devfreq_wq]
+   88 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-edac-poller]
+   83 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kblockd]
+   82 root         20   0    0    0    0 S  0.0   0.0   0:05.85 [kcompactd0]
+   81 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-writeback]
+   80 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [oom_reaper]
+   79 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [khungtaskd]
+   78 root         20   0    0    0    0 S  0.0   0.0   0:00.05 [kauditd]
+   77 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-inet_frag_wq]
+   76 root         20   0    0    0    0 S  0.0   0.0   0:04.27 [rcuop/7]
+   73 root         20   0    0    0    0 S  0.0   0.0   0:00.85 [ksoftirqd/7]
+   72 root         RT   0    0    0    0 S  0.0   0.0   0:00.18 [migration/7]
+   71 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [idle_inject/7]
+   70 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [cpuhp/7]
+   69 root         20   0    0    0    0 S  0.0   0.0   0:04.53 [rcuop/6]
+   66 root         20   0    0    0    0 S  0.0   0.0   0:00.88 [ksoftirqd/6]
+   65 root         RT   0    0    0    0 S  0.0   0.0   0:00.13 [migration/6]
+   64 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [idle_inject/6]
+   63 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [cpuhp/6]
+   62 root         20   0    0    0    0 S  0.0   0.0   0:02.28 [rcuop/5]
+   59 root         20   0    0    0    0 S  0.0   0.0   0:02.57 [ksoftirqd/5]
+   58 root         RT   0    0    0    0 S  0.0   0.0   0:02.57 [migration/5]
+   57 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [idle_inject/5]
+   56 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [cpuhp/5]
+   55 root         20   0    0    0    0 S  0.0   0.0   0:02.37 [rcuop/4]
+   54 root         -2   0    0    0    0 S  0.0   0.0   0:05.65 [rcuog/4]
+   51 root         20   0    0    0    0 S  0.0   0.0   0:02.53 [ksoftirqd/4]
+   50 root         RT   0    0    0    0 S  0.0   0.0   0:02.65 [migration/4]
+   49 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [idle_inject/4]
+   48 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [cpuhp/4]
+   47 root         20   0    0    0    0 S  0.0   0.0   0:02.74 [rcuop/3]
+   44 root         20   0    0    0    0 S  0.0   0.0   0:01.92 [ksoftirqd/3]
+   43 root         RT   0    0    0    0 S  0.0   0.0   0:01.45 [migration/3]
+   42 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [idle_inject/3]
+   41 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [cpuhp/3]
+   40 root         20   0    0    0    0 S  0.0   0.0   0:02.80 [rcuop/2]
+   37 root         20   0    0    0    0 S  0.0   0.0   0:02.49 [ksoftirqd/2]
+   36 root         RT   0    0    0    0 S  0.0   0.0   0:01.79 [migration/2]
+   35 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [idle_inject/2]
+   34 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [cpuhp/2]
+   33 root         20   0    0    0    0 S  0.0   0.0   0:02.98 [rcuop/1]
+   30 root         20   0    0    0    0 S  0.0   0.0   0:02.62 [ksoftirqd/1]
+   29 root         RT   0    0    0    0 S  0.0   0.0   0:01.80 [migration/1]
+   28 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [idle_inject/1]
+   27 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [cpuhp/1]
+   26 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [cpuhp/0]
+   25 root         RT   0    0    0    0 S  0.0   0.0   0:00.00 [idle_inject/0]
+   24 root         RT   0    0    0    0 S  0.0   0.0   0:01.67 [migration/0]
+   23 root         -2   0    0    0    0 S  0.0   0.0   0:05.94 [rcu_exp_gp_kthread_worker]
+   22 root         -2   0    0    0    0 S  0.0   0.0   0:00.00 [rcu_exp_par_gp_kthread_worker/0]
+   21 root         -2   0    0    0    0 S  0.0   0.0   0:00.48 [rcub/0]
+   20 root         20   0    0    0    0 R  0.0   0.0   0:02.74 [rcuop/0]
+   18 root         -2   0    0    0    0 I  0.0   0.0   0:05.77 [rcu_preempt]
+   17 root         20   0    0    0    0 S  0.0   0.0   0:02.69 [ksoftirqd/0]
+   16 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [rcu_tasks_trace_kthread]
+   15 root         20   0    0    0    0 I  0.0   0.0   0:00.00 [rcu_tasks_kthread]
+   13 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-mm_percpu_wq]
+    8 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-netns]
+    7 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-slub_flushwq]
+    6 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-sync_wq]
+    5 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-rcu_gp]
+    4 root          0 -20    0    0    0 I  0.0   0.0   0:00.00 [kworker/R-kvfree_rcu_reclaim]
+    3 root         20   0    0    0    0 S  0.0   0.0   0:00.00 [pool_workqueue_release]
+    2 root         20   0    0    0    0 S  0.0   0.0   0:01.05 [kthreadd]
+    1 root         20   0 2.3G 4.2M 3.1M S  0.0   0.1   0:23.83 init second_stage

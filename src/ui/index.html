@@ -1,0 +1,723 @@
+<!doctype html>
+<!--
+  Evermore Android Profiler — LIVE dashboard (wayfinder ticket 021).
+  Reusa el layout del prototipo (prototypes/dashboard) pero la fuente de datos es
+  REAL: un cliente WebSocket (live.js) recibe Samples del server y los pasa a la
+  misma lógica de render (render.js). Sin build step.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Evermore Android Profiler — live</title>
+    <link rel="icon" type="image/png" href="assets/evermore-appicon.png" />
+    <style>
+      /* ---- Vendored fonts (offline) with system fallback ---- */
+      @font-face {
+        font-family: 'Baloo 2';
+        font-weight: 600;
+        font-style: normal;
+        font-display: swap;
+        src: url('vendor/fonts/baloo-2-latin-600-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Baloo 2';
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+        src: url('vendor/fonts/baloo-2-latin-700-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Baloo 2';
+        font-weight: 800;
+        font-style: normal;
+        font-display: swap;
+        src: url('vendor/fonts/baloo-2-latin-800-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Inter';
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+        src: url('vendor/fonts/inter-latin-400-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Inter';
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+        src: url('vendor/fonts/inter-latin-500-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Inter';
+        font-weight: 600;
+        font-style: normal;
+        font-display: swap;
+        src: url('vendor/fonts/inter-latin-600-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Inter';
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+        src: url('vendor/fonts/inter-latin-700-normal.woff2') format('woff2');
+      }
+
+      /* ---- Theme tokens: LIGHT is the default, dark via body[data-theme="dark"] ----
+     Brand accents (assets/brand/README.md): #EB008B primary, #00E6DA secondary. */
+      :root {
+        --bg: #f4f4f9;
+        --bg-card: #ffffff;
+        --bg-card2: #fbfbfe;
+        --primary: #eb008b;
+        --secondary: #00e6da;
+        --secondary-ink: #009e96; /* teal readable on light backgrounds */
+        --text: #1c1c28;
+        --muted: #66667a;
+        --line: #e2e2ec;
+        --chip-bg: rgba(28, 28, 40, 0.04);
+        --ok: #0fa968;
+        --warn: #e08a00;
+        --bad: #e11d48;
+        --glow-1: rgba(235, 0, 139, 0.06);
+        --glow-2: rgba(0, 230, 218, 0.07);
+        --font-title: 'Baloo 2', ui-rounded, system-ui, sans-serif;
+        --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+      body[data-theme='dark'] {
+        --bg: #0b0b10;
+        --bg-card: #15151d;
+        --bg-card2: #1b1b25;
+        --secondary-ink: #00e6da;
+        --text: #f2f2f6;
+        --muted: #9b9bab;
+        --line: #2a2a38;
+        --chip-bg: rgba(255, 255, 255, 0.04);
+        --ok: #2ee59d;
+        --warn: #ffc24b;
+        --bad: #ff4d6d;
+        --glow-1: rgba(235, 0, 139, 0.1);
+        --glow-2: rgba(0, 230, 218, 0.07);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background:
+          radial-gradient(1200px 500px at 15% -10%, var(--glow-1), transparent 60%),
+          radial-gradient(1000px 500px at 90% -10%, var(--glow-2), transparent 60%), var(--bg);
+        color: var(--text);
+        font-family: var(--font-body);
+        min-height: 100vh;
+        padding: 18px 22px 26px;
+      }
+
+      .card {
+        background: linear-gradient(180deg, var(--bg-card2), var(--bg-card));
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        min-width: 0;
+      }
+      .card-title {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      /* ================= HEADER ================= */
+      header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 10px 4px 18px;
+        flex-wrap: nowrap;
+      }
+      .brand-evermore {
+        flex: 0 0 auto;
+      }
+      .brand-evermore img {
+        height: 84px;
+        display: block;
+        filter: drop-shadow(0 4px 18px rgba(235, 0, 139, 0.25));
+      }
+      .brand-sub {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 15px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--secondary-ink);
+        margin-top: -6px;
+        text-align: center;
+      }
+
+      .device-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 18px;
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .device-card > div {
+        min-width: 0;
+      }
+      .device-icon {
+        font-size: 26px;
+      }
+      .device-name {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 17px;
+      }
+      .device-specs {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+      }
+      .spec {
+        font-size: 11px;
+        color: var(--muted);
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 9px;
+        white-space: nowrap;
+      }
+
+      .header-right {
+        margin-left: auto;
+        display: flex;
+        align-items: flex-end;
+        gap: 14px;
+        flex-wrap: nowrap;
+        flex: 0 0 auto;
+      }
+      .app-name {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .app-name label {
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .app-name .pkg {
+        font-family: var(--font-body);
+        font-size: 13px;
+        color: var(--text);
+        background: var(--bg-card2);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 8px 10px;
+      }
+
+      .rec-badge {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        height: 38px;
+        background: rgba(225, 29, 72, 0.08);
+        border: 1px solid rgba(225, 29, 72, 0.45);
+        border-radius: 999px;
+        padding: 0 16px;
+        user-select: none;
+      }
+      .rec-badge.offline {
+        background: var(--chip-bg);
+        border-color: var(--line);
+      }
+      .rec-dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--bad);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .rec-badge.offline .rec-dot {
+        animation: none;
+        background: var(--muted);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.25;
+        }
+      }
+      .rec-label {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 13px;
+        letter-spacing: 0.12em;
+      }
+      .rec-time {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .theme-toggle {
+        height: 38px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg-card2);
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-family: var(--font-body);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+      }
+      .theme-toggle:hover {
+        border-color: var(--secondary-ink);
+        color: var(--text);
+      }
+
+      .brand-odaclick {
+        align-self: center;
+      }
+      .brand-odaclick img {
+        height: 40px;
+        display: block;
+      }
+
+      /* ================= GAUGES ================= */
+      .gauges {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .gauge-card {
+        padding: 12px 10px 4px;
+        text-align: center;
+        position: relative;
+      }
+      .gauge-chart {
+        width: 100%;
+        height: 190px;
+      }
+      .gauge-head {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+      }
+      .event-chip {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 2px 8px;
+        border-radius: 999px;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      .event-chip.show {
+        opacity: 1;
+      }
+      .event-chip.charging {
+        background: rgba(15, 169, 104, 0.12);
+        color: var(--ok);
+        border: 1px solid rgba(15, 169, 104, 0.4);
+      }
+
+      /* ================= MID ROW: pie + timeline ================= */
+      .mid {
+        display: grid;
+        grid-template-columns: 340px minmax(0, 1fr);
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .panel {
+        padding: 14px 16px 8px;
+      }
+      .panel-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 2px;
+        flex-wrap: wrap;
+      }
+      .panel-sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      #memPie {
+        width: 100%;
+        height: 300px;
+      }
+      #timeline {
+        width: 100%;
+        height: 300px;
+      }
+
+      /* ================= NETWORK FOOTER ================= */
+      .net {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr);
+        align-items: center;
+        gap: 26px;
+        padding: 12px 20px;
+      }
+      .net-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 130px;
+      }
+      .net-stat .lbl {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .net-stat .val {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 22px;
+        font-variant-numeric: tabular-nums;
+      }
+      .net-stat .tot {
+        font-size: 11px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .net-rx .val {
+        color: var(--secondary-ink);
+      }
+      .net-tx .val {
+        color: var(--primary);
+      }
+      #netSpark {
+        width: 100%;
+        height: 64px;
+      }
+      .net-na {
+        font-size: 11px;
+        color: var(--muted);
+        align-self: center;
+      }
+
+      /* Network inspector */
+      .inspector {
+        margin-top: 14px;
+        padding: 0;
+        overflow: hidden;
+      }
+      .insp-head {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .insp-title {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 15px;
+      }
+      .insp-sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .insp-count {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .insp-scroll {
+        max-height: 340px;
+        overflow: auto;
+      }
+      .insp-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      .insp-table th {
+        position: sticky;
+        top: 0;
+        background: var(--bg-card);
+        text-align: left;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .insp-table td {
+        padding: 6px 14px;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 460px;
+        font-size: 13px;
+      }
+      .insp-table tr:hover td {
+        background: color-mix(in srgb, var(--primary) 5%, transparent);
+      }
+      .insp-m {
+        font-weight: 700;
+        font-size: 11px;
+        padding: 1px 7px;
+        border-radius: 5px;
+        background: var(--chip-bg);
+      }
+      .insp-m.https {
+        color: var(--secondary-ink);
+      }
+      .insp-m.http {
+        color: var(--primary);
+      }
+      .insp-host {
+        font-weight: 600;
+      }
+      .insp-time {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .insp-ok {
+        color: var(--secondary-ink);
+      }
+      .insp-err {
+        color: #d11;
+      }
+      .insp-empty {
+        padding: 32px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      footer.credits {
+        margin-top: 16px;
+        text-align: center;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      footer.credits b {
+        color: var(--text);
+      }
+
+      /* ================= RESPONSIVE ================= */
+      @media (max-width: 1100px) {
+        .brand-evermore img {
+          height: 64px;
+        }
+        .mid {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 820px) {
+        header {
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+        .device-card {
+          flex: 1 1 100%;
+        }
+        .header-right {
+          margin-left: 0;
+          width: 100%;
+          justify-content: flex-start;
+          flex-wrap: wrap;
+        }
+      }
+      @media (max-width: 700px) {
+        .net {
+          grid-template-columns: 1fr 1fr;
+          gap: 12px 20px;
+          padding: 12px 16px;
+        }
+        #netSpark {
+          grid-column: 1 / -1;
+        }
+      }
+      @media (max-width: 480px) {
+        body {
+          padding: 12px 12px 20px;
+        }
+        .brand-evermore img {
+          height: 56px;
+        }
+        .brand-sub {
+          font-size: 12px;
+        }
+        .gauges {
+          gap: 10px;
+        }
+        .gauge-chart {
+          height: 170px;
+        }
+        #memPie,
+        #timeline {
+          height: 260px;
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="light">
+    <header>
+      <div class="brand-evermore">
+        <img src="assets/evermore-logo.png" alt="Evermore Arcade" />
+        <div class="brand-sub">Android Profiler</div>
+      </div>
+
+      <div class="device-card card">
+        <div class="device-icon">📱</div>
+        <div>
+          <div class="device-name" id="devName">Waiting for device…</div>
+          <div class="device-specs" id="devSpecs"></div>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="app-name">
+          <label>Profiled app</label>
+          <span class="pkg" id="appPkg">—</span>
+        </div>
+
+        <div class="rec-badge offline" id="recBadge" title="Live connection status">
+          <span class="rec-dot"></span>
+          <span class="rec-label" id="recLabel">LIVE</span>
+          <span class="rec-time" id="recTime">00:00</span>
+        </div>
+
+        <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme" type="button">
+          <span id="themeIcon">🌙</span><span id="themeLabel">Dark</span>
+        </button>
+
+        <div class="brand-odaclick">
+          <img
+            src="assets/odaclick-dog.png"
+            alt="Odaclick Game Studio"
+            title="Odaclick Game Studio"
+          />
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero row: 5 donut-gauges (GPU + FPS share one donut; Battery added) -->
+    <section class="gauges">
+      <div class="card gauge-card">
+        <div class="gauge-head"><span class="card-title">CPU</span></div>
+        <div class="gauge-chart" id="gCpu"></div>
+      </div>
+      <div class="card gauge-card">
+        <div class="gauge-head"><span class="card-title">GPU · FPS</span></div>
+        <div class="gauge-chart" id="gGpu"></div>
+      </div>
+      <div class="card gauge-card">
+        <div class="gauge-head"><span class="card-title">Temp</span></div>
+        <div class="gauge-chart" id="gTemp"></div>
+      </div>
+      <div class="card gauge-card">
+        <div class="gauge-head"><span class="card-title">RAM (PSS)</span></div>
+        <div class="gauge-chart" id="gRam"></div>
+      </div>
+      <div class="card gauge-card">
+        <div class="gauge-head"><span class="card-title">Battery</span></div>
+        <span class="event-chip charging" id="chipCharging">⚡ CHARGING</span>
+        <div class="gauge-chart" id="gBat"></div>
+      </div>
+    </section>
+
+    <!-- Memory pie + timeline -->
+    <section class="mid">
+      <div class="card panel">
+        <div class="panel-head">
+          <span class="card-title">Memory composition</span>
+          <span class="panel-sub">PSS by category</span>
+        </div>
+        <div id="memPie"></div>
+      </div>
+      <div class="card panel">
+        <div class="panel-head">
+          <span class="card-title">Live timeline</span>
+          <span class="panel-sub">sliding 120 s window · click legend to toggle series</span>
+        </div>
+        <div id="timeline"></div>
+      </div>
+    </section>
+
+    <!-- Network footer -->
+    <section class="card net">
+      <div class="net-stat net-rx">
+        <span class="lbl">↓ RX</span>
+        <span class="val" id="rxNow">— KB/s</span>
+        <span class="tot" id="rxTot">total —</span>
+      </div>
+      <div class="net-stat net-tx">
+        <span class="lbl">↑ TX</span>
+        <span class="val" id="txNow">— KB/s</span>
+        <span class="tot" id="txTot">total —</span>
+      </div>
+      <div id="netSpark"></div>
+      <div class="net-na" id="netNa" hidden>
+        Network per-app: N/A on this device (netstats is bucketed, not realtime — deferred)
+      </div>
+    </section>
+
+    <!-- Network inspector: requests en vivo (debajo de la red). Solo con `live --inspect`. -->
+    <section class="card inspector" id="inspector" hidden>
+      <div class="insp-head">
+        <span class="insp-title">Network Inspector</span>
+        <span class="insp-sub"
+          >requests en vivo · HTTPS = host (payload requiere CA) · HTTP = URL completa</span
+        >
+        <span class="insp-count"><b id="flowN">0</b> requests</span>
+      </div>
+      <div class="insp-scroll">
+        <table class="insp-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Method</th>
+              <th>Host</th>
+              <th>URL / target</th>
+              <th>Status</th>
+              <th>Bytes</th>
+            </tr>
+          </thead>
+          <tbody id="flowRows"></tbody>
+        </table>
+        <div class="insp-empty" id="flowEmpty">Esperando tráfico de la app…</div>
+      </div>
+    </section>
+
+    <footer class="credits">
+      Live data at 1 Hz from adb · <b>Evermore Android Profiler</b> · Odaclick Game Studio
+    </footer>
+
+    <script src="vendor/echarts.min.js"></script>
+    <script src="render.js"></script>
+    <script src="live.js"></script>
+  </body>
+</html>

@@ -1,0 +1,326 @@
+<!doctype html>
+<!--
+  DISPOSABLE prototype of the EXPORTED HTML REPORT — Evermore Android Profiler
+  (wayfinder ticket 020). Standalone, no build step, no network: open with
+  `open prototypes/report/report.html`. Data is 100% fake (fixtures.js, deterministic).
+
+  Two modes (toggle in the header):
+    - Single session: consumption cards per metric + memory pie + full-session timelines.
+    - Compare (2+ sessions): delta table (better/worse colored), grouped bars, overlaid timelines.
+  New metric vs the dashboard: BATTERY (level %, drain %, temp, avg mA).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Evermore Android Profiler — session report</title>
+<link rel="icon" type="image/png" href="assets/evermore-appicon.png" />
+<style>
+  /* ---- Vendored fonts (offline) with system fallback ---- */
+  @font-face { font-family:'Baloo 2'; font-weight:600; font-style:normal; font-display:swap; src:url('vendor/fonts/baloo-2-latin-600-normal.woff2') format('woff2'); }
+  @font-face { font-family:'Baloo 2'; font-weight:700; font-style:normal; font-display:swap; src:url('vendor/fonts/baloo-2-latin-700-normal.woff2') format('woff2'); }
+  @font-face { font-family:'Baloo 2'; font-weight:800; font-style:normal; font-display:swap; src:url('vendor/fonts/baloo-2-latin-800-normal.woff2') format('woff2'); }
+  @font-face { font-family:'Inter'; font-weight:400; font-style:normal; font-display:swap; src:url('vendor/fonts/inter-latin-400-normal.woff2') format('woff2'); }
+  @font-face { font-family:'Inter'; font-weight:500; font-style:normal; font-display:swap; src:url('vendor/fonts/inter-latin-500-normal.woff2') format('woff2'); }
+  @font-face { font-family:'Inter'; font-weight:600; font-style:normal; font-display:swap; src:url('vendor/fonts/inter-latin-600-normal.woff2') format('woff2'); }
+  @font-face { font-family:'Inter'; font-weight:700; font-style:normal; font-display:swap; src:url('vendor/fonts/inter-latin-700-normal.woff2') format('woff2'); }
+
+  /* ---- Theme tokens: LIGHT default, dark via body[data-theme="dark"].
+     Brand accents: #EB008B primary, #00E6DA secondary. ---- */
+  :root {
+    --bg:#F4F4F9; --bg-card:#FFFFFF; --bg-card2:#FBFBFE;
+    --primary:#EB008B; --secondary:#00E6DA; --secondary-ink:#009E96;
+    --text:#1C1C28; --muted:#66667A; --line:#E2E2EC; --chip-bg:rgba(28,28,40,.04);
+    --ok:#0FA968; --warn:#E08A00; --bad:#E11D48;
+    --better-bg:rgba(15,169,104,.10); --better-ink:#0B7A4B;
+    --worse-bg:rgba(225,29,72,.09); --worse-ink:#C01038;
+    --glow-1:rgba(235,0,139,.06); --glow-2:rgba(0,230,218,.07);
+    --font-title:'Baloo 2', ui-rounded, system-ui, sans-serif;
+    --font-body:'Inter', system-ui, -apple-system, sans-serif;
+  }
+  body[data-theme="dark"] {
+    --bg:#0B0B10; --bg-card:#15151D; --bg-card2:#1B1B25;
+    --secondary-ink:#00E6DA;
+    --text:#F2F2F6; --muted:#9B9BAB; --line:#2A2A38; --chip-bg:rgba(255,255,255,.04);
+    --ok:#2EE59D; --warn:#FFC24B; --bad:#FF4D6D;
+    --better-bg:rgba(46,229,157,.12); --better-ink:#2EE59D;
+    --worse-bg:rgba(255,77,109,.12); --worse-ink:#FF6B84;
+    --glow-1:rgba(235,0,139,.10); --glow-2:rgba(0,230,218,.07);
+  }
+
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; max-width:100%; overflow-x:hidden; }
+  body {
+    background:
+      radial-gradient(1200px 500px at 15% -10%, var(--glow-1), transparent 60%),
+      radial-gradient(1000px 500px at 90% -10%, var(--glow-2), transparent 60%),
+      var(--bg);
+    color:var(--text); font-family:var(--font-body); min-height:100vh; padding:18px 22px 26px;
+  }
+
+  .card {
+    background:linear-gradient(180deg, var(--bg-card2), var(--bg-card));
+    border:1px solid var(--line); border-radius:14px; min-width:0;
+  }
+  .card-title {
+    font-family:var(--font-title); font-weight:700; font-size:13px;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--muted);
+  }
+  .panel { padding:14px 16px 10px; }
+  .panel-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+  .panel-sub { font-size:11px; color:var(--muted); }
+
+  /* ================= HEADER ================= */
+  header { display:flex; align-items:center; gap:20px; padding:10px 4px 16px; flex-wrap:nowrap; }
+  .brand-evermore { flex:0 0 auto; }
+  .brand-evermore img { height:78px; display:block; filter:drop-shadow(0 4px 18px rgba(235,0,139,.25)); }
+  .brand-sub {
+    font-family:var(--font-title); font-weight:800; font-size:14px; letter-spacing:.20em;
+    text-transform:uppercase; color:var(--secondary-ink); margin-top:-6px; text-align:center;
+  }
+  .report-badge {
+    font-family:var(--font-title); font-weight:800; font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--primary);
+    background:rgba(235,0,139,.08); border:1px solid rgba(235,0,139,.35);
+    border-radius:999px; padding:3px 12px; align-self:center; white-space:nowrap;
+  }
+
+  .header-right { margin-left:auto; display:flex; align-items:center; gap:12px; flex-wrap:nowrap; flex:0 0 auto; }
+  .mode-toggle { display:flex; background:var(--bg-card2); border:1px solid var(--line); border-radius:999px; padding:3px; }
+  .mode-toggle button {
+    font-family:var(--font-body); font-size:12px; font-weight:600; color:var(--muted);
+    background:transparent; border:0; border-radius:999px; padding:6px 14px; cursor:pointer; white-space:nowrap;
+  }
+  .mode-toggle button.active { background:var(--primary); color:#fff; }
+  .theme-toggle {
+    height:34px; padding:0 12px; display:flex; align-items:center; gap:6px;
+    background:var(--bg-card2); color:var(--muted); border:1px solid var(--line);
+    border-radius:999px; font-family:var(--font-body); font-size:12px; font-weight:600; cursor:pointer; user-select:none;
+  }
+  .theme-toggle:hover { border-color:var(--secondary-ink); color:var(--text); }
+  .brand-odaclick { align-self:center; }
+  .brand-odaclick img { height:38px; display:block; }
+
+  /* ================= DEVICE / SESSION META STRIP ================= */
+  .meta-strip { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:14px; margin-bottom:14px; }
+  .device-card { display:flex; align-items:center; gap:16px; padding:14px 18px; }
+  .device-icon { font-size:30px; }
+  .device-name { font-family:var(--font-title); font-weight:700; font-size:18px; }
+  .device-specs { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .spec {
+    font-size:11px; color:var(--muted); background:var(--chip-bg);
+    border:1px solid var(--line); border-radius:999px; padding:2px 9px; white-space:nowrap;
+  }
+  .session-card { padding:14px 18px; display:flex; flex-direction:column; gap:8px; }
+  .session-app { font-family:var(--font-title); font-weight:700; font-size:16px; }
+  .session-bundle { font-family:var(--font-body); font-size:12px; color:var(--secondary-ink); font-weight:600; }
+  .session-facts { display:flex; gap:8px; flex-wrap:wrap; margin-top:2px; }
+  .fact { font-size:11px; color:var(--muted); }
+  .fact b { color:var(--text); font-variant-numeric:tabular-nums; }
+
+  .single-picker { display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .single-picker label { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+  .single-picker select {
+    background:var(--bg-card2); color:var(--text); border:1px solid var(--line); border-radius:9px;
+    font-family:var(--font-body); font-size:13px; padding:0 10px; height:34px; min-width:220px; outline:none;
+  }
+  .single-picker select:focus { border-color:var(--secondary-ink); }
+
+  /* ================= CONSUMPTION CARDS ================= */
+  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(158px,1fr)); gap:14px; margin-bottom:14px; }
+  .metric-card { padding:14px 14px 12px; position:relative; }
+  .metric-card .card-title { display:flex; align-items:center; gap:6px; }
+  .metric-big {
+    font-family:var(--font-title); font-weight:800; font-size:34px; line-height:1.05;
+    margin-top:8px; font-variant-numeric:tabular-nums;
+  }
+  .metric-big .unit { font-size:15px; color:var(--muted); font-weight:600; margin-left:3px; }
+  .metric-sub { font-size:11.5px; color:var(--muted); margin-top:6px; font-variant-numeric:tabular-nums; }
+  .metric-sub .hi { color:var(--bad); font-weight:600; }
+  .metric-sub .lo { color:var(--secondary-ink); font-weight:600; }
+  /* battery = star card */
+  .metric-card.star { border-color:rgba(235,0,139,.4); background:linear-gradient(180deg, rgba(235,0,139,.05), var(--bg-card)); }
+  .metric-card.star .metric-big { color:var(--primary); }
+
+  /* ================= MID: memory pie + timelines ================= */
+  .mid { display:grid; grid-template-columns:340px minmax(0,1fr); gap:14px; margin-bottom:14px; }
+  #memPie { width:100%; height:300px; }
+  #timeline { width:100%; height:320px; }
+
+  /* ================= COMPARE ================= */
+  .cmp-banner {
+    display:flex; align-items:center; gap:10px; padding:11px 16px; border-radius:12px; margin-bottom:14px;
+    font-size:13px; font-weight:600;
+    background:rgba(15,169,104,.09); border:1px solid rgba(15,169,104,.4); color:var(--ok);
+  }
+  .cmp-banner.warn { background:rgba(225,29,72,.08); border-color:rgba(225,29,72,.45); color:var(--bad); }
+  .cmp-banner .ico { font-size:16px; }
+
+  .cmp-table-wrap { overflow-x:auto; }
+  table.cmp { width:100%; border-collapse:collapse; font-size:13px; }
+  table.cmp th, table.cmp td { padding:10px 12px; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  table.cmp th:first-child, table.cmp td:first-child { text-align:left; }
+  table.cmp thead th {
+    font-family:var(--font-title); font-weight:700; font-size:11px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line);
+  }
+  table.cmp tbody td { border-bottom:1px solid var(--line); }
+  table.cmp .metric-name { font-weight:600; color:var(--text); }
+  table.cmp .metric-name small { display:block; color:var(--muted); font-weight:400; font-size:10.5px; letter-spacing:.02em; }
+  .delta { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:999px; font-weight:600; font-size:12px; }
+  .delta.better { background:var(--better-bg); color:var(--better-ink); }
+  .delta.worse { background:var(--worse-bg); color:var(--worse-ink); }
+  .delta.flat { color:var(--muted); }
+  td.base { color:var(--muted); }
+
+  #cmpBars { width:100%; height:340px; }
+  #cmpTimeline { width:100%; height:340px; }
+  .cmp-grid { display:grid; grid-template-columns:1fr; gap:14px; margin-bottom:14px; }
+  .metric-switch { display:flex; gap:6px; flex-wrap:wrap; }
+  .metric-switch button {
+    font-family:var(--font-body); font-size:11px; font-weight:600; color:var(--muted);
+    background:var(--bg-card2); border:1px solid var(--line); border-radius:999px; padding:4px 11px; cursor:pointer;
+  }
+  .metric-switch button.active { background:var(--secondary-ink); color:#fff; border-color:var(--secondary-ink); }
+
+  footer.credits { margin-top:16px; text-align:center; font-size:11px; color:var(--muted); }
+  footer.credits b { color:var(--text); }
+  .hidden { display:none !important; }
+
+  /* ================= RESPONSIVE ================= */
+  @media (max-width:1100px) {
+    .brand-evermore img { height:62px; }
+    .mid { grid-template-columns:1fr; }
+    .meta-strip { grid-template-columns:1fr; }
+  }
+  @media (max-width:820px) {
+    header { gap:12px; flex-wrap:wrap; }
+    .header-right { margin-left:0; width:100%; justify-content:flex-start; flex-wrap:wrap; }
+  }
+  @media (max-width:480px) {
+    body { padding:12px 12px 20px; }
+    .brand-evermore img { height:54px; }
+    .brand-sub { font-size:12px; }
+    .cards { gap:10px; }
+    .metric-big { font-size:30px; }
+    #memPie, #timeline, #cmpBars, #cmpTimeline { height:280px; }
+    .single-picker select { min-width:0; width:100%; }
+  }
+</style>
+</head>
+<body data-theme="light">
+
+<header>
+  <div class="brand-evermore">
+    <img src="assets/evermore-logo.png" alt="Evermore Arcade" />
+    <div class="brand-sub">Android Profiler</div>
+  </div>
+  <span class="report-badge">Session Report</span>
+
+  <div class="header-right">
+    <div class="mode-toggle" id="modeToggle">
+      <button data-mode="single" class="active" type="button">1 session</button>
+      <button data-mode="compare" type="button">Compare</button>
+    </div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme" type="button">
+      <span id="themeIcon">🌙</span><span id="themeLabel">Dark</span>
+    </button>
+    <div class="brand-odaclick">
+      <img src="assets/odaclick-dog.png" alt="Odaclick Game Studio" title="Odaclick Game Studio" />
+    </div>
+  </div>
+</header>
+
+<!-- ========================= MODE 1: SINGLE SESSION ========================= -->
+<main id="viewSingle">
+  <div class="single-picker">
+    <label for="sessSel">Session</label>
+    <select id="sessSel"></select>
+  </div>
+
+  <div class="meta-strip">
+    <div class="device-card card">
+      <div class="device-icon">📱</div>
+      <div>
+        <div class="device-name" id="devName">Samsung SM_G973F</div>
+        <div class="device-specs" id="devSpecs"></div>
+      </div>
+    </div>
+    <div class="session-card card">
+      <div class="session-app" id="sesApp">Evermore Arcade</div>
+      <div class="session-bundle" id="sesBundle">com.evermore.oda.qa</div>
+      <div class="session-facts" id="sesFacts"></div>
+    </div>
+  </div>
+
+  <!-- consumption cards per metric -->
+  <section class="cards" id="metricCards"></section>
+
+  <!-- memory pie + full-session timelines -->
+  <section class="mid">
+    <div class="card panel">
+      <div class="panel-head">
+        <span class="card-title">Memory composition</span>
+        <span class="panel-sub">avg PSS by category</span>
+      </div>
+      <div id="memPie"></div>
+    </div>
+    <div class="card panel">
+      <div class="panel-head">
+        <span class="card-title">Session timeline</span>
+        <span class="panel-sub">full session · click legend to toggle series</span>
+      </div>
+      <div id="timeline"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ========================= MODE 2: COMPARE ========================= -->
+<main id="viewCompare" class="hidden">
+  <div class="cmp-banner" id="cmpBanner">
+    <span class="ico">✓</span>
+    <span id="cmpBannerText">Comparable — same device &amp; sampling across all sessions.</span>
+  </div>
+
+  <div class="cmp-grid">
+    <div class="card panel">
+      <div class="panel-head">
+        <span class="card-title">Deltas vs baseline</span>
+        <span class="panel-sub" id="cmpBaseSub">baseline = first session · less battery / temp / RAM = better, more FPS = better</span>
+      </div>
+      <div class="cmp-table-wrap">
+        <table class="cmp" id="cmpTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="cmp-grid">
+    <div class="card panel">
+      <div class="panel-head">
+        <span class="card-title">Per-metric comparison</span>
+        <span class="panel-sub">grouped bars — one bar per session</span>
+      </div>
+      <div id="cmpBars"></div>
+    </div>
+  </div>
+
+  <div class="cmp-grid">
+    <div class="card panel">
+      <div class="panel-head">
+        <span class="card-title">Overlaid timelines</span>
+        <div class="metric-switch" id="cmpMetricSwitch"></div>
+      </div>
+      <div id="cmpTimeline"></div>
+    </div>
+  </div>
+</main>
+
+<footer class="credits">
+  Disposable prototype · fake sessions (fixtures.js, deterministic) · <b>Evermore Android Profiler</b> · Odaclick Game Studio
+</footer>
+
+<script src="vendor/echarts.min.js"></script>
+<script src="fixtures.js"></script>
+<script src="report.js"></script>
+</body>
+</html>

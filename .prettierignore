@@ -1,0 +1,6 @@
+node_modules/
+dist/
+fixtures/
+prototypes/
+src/ui/vendor/
+bun.lock

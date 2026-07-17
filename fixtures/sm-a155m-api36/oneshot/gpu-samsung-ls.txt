@@ -1,0 +1,10 @@
+gpu_available_governor
+gpu_busy
+gpu_busy_orig
+gpu_clock
+gpu_freq_table
+gpu_governor
+gpu_max_clock
+gpu_min_clock
+gpu_model
+gpu_tmu
