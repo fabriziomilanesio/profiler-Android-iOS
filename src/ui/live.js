@@ -427,14 +427,11 @@
     e.stopPropagation()
   })
 
-  // Tema persistido: aplicar el guardado al cargar; el toggle del header también persiste.
+  // Tema persistido: aplicar el guardado al cargar. El select de Configuración
+  // es el único control: al cambiarlo previsualiza al toque; Guardar lo persiste.
   void loadConfig(true)
-  document.getElementById('themeToggle').addEventListener('click', function () {
-    // corre después del handler de render.js (se registró antes): el tema ya cambió
-    fetch('/api/config', {
-      method: 'PUT',
-      body: JSON.stringify({ theme: ProfilerDashboard.getTheme() }),
-    }).catch(function () {})
+  menu.cfgTheme.addEventListener('change', function () {
+    ProfilerDashboard.setTheme(menu.cfgTheme.value)
   })
 
   function closePops() {

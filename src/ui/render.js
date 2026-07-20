@@ -659,29 +659,21 @@
       (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss
   }, 1000)
 
-  // ---------- theme toggle ----------
+  // ---------- theme (se controla desde Configuración del menú ☰) ----------
   function applyTheme(next) {
     if (next !== 'light' && next !== 'dark') return
     if (next === theme) return
     theme = next
     C = PALETTES[theme]
     document.body.setAttribute('data-theme', theme)
-    document.getElementById('themeIcon').textContent = theme === 'light' ? '🌙' : '☀️'
-    document.getElementById('themeLabel').textContent = theme === 'light' ? 'Dark' : 'Light'
     disposeCharts()
     SERIES = seriesMeta()
     buildCharts()
     if (lastSample) render(lastSample)
   }
-  function initTheme() {
-    document.getElementById('themeToggle').addEventListener('click', function () {
-      applyTheme(theme === 'light' ? 'dark' : 'light')
-    })
-  }
 
   function init() {
     buildCharts()
-    initTheme()
     window.addEventListener('resize', function () {
       allCharts().forEach(function (c) {
         c.resize()
