@@ -36,7 +36,7 @@ declare const Bun: {
 const WS_TOPIC = 'samples'
 
 /** ¿El Origin es una página servida por nosotros mismos (localhost)? */
-function isLocalOrigin(origin: string): boolean {
+export function isLocalOrigin(origin: string): boolean {
   try {
     const host = new URL(origin).hostname
     return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1'

@@ -1,12 +1,23 @@
 // Protocolo del WebSocket entre el server y el dashboard (ticket 021).
-// Mensajes tipados serializados a JSON. Al conectar: {type:"device"}; por tick: {type:"sample"}.
+// Mensajes tipados serializados a JSON. Al conectar: {type:"device"} + {type:"app"};
+// por tick: {type:"sample"}; al cambiar de app desde el selector: {type:"app"}.
 import type { DeviceInfo, Sample } from '../core/schema'
 import type { InspectorFlow } from './inspectorProxy'
+
+/** Estado de la app profileada (selector de apps). */
+export interface AppStatus {
+  packageName: string
+  /** pid del proceso; null = todavía no está corriendo (el sampler engancha cuando aparezca). */
+  pid: number | null
+  /** true si el server la lanzó automáticamente (no estaba corriendo al seleccionarla). */
+  launched: boolean
+}
 
 export type ServerMessage =
   | { type: 'device'; device: DeviceInfo }
   | { type: 'sample'; sample: Sample }
   | { type: 'flow'; flow: InspectorFlow }
+  | { type: 'app'; app: AppStatus }
 
 export function deviceMessage(device: DeviceInfo): string {
   return JSON.stringify({ type: 'device', device } satisfies ServerMessage)
@@ -18,4 +29,8 @@ export function sampleMessage(sample: Sample): string {
 
 export function flowMessage(flow: InspectorFlow): string {
   return JSON.stringify({ type: 'flow', flow } satisfies ServerMessage)
+}
+
+export function appMessage(app: AppStatus): string {
+  return JSON.stringify({ type: 'app', app } satisfies ServerMessage)
 }

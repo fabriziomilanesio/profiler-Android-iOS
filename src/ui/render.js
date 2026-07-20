@@ -619,6 +619,28 @@
     }
   }
 
+  // ---------- reset al cambiar de app (selector) ----------
+  // Mezclar series de dos apps en el mismo timeline sería engañoso: se vacían
+  // los buffers y los totales; los gauges son instantáneos y se pisan solos.
+  function resetSeries() {
+    tlData.forEach(function (arr) {
+      arr.length = 0
+    })
+    netData[0].length = 0
+    netData[1].length = 0
+    netTotalRx = 0
+    netTotalTx = 0
+    netEverSeen = false
+    lastSample = null
+    if (timeline)
+      timeline.setOption({
+        series: SERIES.map(function (_, i) {
+          return { data: tlData[i] }
+        }),
+      })
+    if (netSpark) netSpark.setOption({ series: [{ data: netData[0] }, { data: netData[1] }] })
+  }
+
   // ---------- connection status ----------
   var startTs = null
   function setConnected(connected) {
@@ -670,5 +692,6 @@
     render: render,
     setDevice: setDevice,
     setConnected: setConnected,
+    resetSeries: resetSeries,
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this)

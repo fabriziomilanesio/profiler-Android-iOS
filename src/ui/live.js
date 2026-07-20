@@ -1,7 +1,8 @@
 /**
  * live.js — WebSocket client for the LIVE dashboard (ticket 021).
- * Connects to /ws on the same origin, receives {type:"device"|"sample"} messages,
- * and drives ProfilerDashboard (render.js). Auto-reconnects if the socket drops.
+ * Connects to /ws on the same origin, receives {type:"device"|"sample"|"app"|"flow"}
+ * messages, and drives ProfilerDashboard (render.js). Auto-reconnects if the socket
+ * drops. También maneja el selector de apps (dropdown del header + /api/packages).
  */
 ;(function () {
   'use strict'
@@ -11,6 +12,146 @@
   var pkg = null
   var device = null
   var reconnectDelay = 1000
+
+  // --- Selector de apps (dropdown del header) ---
+  var appSel = {
+    btn: document.getElementById('appPkgBtn'),
+    pop: document.getElementById('appPop'),
+    search: document.getElementById('appSearch'),
+    chip: document.getElementById('appChip'),
+    sys: document.getElementById('appSys'),
+    list: document.getElementById('appList'),
+    empty: document.getElementById('appEmpty'),
+    pkgLabel: document.getElementById('appPkg'),
+    launched: document.getElementById('appLaunched'),
+  }
+  var chipOn = true // filtro default: solo apps que matchean filterTerm ("evermore")
+  var appData = null // {packages, usage, filterTerm, current} del último fetch
+  var appSwitching = false
+
+  function onAppStatus(app) {
+    // cambio de app: las series del timeline son de la app anterior — resetear
+    if (pkg && pkg !== app.packageName) ProfilerDashboard.resetSeries()
+    pkg = app.packageName
+    appSel.pkgLabel.textContent = app.packageName
+    if (app.pid === null) {
+      appSel.launched.textContent = 'esperando proceso…'
+      appSel.launched.className = 'app-launched waiting'
+      appSel.launched.hidden = false
+    } else if (app.launched) {
+      appSel.launched.textContent = '🚀 launched'
+      appSel.launched.className = 'app-launched'
+      appSel.launched.hidden = false
+    } else {
+      appSel.launched.hidden = true
+    }
+  }
+
+  function loadPackages() {
+    var url = '/api/packages' + (appSel.sys.checked ? '?system=1' : '')
+    appSel.empty.hidden = false
+    appSel.empty.textContent = 'Cargando apps del device…'
+    fetch(url)
+      .then(function (r) {
+        return r.json()
+      })
+      .then(function (data) {
+        appData = data
+        // el término del chip es configurable (apps.json), no hardcodeado acá
+        appSel.chip.textContent = data.filterTerm.charAt(0).toUpperCase() + data.filterTerm.slice(1)
+        renderAppList()
+      })
+      .catch(function () {
+        appSel.empty.textContent = 'No se pudo listar las apps.'
+      })
+  }
+
+  function renderAppList() {
+    if (!appData) return
+    var term = chipOn ? appData.filterTerm : appSel.search.value.trim()
+    term = term.toLowerCase()
+    var shown = appData.packages.filter(function (p) {
+      return !term || p.toLowerCase().indexOf(term) !== -1
+    })
+    appSel.list.innerHTML = ''
+    appSel.empty.hidden = shown.length > 0
+    appSel.empty.textContent = 'Sin resultados.'
+    shown.forEach(function (p) {
+      var li = document.createElement('li')
+      var b = document.createElement('button')
+      b.type = 'button'
+      if (p === pkg) b.className = 'current'
+      var name = document.createElement('span')
+      name.textContent = (p === pkg ? '✓ ' : '') + p
+      b.appendChild(name)
+      var uses = appData.usage[p]
+      if (uses) {
+        var u = document.createElement('span')
+        u.className = 'app-use'
+        u.textContent = uses + '×'
+        b.appendChild(u)
+      }
+      b.addEventListener('click', function () {
+        selectApp(p)
+      })
+      li.appendChild(b)
+      appSel.list.appendChild(li)
+    })
+  }
+
+  function selectApp(p) {
+    if (appSwitching || p === pkg) {
+      closeAppPop()
+      return
+    }
+    appSwitching = true
+    appSel.pkgLabel.textContent = p + ' — cambiando…'
+    closeAppPop()
+    fetch('/api/app', { method: 'POST', body: JSON.stringify({ package: p }) })
+      .then(function (r) {
+        if (!r.ok) throw new Error('switch failed')
+        // el estado real llega por WS ({type:"app"}) — acá no hay nada más que hacer
+      })
+      .catch(function () {
+        appSel.pkgLabel.textContent = pkg || '—'
+      })
+      .finally(function () {
+        appSwitching = false
+      })
+  }
+
+  function closeAppPop() {
+    appSel.pop.hidden = true
+  }
+
+  appSel.btn.addEventListener('click', function (e) {
+    e.stopPropagation()
+    appSel.pop.hidden = !appSel.pop.hidden
+    if (!appSel.pop.hidden) {
+      loadPackages()
+      appSel.search.focus()
+    }
+  })
+  appSel.search.addEventListener('input', function () {
+    // escribir apaga el chip: la búsqueda es sobre todas las apps listadas
+    if (appSel.search.value.trim()) chipOn = false
+    appSel.chip.classList.toggle('active', chipOn)
+    renderAppList()
+  })
+  appSel.chip.addEventListener('click', function () {
+    chipOn = !chipOn
+    if (chipOn) appSel.search.value = ''
+    appSel.chip.classList.toggle('active', chipOn)
+    renderAppList()
+  })
+  appSel.sys.addEventListener('change', loadPackages)
+  appSel.pop.addEventListener('click', function (e) {
+    e.stopPropagation()
+  })
+  document.addEventListener('click', closeAppPop)
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeAppPop()
+  })
 
   // --- Network inspector (tabla de requests en vivo, debajo de la red) ---
   var flowCount = 0
@@ -81,14 +222,14 @@
       }
       if (msg.type === 'device') {
         device = msg.device
-        ProfilerDashboard.setDevice(
-          device,
-          pkg || new URLSearchParams(location.search).get('package') || 'com.evermore.oda.qa',
-        )
+        // el package lo anuncia el server con {type:"app"} — acá solo la ficha
+        ProfilerDashboard.setDevice(device, pkg)
       } else if (msg.type === 'sample') {
         ProfilerDashboard.render(msg.sample)
       } else if (msg.type === 'flow') {
         addFlow(msg.flow)
+      } else if (msg.type === 'app') {
+        onAppStatus(msg.app)
       }
     })
 

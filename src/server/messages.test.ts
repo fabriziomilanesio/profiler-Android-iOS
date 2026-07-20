@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { deviceMessage, sampleMessage } from './messages'
+import { appMessage, deviceMessage, sampleMessage } from './messages'
 import type { DeviceInfo, Sample } from '../core/schema'
 
 describe('protocolo WS', () => {
@@ -31,5 +31,10 @@ describe('protocolo WS', () => {
       netTxKb: null,
     }
     expect(JSON.parse(sampleMessage(sample))).toEqual({ type: 'sample', sample })
+  })
+
+  test('appMessage serializa {type:"app", app}', () => {
+    const app = { packageName: 'com.evermore.oda.qa', pid: 123, launched: true }
+    expect(JSON.parse(appMessage(app))).toEqual({ type: 'app', app })
   })
 })

@@ -70,6 +70,11 @@ export class Sampler {
     private pid: number,
   ) {}
 
+  /** pid actual (0 = proceso todavía no visto; refreshPid lo engancha cuando aparece). */
+  get processId(): number {
+    return this.pid
+  }
+
   /** Habilita la recolección de timestats de SurfaceFlinger (necesaria para FPS). Best-effort. */
   async init(): Promise<void> {
     try {

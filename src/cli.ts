@@ -15,16 +15,15 @@ import { installPlatformTools, realInstallDeps } from './core/preflight/installP
 import { Preflight, type PreflightReport } from './core/preflight/preflight'
 import { LiveServer } from './server/liveServer'
 import type { AdbTransport } from './core/adb/AdbTransport'
+import { isValidPackageName } from './core/adb/packageName'
+import { AppStore } from './core/appStore'
 
 const DEFAULT_PACKAGE = 'com.evermore.oda.qa'
 
-// El package viaja interpolado a `adb shell` (que pasa por el sh del device):
-// validar acá corta cualquier inyección de comandos vía --package.
-const PACKAGE_RE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/
-
 interface CliArgs {
   command: 'preflight' | 'live'
-  packageName: string
+  /** package pedido por --package; null = auto-resume (última usada del AppStore). */
+  packageName: string | null
   adbPath?: string
   installPlatformTools: boolean
   port?: number
@@ -34,7 +33,7 @@ interface CliArgs {
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     command: 'preflight',
-    packageName: DEFAULT_PACKAGE,
+    packageName: null,
     installPlatformTools: false,
     inspectHttp: false,
   }
@@ -57,7 +56,9 @@ function parseArgs(argv: string[]): CliArgs {
       process.exit(2)
     }
   }
-  if (!PACKAGE_RE.test(args.packageName)) {
+  // El package viaja interpolado a `adb shell` (que pasa por el sh del device):
+  // validar acá corta cualquier inyección de comandos vía --package.
+  if (args.packageName !== null && !isValidPackageName(args.packageName)) {
     console.error(`--package inválido: "${args.packageName}" (se espera ej. com.empresa.app)`)
     process.exit(2)
   }
@@ -141,8 +142,14 @@ function uiRoot(): string {
 }
 
 /** Subcomando `profiler live`: preflight → primer device → server WS + dashboard. */
-async function runLive(transport: AdbTransport, adbPath: string, args: CliArgs): Promise<void> {
-  const report = await new Preflight(transport, args.packageName).check()
+async function runLive(
+  transport: AdbTransport,
+  adbPath: string,
+  args: CliArgs,
+  packageName: string,
+  store: AppStore,
+): Promise<void> {
+  const report = await new Preflight(transport, packageName).check()
   renderReport(report)
   if (!report.ready || !report.device) {
     process.exitCode = 1
@@ -150,14 +157,18 @@ async function runLive(transport: AdbTransport, adbPath: string, args: CliArgs):
   }
   const serial = report.device.serial
 
+  // cuenta para el ranking del dropdown y queda como "última usada" (auto-resume)
+  store.select(packageName)
+
   const server = new LiveServer({
     transport,
     serial,
-    packageName: args.packageName,
+    packageName,
     uiRoot: uiRoot(),
     port: args.port,
     inspectHttp: args.inspectHttp,
     adbPath,
+    appStore: store,
   })
 
   // Cleanup idempotente registrado ANTES de start(): start() setea el proxy del
@@ -200,7 +211,7 @@ async function runLive(transport: AdbTransport, adbPath: string, args: CliArgs):
       `· Android ${device.androidRelease ?? '?'} (API ${device.apiLevel ?? '?'}) ` +
       `· ${device.gpu ?? 'GPU ?'} · ${device.soc ?? 'SoC ?'}`,
   )
-  console.log(`Streaming ${args.packageName} @ 1 Hz por WebSocket.`)
+  console.log(`Streaming ${packageName} @ 1 Hz por WebSocket.`)
   if (args.inspectHttp) {
     console.log(`  🔎 Network inspector ON — proxy del device seteado (se limpia al cortar).`)
   }
@@ -212,16 +223,24 @@ async function main(): Promise<void> {
   console.log('Evermore Android Profiler v0.1.0')
   const args = parseArgs(process.argv.slice(2))
 
+  // Auto-resume: sin --package se profilea la última app usada (AppStore);
+  // primera corrida sin historial ⇒ el default de Evermore QA.
+  const store = new AppStore()
+  const packageName = args.packageName ?? store.data.last ?? DEFAULT_PACKAGE
+  if (args.packageName === null && store.data.last) {
+    console.log(`App: ${packageName} (última usada — cambiala con --package o desde el dashboard)`)
+  }
+
   const adbPath = await resolveAdbPath(args)
   const transport = new RealAdbTransport(adbPath)
 
   if (args.command === 'live') {
-    await runLive(transport, adbPath, args)
+    await runLive(transport, adbPath, args, packageName, store)
     return
   }
 
   // preflight (default): cadena de checks contra el transport real
-  const report = await new Preflight(transport, args.packageName).check()
+  const report = await new Preflight(transport, packageName).check()
   renderReport(report)
   process.exitCode = report.ready ? 0 : 1
 }
