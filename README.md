@@ -29,7 +29,26 @@ En el teléfono, una sola vez: activá **Depuración USB** (Ajustes → Acerca d
 tocá 7 veces "Número de compilación" → volvé → Opciones de desarrollador → Depuración USB)
 y al conectarlo aceptá el diálogo "¿Permitir depuración USB?" marcando "Permitir siempre".
 
-Todo lo que sigue es para uso desde terminal / desarrollo.
+## macOS / Linux — instalación normal
+
+```bash
+# 1. Bun (runtime; si ya lo tenés, salteá):
+curl -fsSL https://bun.sh/install | bash        # macOS: también `brew install oven-sh/bun/bun`
+
+# 2. Clonar e instalar deps:
+git clone git@github.com:Odaclick/evermore-android-profiler.git
+cd evermore-android-profiler
+bun install
+
+# 3. Arrancar — abre el dashboard solo en el browser:
+bun start
+```
+
+adb no suele hacer falta instalarlo: si tenés Android Studio lo encuentra solo, y si no,
+`bun start --install-platform-tools` lo descarga (oficial de Google). El mismo paso del
+teléfono de arriba (Depuración USB) aplica igual.
+
+Las secciones que siguen detallan requisitos, flags y desarrollo.
 
 ## Requisitos
 
