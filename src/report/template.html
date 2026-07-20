@@ -1,0 +1,439 @@
+<!doctype html>
+<!--
+  Evermore Android Profiler — reporte de sesión exportado (standalone).
+  Generado por el profiler con datos reales embebidos (window.ReportData).
+  Diseño del prototipo ticket 020, modo single. Sin red: todo va inline.
+-->
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Evermore Profiler — __TITLE__</title>
+    <style>
+      __FONTS_CSS__ :root {
+        --bg: #f4f4f9;
+        --bg-card: #ffffff;
+        --bg-card2: #fbfbfe;
+        --primary: #eb008b;
+        --secondary: #00e6da;
+        --secondary-ink: #009e96;
+        --text: #1c1c28;
+        --muted: #66667a;
+        --line: #e2e2ec;
+        --chip-bg: rgba(28, 28, 40, 0.04);
+        --ok: #0fa968;
+        --warn: #e08a00;
+        --bad: #e11d48;
+        --glow-1: rgba(235, 0, 139, 0.06);
+        --glow-2: rgba(0, 230, 218, 0.07);
+        --font-title: 'Baloo 2', ui-rounded, system-ui, sans-serif;
+        --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+      body[data-theme='dark'] {
+        --bg: #0b0b10;
+        --bg-card: #15151d;
+        --bg-card2: #1b1b25;
+        --secondary-ink: #00e6da;
+        --text: #f2f2f6;
+        --muted: #9b9bab;
+        --line: #2a2a38;
+        --chip-bg: rgba(255, 255, 255, 0.04);
+        --ok: #2ee59d;
+        --warn: #ffc24b;
+        --bad: #ff4d6d;
+        --glow-1: rgba(235, 0, 139, 0.1);
+        --glow-2: rgba(0, 230, 218, 0.07);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+      body {
+        background:
+          radial-gradient(1200px 500px at 15% -10%, var(--glow-1), transparent 60%),
+          radial-gradient(1000px 500px at 90% -10%, var(--glow-2), transparent 60%), var(--bg);
+        color: var(--text);
+        font-family: var(--font-body);
+        min-height: 100vh;
+        padding: 18px 22px 26px;
+      }
+
+      .card {
+        background: linear-gradient(180deg, var(--bg-card2), var(--bg-card));
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        min-width: 0;
+      }
+      .card-title {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .panel {
+        padding: 14px 16px 10px;
+      }
+      .panel-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .panel-sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 10px 4px 16px;
+        flex-wrap: nowrap;
+      }
+      .brand-evermore {
+        flex: 0 0 auto;
+      }
+      .brand-evermore img {
+        height: 78px;
+        display: block;
+        filter: drop-shadow(0 4px 18px rgba(235, 0, 139, 0.25));
+      }
+      .brand-sub {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 14px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--secondary-ink);
+        margin-top: -6px;
+        text-align: center;
+      }
+      .report-badge {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--primary);
+        background: rgba(235, 0, 139, 0.08);
+        border: 1px solid rgba(235, 0, 139, 0.35);
+        border-radius: 999px;
+        padding: 3px 12px;
+        align-self: center;
+        white-space: nowrap;
+      }
+      .header-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: nowrap;
+        flex: 0 0 auto;
+      }
+      .theme-toggle {
+        height: 34px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg-card2);
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-family: var(--font-body);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+      }
+      .theme-toggle:hover {
+        border-color: var(--secondary-ink);
+        color: var(--text);
+      }
+      .brand-odaclick {
+        align-self: center;
+      }
+      .brand-odaclick img {
+        height: 38px;
+        display: block;
+      }
+
+      .meta-strip {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .device-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 18px;
+      }
+      .device-icon {
+        font-size: 30px;
+      }
+      .device-name {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 18px;
+      }
+      .device-specs {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+      .spec {
+        font-size: 11px;
+        color: var(--muted);
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 9px;
+        white-space: nowrap;
+      }
+      .session-card {
+        padding: 14px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .session-app {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 16px;
+      }
+      .session-bundle {
+        font-family: var(--font-body);
+        font-size: 12px;
+        color: var(--secondary-ink);
+        font-weight: 600;
+      }
+      .session-facts {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+      .fact {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .fact b {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      .trim-note {
+        font-size: 11px;
+        color: var(--warn);
+        border: 1px solid var(--warn);
+        border-radius: 999px;
+        padding: 2px 9px;
+        align-self: flex-start;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .metric-card {
+        padding: 14px 14px 12px;
+        position: relative;
+      }
+      .metric-card .card-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .metric-big {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 34px;
+        line-height: 1.05;
+        margin-top: 8px;
+        font-variant-numeric: tabular-nums;
+      }
+      .metric-big .unit {
+        font-size: 15px;
+        color: var(--muted);
+        font-weight: 600;
+        margin-left: 3px;
+      }
+      .metric-sub {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .metric-sub .hi {
+        color: var(--bad);
+        font-weight: 600;
+      }
+      .metric-sub .lo {
+        color: var(--secondary-ink);
+        font-weight: 600;
+      }
+      .metric-card.star {
+        border-color: rgba(235, 0, 139, 0.4);
+        background: linear-gradient(180deg, rgba(235, 0, 139, 0.05), var(--bg-card));
+      }
+      .metric-card.star .metric-big {
+        color: var(--primary);
+      }
+
+      .mid {
+        display: grid;
+        grid-template-columns: 340px minmax(0, 1fr);
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      #memPie {
+        width: 100%;
+        height: 300px;
+      }
+      #timeline {
+        width: 100%;
+        height: 320px;
+      }
+
+      footer.credits {
+        margin-top: 16px;
+        text-align: center;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      footer.credits b {
+        color: var(--text);
+      }
+
+      @media (max-width: 1100px) {
+        .brand-evermore img {
+          height: 62px;
+        }
+        .mid {
+          grid-template-columns: 1fr;
+        }
+        .meta-strip {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 820px) {
+        header {
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .header-right {
+          margin-left: 0;
+          width: 100%;
+          justify-content: flex-start;
+          flex-wrap: wrap;
+        }
+      }
+      @media (max-width: 480px) {
+        body {
+          padding: 12px 12px 20px;
+        }
+        .brand-evermore img {
+          height: 54px;
+        }
+        .brand-sub {
+          font-size: 12px;
+        }
+        .cards {
+          gap: 10px;
+        }
+        .metric-big {
+          font-size: 30px;
+        }
+        #memPie,
+        #timeline {
+          height: 280px;
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="__THEME__">
+    <header>
+      <div class="brand-evermore">
+        <img src="__LOGO_EVERMORE__" alt="Evermore Arcade" />
+        <div class="brand-sub">Android Profiler</div>
+      </div>
+      <span class="report-badge">Session Report</span>
+
+      <div class="header-right">
+        <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme" type="button">
+          <span id="themeIcon">🌙</span><span id="themeLabel">Dark</span>
+        </button>
+        <div class="brand-odaclick">
+          <img src="__LOGO_ODACLICK__" alt="Odaclick Game Studio" title="Odaclick Game Studio" />
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="meta-strip">
+        <div class="device-card card">
+          <div class="device-icon">📱</div>
+          <div>
+            <div class="device-name" id="devName">—</div>
+            <div class="device-specs" id="devSpecs"></div>
+          </div>
+        </div>
+        <div class="session-card card">
+          <div class="session-app" id="sesApp">—</div>
+          <div class="session-bundle" id="sesBundle">—</div>
+          <div class="session-facts" id="sesFacts"></div>
+          <span class="trim-note" id="trimNote" hidden></span>
+        </div>
+      </div>
+
+      <section class="cards" id="metricCards"></section>
+
+      <section class="mid">
+        <div class="card panel">
+          <div class="panel-head">
+            <span class="card-title">Memory composition</span>
+            <span class="panel-sub">avg PSS by category</span>
+          </div>
+          <div id="memPie"></div>
+        </div>
+        <div class="card panel">
+          <div class="panel-head">
+            <span class="card-title">Session timeline</span>
+            <span class="panel-sub">full window · click legend to toggle series</span>
+          </div>
+          <div id="timeline"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="credits">
+      Generado __GENERATED__ · <b>Evermore Android Profiler</b> · Odaclick Game Studio
+    </footer>
+
+    <script>
+      __ECHARTS__
+    </script>
+    <script>
+      window.ReportData = __REPORT_DATA__
+    </script>
+    <script>
+      __TEMPLATE_JS__
+    </script>
+  </body>
+</html>

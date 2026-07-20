@@ -3,6 +3,7 @@
 // servido en localhost para inspeccionarlo a mano o con Playwright.
 // Correr con: bun scripts/smoke-selector.ts [puerto]
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { AdbTransport, ShellResult } from '../src/core/adb/AdbTransport'
 import type { AppStoreData } from '../src/core/appStore'
 import { defaultAppStoreData } from '../src/core/appStore'
@@ -50,13 +51,19 @@ const transport: AdbTransport = {
   },
 }
 
+const smokeDir = join(tmpdir(), 'evermore-smoke')
 const store = {
   data: {
     ...defaultAppStoreData(),
     usage: { 'com.evermore.oda.qa': 12, 'com.evermore.arcade': 5, 'com.android.chrome': 2 },
+    reportsDir: join(smokeDir, 'reports'),
   } satisfies AppStoreData,
   select(pkg: string) {
     console.log(`[store] select ${pkg}`)
+  },
+  set(patch: Partial<AppStoreData>) {
+    Object.assign(store.data, patch)
+    console.log(`[store] set ${JSON.stringify(patch)}`)
   },
 }
 
@@ -67,6 +74,8 @@ const server = new LiveServer({
   uiRoot: join(import.meta.dir, '../src/ui'),
   port: Number(process.argv[2] ?? 4599),
   appStore: store,
+  intervalMs: 1000,
+  sessionsDir: join(smokeDir, 'sessions'),
 })
 
 const { url } = await server.start()

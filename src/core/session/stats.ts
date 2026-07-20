@@ -1,0 +1,191 @@
+// Estadísticas de sesión para el reporte exportado (contrato del ticket 020):
+// cada métrica escalar → {avg, peak, min, p90}; batería → drain/avgMa/temp;
+// memAvg → breakdown PSS promedio. Funciones puras, null-safe: los Samples reales
+// traen null en lo no disponible y acá se filtra (una métrica sin datos ⇒ null).
+import type { DeviceInfo, MemSample, Sample } from '../schema'
+
+export interface ScalarStats {
+  avg: number
+  peak: number
+  min: number
+  p90: number
+}
+
+export interface BatterySummary {
+  levelStart: number | null
+  levelEnd: number | null
+  drainPct: number | null
+  avgMa: number | null
+  tempPeak: number | null
+  tempAvg: number | null
+}
+
+export interface ReportSummary {
+  cpu: ScalarStats | null
+  gpu: ScalarStats | null
+  fps: ScalarStats | null
+  tempC: ScalarStats | null
+  ramMb: ScalarStats | null
+  battery: BatterySummary
+  memAvg: Record<'java' | 'native' | 'graphics' | 'code' | 'stack' | 'other', number | null>
+}
+
+/** Punto de la serie del reporte (shape que consume el template del ticket 020). */
+export interface ReportSeriesPoint {
+  t: number
+  ts: number
+  cpu: number | null
+  gpu: number | null
+  fps: number | null
+  tempC: number | null
+  ramMb: number | null
+  mem: Omit<MemSample, 'pss'>
+  battery: { level: number | null; tempC: number | null; mA: number | null }
+  netRxKb: number | null
+  netTxKb: number | null
+}
+
+export interface ReportSession {
+  app: string
+  bundleId: string
+  device: {
+    name: string
+    os: string
+    ramMb: number | null
+    gpu: string | null
+    soc: string | null
+    serial: string
+  } | null
+  startedAt: string
+  durationS: number
+  samplingHz: number
+  sampleCount: number
+  /** true si la ventana pedida se recortó al tramo de la app actual (hubo switches). */
+  trimmed: boolean
+  series: ReportSeriesPoint[]
+  summary: ReportSummary
+}
+
+function percentile(sortedAsc: number[], p: number): number {
+  const idx = Math.min(
+    sortedAsc.length - 1,
+    Math.max(0, Math.round((p / 100) * (sortedAsc.length - 1))),
+  )
+  return sortedAsc[idx]!
+}
+
+/** Stats de una serie de valores (los null ya filtrados). null si no hay datos. */
+export function scalarStats(values: number[]): ScalarStats | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  let sum = 0
+  for (const v of values) sum += v
+  return {
+    avg: sum / values.length,
+    peak: sorted[sorted.length - 1]!,
+    min: sorted[0]!,
+    p90: percentile(sorted, 90),
+  }
+}
+
+function pick(samples: Sample[], get: (s: Sample) => number | null): number[] {
+  const out: number[] = []
+  for (const s of samples) {
+    const v = get(s)
+    if (v !== null && Number.isFinite(v)) out.push(v)
+  }
+  return out
+}
+
+function avgOrNull(values: number[]): number | null {
+  if (values.length === 0) return null
+  let sum = 0
+  for (const v of values) sum += v
+  return sum / values.length
+}
+
+export function summarize(samples: Sample[]): ReportSummary {
+  const levels = pick(samples, (s) => s.battery.levelPct)
+  const battTemps = pick(samples, (s) => s.battery.tempC)
+  // el signo de mA varía por OEM (carga vs drenaje): se reporta magnitud promedio
+  const mAs = pick(samples, (s) => s.battery.mA).map(Math.abs)
+  const levelStart = levels.length ? levels[0]! : null
+  const levelEnd = levels.length ? levels[levels.length - 1]! : null
+
+  const memKeys = ['java', 'native', 'graphics', 'code', 'stack', 'other'] as const
+  const memAvg = {} as ReportSummary['memAvg']
+  for (const k of memKeys) memAvg[k] = avgOrNull(pick(samples, (s) => s.mem[k]))
+
+  return {
+    cpu: scalarStats(pick(samples, (s) => s.cpu)),
+    gpu: scalarStats(pick(samples, (s) => s.gpu)),
+    fps: scalarStats(pick(samples, (s) => s.fps)),
+    tempC: scalarStats(pick(samples, (s) => s.tempC)),
+    ramMb: scalarStats(pick(samples, (s) => s.mem.pss)),
+    battery: {
+      levelStart,
+      levelEnd,
+      drainPct: levelStart !== null && levelEnd !== null ? levelStart - levelEnd : null,
+      avgMa: avgOrNull(mAs),
+      tempPeak: battTemps.length ? Math.max(...battTemps) : null,
+      tempAvg: avgOrNull(battTemps),
+    },
+    memAvg,
+  }
+}
+
+export interface BuildReportOptions {
+  samples: Sample[]
+  packageName: string
+  device: DeviceInfo | null
+  intervalMs: number
+  trimmed: boolean
+}
+
+/** Arma la sesión completa que consume el template del reporte. */
+export function buildReportSession(opts: BuildReportOptions): ReportSession {
+  const { samples, device } = opts
+  const first = samples[0]
+  const last = samples[samples.length - 1]
+  const durationS = first && last ? Math.max(1, Math.round((last.ts - first.ts) / 1000) + 1) : 0
+  return {
+    app: opts.packageName.split('.').pop() ?? opts.packageName,
+    bundleId: opts.packageName,
+    device: device
+      ? {
+          name: [device.manufacturer, device.model].filter(Boolean).join(' ') || device.serial,
+          os: `Android ${device.androidRelease ?? '?'} (API ${device.apiLevel ?? '?'})`,
+          ramMb: device.ramTotalMb ?? null,
+          gpu: device.gpu ?? null,
+          soc: device.soc ?? null,
+          serial: device.serial,
+        }
+      : null,
+    startedAt: first ? new Date(first.ts).toISOString() : new Date(0).toISOString(),
+    durationS,
+    samplingHz: +(1000 / opts.intervalMs).toFixed(2),
+    sampleCount: samples.length,
+    trimmed: opts.trimmed,
+    series: samples.map((s) => ({
+      t: s.t,
+      ts: s.ts,
+      cpu: s.cpu,
+      gpu: s.gpu,
+      fps: s.fps,
+      tempC: s.tempC,
+      ramMb: s.mem.pss,
+      mem: {
+        java: s.mem.java,
+        native: s.mem.native,
+        graphics: s.mem.graphics,
+        code: s.mem.code,
+        stack: s.mem.stack,
+        other: s.mem.other,
+      },
+      battery: { level: s.battery.levelPct, tempC: s.battery.tempC, mA: s.battery.mA },
+      netRxKb: s.netRxKb,
+      netTxKb: s.netTxKb,
+    })),
+    summary: summarize(samples),
+  }
+}

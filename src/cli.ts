@@ -17,6 +17,7 @@ import { LiveServer } from './server/liveServer'
 import type { AdbTransport } from './core/adb/AdbTransport'
 import { isValidPackageName } from './core/adb/packageName'
 import { AppStore } from './core/appStore'
+import { defaultSessionsDir } from './core/session/sessionLog'
 import { run } from './runtime/spawn'
 
 const DEFAULT_PACKAGE = 'com.evermore.oda.qa'
@@ -191,6 +192,7 @@ async function runLive(
     inspectHttp: args.inspectHttp,
     adbPath,
     appStore: store,
+    sessionsDir: defaultSessionsDir(),
   })
 
   // Cleanup idempotente registrado ANTES de start(): start() setea el proxy del

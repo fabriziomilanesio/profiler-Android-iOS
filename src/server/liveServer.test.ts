@@ -58,12 +58,20 @@ function fakeTransport(
   return { t, cmds }
 }
 
-function memoryStore(): { data: AppStoreData; select(pkg: string): void; selected: string[] } {
+function memoryStore(): {
+  data: AppStoreData
+  select(pkg: string): void
+  set(patch: Partial<AppStoreData>): void
+  selected: string[]
+} {
   const selected: string[] = []
   const store = {
     data: { ...defaultAppStoreData(), usage: { 'com.evermore.arcade': 7 } },
     select(pkg: string) {
       selected.push(pkg)
+    },
+    set(patch: Partial<AppStoreData>) {
+      Object.assign(store.data, patch)
     },
     selected,
   }
@@ -75,18 +83,21 @@ async function startServer(
   installed: string[],
   deviceList: AdbDevice[] = [],
   serial: string | null = 'FAKE-SERIAL',
+  extra: { sessionsDir?: string; reportsDir?: string } = {},
 ) {
   const { t, cmds } = fakeTransport(running, installed, deviceList)
   const store = memoryStore()
+  if (extra.reportsDir) store.data.reportsDir = extra.reportsDir
   const server = new LiveServer({
     transport: t,
     serial: serial ?? undefined,
     packageName: PKG,
     uiRoot: UI_ROOT,
     port: 0, // puerto libre: los tests no chocan con un live real
-    intervalMs: 3_600_000, // sin ticks durante el test
+    intervalMs: 3_600_000, // sin ticks periódicos durante el test (el primero corre igual)
     devicePollMs: 25, // watcher rápido para el test de modo espera
     appStore: store,
+    sessionsDir: extra.sessionsDir,
   })
   const { url } = await server.start()
   return { server, url, cmds, store }
@@ -270,6 +281,92 @@ describe('LiveServer /api/device', () => {
 
       const after = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
       expect(after.current).toBe('SERIAL-B')
+    } finally {
+      await server.stop()
+    }
+  })
+})
+
+describe('LiveServer export/config/sesiones', () => {
+  test('GET /api/report?window=full descarga HTML con datos y guarda copia', async () => {
+    const { mkdtempSync, readdirSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const reportsDir = mkdtempSync(join(tmpdir(), 'reports-'))
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], [], 'FAKE-SERIAL', {
+      reportsDir,
+    })
+    try {
+      await new Promise((r) => setTimeout(r, 150)) // el primer tick llena el buffer
+      const res = await fetch(`${url}/api/report?window=full`)
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-disposition')).toContain('evermore-report-')
+      const html = await res.text()
+      expect(html).toContain('window.ReportData')
+      expect(html).toContain(PKG)
+      expect(readdirSync(reportsDir).some((f) => f.endsWith('.html'))).toBe(true)
+    } finally {
+      await server.stop()
+      rmSync(reportsDir, { recursive: true, force: true })
+    }
+  })
+
+  test('window inválida ⇒ 400; sin muestras (ventana diminuta tras switch) no explota', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [])
+    try {
+      expect((await fetch(`${url}/api/report?window=abc`)).status).toBe(400)
+      expect((await fetch(`${url}/api/report?window=99999`)).status).toBe(400)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('historial: la corrida crea una sesión listable y exportable', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'sessions-'))
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], [], 'FAKE-SERIAL', {
+      sessionsDir,
+    })
+    try {
+      await new Promise((r) => setTimeout(r, 150)) // primer tick → primer sample al JSONL
+      const list = (await (await fetch(`${url}/api/sessions`)).json()) as {
+        sessions: Array<{ id: string; packages: string[] }>
+        current: string | null
+      }
+      expect(list.sessions).toHaveLength(1)
+      expect(list.current).toBe(list.sessions[0]!.id)
+      expect(list.sessions[0]!.packages).toContain(PKG)
+
+      const rep = await fetch(`${url}/api/report?session=${list.sessions[0]!.id}`)
+      expect(rep.status).toBe(200)
+      expect(await rep.text()).toContain(PKG)
+
+      expect((await fetch(`${url}/api/report?session=..%2Fevil`)).status).toBe(404)
+    } finally {
+      await server.stop()
+      rmSync(sessionsDir, { recursive: true, force: true })
+    }
+  })
+
+  test('config: GET devuelve defaults y PUT aplica filterTerm/theme en caliente', async () => {
+    const { server, url, store } = await startServer(new Map([[PKG, 111]]), [])
+    try {
+      const before = (await (await fetch(`${url}/api/config`)).json()) as {
+        config: { filterTerm: string; theme: string }
+      }
+      expect(before.config.filterTerm).toBe('evermore')
+
+      const put = await fetch(`${url}/api/config`, {
+        method: 'PUT',
+        body: JSON.stringify({ filterTerm: 'oda', theme: 'dark' }),
+      })
+      expect(put.status).toBe(200)
+      expect(store.data.filterTerm).toBe('oda')
+      expect(store.data.theme).toBe('dark')
+
+      // el selector de apps refleja el término nuevo al toque
+      const pkgs = (await (await fetch(`${url}/api/packages`)).json()) as { filterTerm: string }
+      expect(pkgs.filterTerm).toBe('oda')
     } finally {
       await server.stop()
     }

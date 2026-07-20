@@ -421,6 +421,113 @@
         color: var(--muted);
       }
 
+      /* --- Menú ☰: export / registros / configuración --- */
+      .menu-select {
+        position: relative;
+        align-self: center;
+      }
+      .menu-pop {
+        width: 440px;
+        max-height: min(560px, 80vh);
+        overflow: auto;
+      }
+      .menu-section {
+        padding: 8px 4px 10px;
+      }
+      .menu-section + .menu-section {
+        border-top: 1px solid var(--line);
+      }
+      .menu-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .menu-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .menu-status {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+        min-height: 14px;
+      }
+      .menu-status.err {
+        color: var(--bad);
+      }
+      .menu-status.ok {
+        color: var(--secondary-ink);
+      }
+      .sess-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .sess-date {
+        font-size: 12.5px;
+        color: var(--text);
+      }
+      .sess-sub {
+        font-size: 11px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cfg-grid {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 8px 10px;
+        align-items: center;
+      }
+      .cfg-grid label {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .cfg-grid input,
+      .cfg-grid select {
+        width: 100%;
+        font: 12.5px var(--font-body);
+        color: var(--text);
+        background: var(--bg-card2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 9px;
+        outline: none;
+      }
+      .cfg-grid input:focus,
+      .cfg-grid select:focus {
+        border-color: var(--secondary-ink);
+      }
+      .cfg-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .cfg-save {
+        font: 600 12px var(--font-body);
+        color: #fff;
+        background: var(--primary);
+        border: 1px solid var(--primary);
+        border-radius: 999px;
+        padding: 6px 16px;
+        cursor: pointer;
+      }
+      .cfg-save:hover {
+        filter: brightness(1.08);
+      }
+
       .rec-badge {
         display: flex;
         align-items: center;
@@ -840,6 +947,65 @@
         <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme" type="button">
           <span id="themeIcon">🌙</span><span id="themeLabel">Dark</span>
         </button>
+
+        <div class="menu-select" id="menuSelect">
+          <button
+            class="theme-toggle"
+            id="menuBtn"
+            title="Export · registros · configuración"
+            type="button"
+          >
+            ☰
+          </button>
+          <div class="app-pop menu-pop" id="menuPop" hidden>
+            <div class="menu-section">
+              <div class="menu-title">Exportar reporte</div>
+              <div class="menu-row" id="exportRow">
+                <button class="app-chip" data-window="full" type="button">Sesión completa</button>
+                <button class="app-chip" data-window="5" type="button">5 min</button>
+                <button class="app-chip" data-window="15" type="button">15 min</button>
+                <button class="app-chip" data-window="30" type="button">30 min</button>
+                <button class="app-chip" data-window="60" type="button">1 h</button>
+              </div>
+              <div class="menu-status" id="exportStatus"></div>
+            </div>
+
+            <div class="menu-section">
+              <div class="menu-title">
+                <span>Registros de sesiones</span>
+                <button class="app-chip" id="sessRefresh" type="button">⟳</button>
+              </div>
+              <ul class="app-list" id="sessList"></ul>
+              <div class="app-empty" id="sessEmpty" hidden>Sin sesiones guardadas.</div>
+            </div>
+
+            <div class="menu-section">
+              <div class="menu-title">Configuración</div>
+              <div class="cfg-grid">
+                <label for="cfgFilter">Filtro de apps</label>
+                <input id="cfgFilter" type="text" autocomplete="off" spellcheck="false" />
+                <label for="cfgInterval">Sampling</label>
+                <select id="cfgInterval">
+                  <option value="500">0.5 s</option>
+                  <option value="1000">1 s</option>
+                  <option value="2000">2 s</option>
+                  <option value="5000">5 s</option>
+                </select>
+                <label for="cfgTheme">Tema</label>
+                <select id="cfgTheme">
+                  <option value="light">Claro</option>
+                  <option value="dark">Oscuro</option>
+                </select>
+                <label for="cfgReports">Carpeta reportes</label>
+                <input id="cfgReports" type="text" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="cfg-actions">
+                <button class="cfg-save" id="cfgSave" type="button">Guardar</button>
+                <span class="menu-status" id="cfgStatus"></span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div class="brand-odaclick">
           <img

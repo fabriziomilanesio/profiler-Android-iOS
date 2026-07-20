@@ -660,20 +660,22 @@
   }, 1000)
 
   // ---------- theme toggle ----------
+  function applyTheme(next) {
+    if (next !== 'light' && next !== 'dark') return
+    if (next === theme) return
+    theme = next
+    C = PALETTES[theme]
+    document.body.setAttribute('data-theme', theme)
+    document.getElementById('themeIcon').textContent = theme === 'light' ? '🌙' : '☀️'
+    document.getElementById('themeLabel').textContent = theme === 'light' ? 'Dark' : 'Light'
+    disposeCharts()
+    SERIES = seriesMeta()
+    buildCharts()
+    if (lastSample) render(lastSample)
+  }
   function initTheme() {
-    var t = document.getElementById('themeToggle')
-    var icon = document.getElementById('themeIcon')
-    var lbl = document.getElementById('themeLabel')
-    t.addEventListener('click', function () {
-      theme = theme === 'light' ? 'dark' : 'light'
-      C = PALETTES[theme]
-      document.body.setAttribute('data-theme', theme)
-      icon.textContent = theme === 'light' ? '🌙' : '☀️'
-      lbl.textContent = theme === 'light' ? 'Dark' : 'Light'
-      disposeCharts()
-      SERIES = seriesMeta()
-      buildCharts()
-      if (lastSample) render(lastSample)
+    document.getElementById('themeToggle').addEventListener('click', function () {
+      applyTheme(theme === 'light' ? 'dark' : 'light')
     })
   }
 
@@ -693,5 +695,9 @@
     setDevice: setDevice,
     setConnected: setConnected,
     resetSeries: resetSeries,
+    setTheme: applyTheme,
+    getTheme: function () {
+      return theme
+    },
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this)

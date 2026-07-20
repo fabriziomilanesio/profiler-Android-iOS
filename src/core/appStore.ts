@@ -1,9 +1,9 @@
-// Persistencia del selector de apps: última app profileada (auto-resume del CLI),
-// contadores de uso por package (ordenan el dropdown: más usadas arriba) y el
-// término del chip de filtro (default "evermore", configurable editando el JSON).
+// Configuración persistente del profiler: selector de apps (última profileada,
+// contadores de uso, término del chip) + preferencias del dashboard (tema,
+// intervalo de sampling, carpeta de reportes). Editable a mano.
 //
-// Vive en ~/.config/evermore-profiler/apps.json — local a la máquina, fuera del
-// repo a propósito: la selección personal no debe generar ruido en git.
+// Vive en ~/.config/evermore-profiler/config.json — local a la máquina, fuera del
+// repo a propósito. Migración silenciosa desde el viejo apps.json si existe.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -16,10 +16,32 @@ export interface AppStoreData {
   usage: Record<string, number>
   /** término del chip de filtro del selector (substring, case-insensitive). */
   filterTerm: string
+  /** tema del dashboard y de los reportes exportados. */
+  theme: 'light' | 'dark'
+  /** intervalo de sampling en ms (aplica en caliente desde el panel de config). */
+  intervalMs: number
+  /** carpeta donde se guarda la copia de cada reporte exportado. */
+  reportsDir: string
+}
+
+/** Campos que el panel de configuración puede escribir (PUT /api/config). */
+export type ConfigPatch = Partial<
+  Pick<AppStoreData, 'filterTerm' | 'theme' | 'intervalMs' | 'reportsDir'>
+>
+
+export function defaultReportsDir(): string {
+  return join(homedir(), '.config', 'evermore-profiler', 'reports')
 }
 
 export function defaultAppStoreData(): AppStoreData {
-  return { last: null, usage: {}, filterTerm: 'evermore' }
+  return {
+    last: null,
+    usage: {},
+    filterTerm: 'evermore',
+    theme: 'light',
+    intervalMs: 1000,
+    reportsDir: defaultReportsDir(),
+  }
 }
 
 /** Parsea el JSON del store. Tolerante: corrupto o con basura ⇒ defaults campo a campo. */
@@ -45,6 +67,13 @@ export function parseAppStore(json: string): AppStoreData {
   if (typeof o['filterTerm'] === 'string' && o['filterTerm'].trim()) {
     d.filterTerm = o['filterTerm'].trim()
   }
+  if (o['theme'] === 'dark' || o['theme'] === 'light') d.theme = o['theme']
+  if (typeof o['intervalMs'] === 'number' && o['intervalMs'] >= 250 && o['intervalMs'] <= 10000) {
+    d.intervalMs = Math.round(o['intervalMs'])
+  }
+  if (typeof o['reportsDir'] === 'string' && o['reportsDir'].trim()) {
+    d.reportsDir = o['reportsDir'].trim()
+  }
   return d
 }
 
@@ -66,19 +95,32 @@ export function rankPackages(installed: string[], usage: Record<string, number>)
 }
 
 export function appStorePath(): string {
+  return join(homedir(), '.config', 'evermore-profiler', 'config.json')
+}
+
+/** Ruta vieja (pre-panel de config): se migra silenciosamente a config.json. */
+export function legacyAppStorePath(): string {
   return join(homedir(), '.config', 'evermore-profiler', 'apps.json')
 }
 
-/** Store con persistencia. Carga al construir; select() guarda enseguida (best-effort). */
+/** Store con persistencia. Carga al construir; select()/set() guardan enseguida. */
 export class AppStore {
   private data_: AppStoreData
 
-  constructor(private readonly path: string = appStorePath()) {
+  constructor(
+    private readonly path: string = appStorePath(),
+    legacyPath: string = legacyAppStorePath(),
+  ) {
     let json = ''
     try {
       json = readFileSync(this.path, 'utf8')
     } catch {
-      /* primera corrida: sin archivo */
+      // sin config.json: migrar del viejo apps.json si existe (mismos campos base)
+      try {
+        json = readFileSync(legacyPath, 'utf8')
+      } catch {
+        /* primera corrida: sin archivo */
+      }
     }
     this.data_ = parseAppStore(json)
   }
@@ -89,6 +131,31 @@ export class AppStore {
 
   select(pkg: string): void {
     this.data_ = recordSelection(this.data_, pkg)
+    this.save()
+  }
+
+  /** Aplica un patch de configuración. Campo inválido ⇒ se ignora (queda el previo). */
+  set(patch: ConfigPatch): void {
+    const d = { ...this.data_ }
+    if (typeof patch.filterTerm === 'string' && patch.filterTerm.trim()) {
+      d.filterTerm = patch.filterTerm.trim()
+    }
+    if (patch.theme === 'light' || patch.theme === 'dark') d.theme = patch.theme
+    if (
+      typeof patch.intervalMs === 'number' &&
+      patch.intervalMs >= 250 &&
+      patch.intervalMs <= 10000
+    ) {
+      d.intervalMs = Math.round(patch.intervalMs)
+    }
+    if (typeof patch.reportsDir === 'string' && patch.reportsDir.trim()) {
+      d.reportsDir = patch.reportsDir.trim()
+    }
+    this.data_ = d
+    this.save()
+  }
+
+  private save(): void {
     try {
       mkdirSync(dirname(this.path), { recursive: true })
       writeFileSync(this.path, JSON.stringify(this.data_, null, 2) + '\n')

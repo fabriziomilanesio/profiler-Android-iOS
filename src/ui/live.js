@@ -248,9 +248,199 @@
     e.stopPropagation()
   })
 
+  // --- Menú ☰: export de reportes, registros de sesiones y configuración ---
+  var menu = {
+    btn: document.getElementById('menuBtn'),
+    pop: document.getElementById('menuPop'),
+    exportRow: document.getElementById('exportRow'),
+    exportStatus: document.getElementById('exportStatus'),
+    sessList: document.getElementById('sessList'),
+    sessEmpty: document.getElementById('sessEmpty'),
+    sessRefresh: document.getElementById('sessRefresh'),
+    cfgFilter: document.getElementById('cfgFilter'),
+    cfgInterval: document.getElementById('cfgInterval'),
+    cfgTheme: document.getElementById('cfgTheme'),
+    cfgReports: document.getElementById('cfgReports'),
+    cfgSave: document.getElementById('cfgSave'),
+    cfgStatus: document.getElementById('cfgStatus'),
+  }
+
+  function setStatus(el, msg, kind) {
+    el.textContent = msg || ''
+    el.className = 'menu-status' + (kind ? ' ' + kind : '')
+  }
+
+  // Descarga vía blob (no navegación): un error del server se muestra, no rompe la página.
+  function downloadReport(query, statusEl) {
+    setStatus(statusEl, 'Generando reporte…')
+    fetch('/api/report?' + query)
+      .then(function (r) {
+        if (!r.ok) {
+          return r.json().then(function (body) {
+            throw new Error(body.error || 'error ' + r.status)
+          })
+        }
+        var dispo = r.headers.get('content-disposition') || ''
+        var m = dispo.match(/filename="([^"]+)"/)
+        return r.blob().then(function (blob) {
+          var a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = m ? m[1] : 'evermore-report.html'
+          // dentro del popover: el click sintético no burbujea a document (cerraría el menú)
+          menu.pop.appendChild(a)
+          a.click()
+          a.remove()
+          setTimeout(function () {
+            URL.revokeObjectURL(a.href)
+          }, 10000)
+          setStatus(statusEl, 'Reporte descargado (copia en la carpeta de reportes).', 'ok')
+        })
+      })
+      .catch(function (e) {
+        setStatus(statusEl, 'No se pudo exportar: ' + e.message, 'err')
+      })
+  }
+
+  menu.exportRow.addEventListener('click', function (e) {
+    var w = e.target && e.target.getAttribute && e.target.getAttribute('data-window')
+    if (w) downloadReport('window=' + w, menu.exportStatus)
+  })
+
+  function fmtDur(s) {
+    if (s >= 3600) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm'
+    if (s >= 60) return Math.floor(s / 60) + 'm ' + (s % 60) + 's'
+    return s + 's'
+  }
+
+  function loadSessions() {
+    menu.sessEmpty.hidden = false
+    menu.sessEmpty.textContent = 'Cargando…'
+    menu.sessList.innerHTML = ''
+    fetch('/api/sessions')
+      .then(function (r) {
+        return r.json()
+      })
+      .then(function (data) {
+        menu.sessEmpty.hidden = data.sessions.length > 0
+        menu.sessEmpty.textContent = 'Sin sesiones guardadas.'
+        data.sessions.forEach(function (s) {
+          var li = document.createElement('li')
+          var b = document.createElement('button')
+          b.type = 'button'
+          var metaBox = document.createElement('span')
+          metaBox.className = 'sess-meta'
+          var date = document.createElement('span')
+          date.className = 'sess-date'
+          var d = new Date(s.startedAt)
+          date.textContent =
+            d.toLocaleDateString() +
+            ' ' +
+            d.toLocaleTimeString().slice(0, 5) +
+            (s.id === data.current ? ' · en curso' : '')
+          if (s.id === data.current) b.className = 'current'
+          var sub = document.createElement('span')
+          sub.className = 'sess-sub'
+          sub.textContent = fmtDur(s.durationS) + ' · ' + (s.packages.join(', ') || '—')
+          metaBox.appendChild(date)
+          metaBox.appendChild(sub)
+          var dl = document.createElement('span')
+          dl.className = 'app-use'
+          dl.textContent = '⬇ reporte'
+          b.appendChild(metaBox)
+          b.appendChild(dl)
+          b.addEventListener('click', function () {
+            downloadReport('session=' + encodeURIComponent(s.id), menu.exportStatus)
+          })
+          li.appendChild(b)
+          menu.sessList.appendChild(li)
+        })
+      })
+      .catch(function () {
+        menu.sessEmpty.textContent = 'No se pudo cargar el historial.'
+      })
+  }
+
+  function fillConfig(cfg) {
+    menu.cfgFilter.value = cfg.filterTerm
+    menu.cfgInterval.value = String(cfg.intervalMs)
+    menu.cfgTheme.value = cfg.theme
+    menu.cfgReports.value = cfg.reportsDir
+  }
+
+  function loadConfig(applyTheme) {
+    return fetch('/api/config')
+      .then(function (r) {
+        return r.json()
+      })
+      .then(function (data) {
+        fillConfig(data.config)
+        if (applyTheme) ProfilerDashboard.setTheme(data.config.theme)
+        return data.config
+      })
+  }
+
+  menu.cfgSave.addEventListener('click', function () {
+    var patch = {
+      filterTerm: menu.cfgFilter.value.trim(),
+      intervalMs: Number(menu.cfgInterval.value),
+      theme: menu.cfgTheme.value,
+      reportsDir: menu.cfgReports.value.trim(),
+    }
+    setStatus(menu.cfgStatus, 'Guardando…')
+    fetch('/api/config', { method: 'PUT', body: JSON.stringify(patch) })
+      .then(function (r) {
+        if (!r.ok) throw new Error('error ' + r.status)
+        return r.json()
+      })
+      .then(function (data) {
+        fillConfig(data.config)
+        ProfilerDashboard.setTheme(data.config.theme)
+        // el chip del selector de apps refleja el término nuevo
+        appSel.chip.textContent =
+          data.config.filterTerm.charAt(0).toUpperCase() + data.config.filterTerm.slice(1)
+        appData = null // el próximo open re-fetchea con el filtro nuevo
+        setStatus(menu.cfgStatus, 'Guardado ✓', 'ok')
+      })
+      .catch(function (e) {
+        setStatus(menu.cfgStatus, 'No se pudo guardar: ' + e.message, 'err')
+      })
+  })
+
+  function closeMenuPop() {
+    menu.pop.hidden = true
+  }
+  menu.btn.addEventListener('click', function (e) {
+    e.stopPropagation()
+    menu.pop.hidden = !menu.pop.hidden
+    if (!menu.pop.hidden) {
+      setStatus(menu.exportStatus, '')
+      setStatus(menu.cfgStatus, '')
+      loadSessions()
+      void loadConfig(false)
+    }
+  })
+  menu.sessRefresh.addEventListener('click', function (e) {
+    e.stopPropagation()
+    loadSessions()
+  })
+  menu.pop.addEventListener('click', function (e) {
+    e.stopPropagation()
+  })
+
+  // Tema persistido: aplicar el guardado al cargar; el toggle del header también persiste.
+  void loadConfig(true)
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    // corre después del handler de render.js (se registró antes): el tema ya cambió
+    fetch('/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ theme: ProfilerDashboard.getTheme() }),
+    }).catch(function () {})
+  })
+
   function closePops() {
     closeAppPop()
     closeDevPop()
+    closeMenuPop()
   }
   document.addEventListener('click', closePops)
   document.addEventListener('keydown', function (e) {

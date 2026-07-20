@@ -73,13 +73,14 @@ describe('AppStore (persistencia)', () => {
   test('archivo inexistente ⇒ defaults; select persiste y recarga', () => {
     dir = mkdtempSync(join(tmpdir(), 'appstore-'))
     const path = join(dir, 'sub', 'apps.json') // el subdir no existe: save debe crearlo
-    const store = new AppStore(path)
+    const legacy = join(dir, 'no-legacy.json') // aislar del apps.json real de la máquina
+    const store = new AppStore(path, legacy)
     expect(store.data.last).toBeNull()
 
     store.select('com.evermore.oda.qa')
     store.select('com.evermore.oda.qa')
 
-    const reloaded = new AppStore(path)
+    const reloaded = new AppStore(path, legacy)
     expect(reloaded.data.last).toBe('com.evermore.oda.qa')
     expect(reloaded.data.usage['com.evermore.oda.qa']).toBe(2)
     // el JSON en disco es legible/editable a mano (filterTerm configurable)
@@ -93,5 +94,36 @@ describe('AppStore (persistencia)', () => {
     writeFileSync(path, '{basura')
     const store = new AppStore(path)
     expect(store.data).toEqual(defaultAppStoreData())
+  })
+
+  test('migra silenciosamente del apps.json viejo a config.json', () => {
+    dir = mkdtempSync(join(tmpdir(), 'appstore-'))
+    const legacy = join(dir, 'apps.json')
+    const cfg = join(dir, 'config.json')
+    writeFileSync(
+      legacy,
+      JSON.stringify({ last: 'com.evermore.oda.qa', usage: { 'com.evermore.oda.qa': 4 } }),
+    )
+    const store = new AppStore(cfg, legacy)
+    expect(store.data.last).toBe('com.evermore.oda.qa')
+    expect(store.data.theme).toBe('light') // defaults nuevos completados
+    store.select('com.evermore.oda.qa')
+    // tras el primer save, config.json existe y manda sobre el legacy
+    const reloaded = new AppStore(cfg, legacy)
+    expect(reloaded.data.usage['com.evermore.oda.qa']).toBe(5)
+  })
+
+  test('set() aplica config validada y rechaza basura', () => {
+    dir = mkdtempSync(join(tmpdir(), 'appstore-'))
+    const store = new AppStore(join(dir, 'config.json'), join(dir, 'apps.json'))
+    store.select('com.evermore.oda.qa')
+    store.set({ theme: 'dark', intervalMs: 2000, filterTerm: 'oda' })
+    expect(store.data.theme).toBe('dark')
+    expect(store.data.intervalMs).toBe(2000)
+    expect(store.data.filterTerm).toBe('oda')
+    expect(store.data.last).toBe('com.evermore.oda.qa') // select previo se preserva
+
+    store.set({ intervalMs: 50 } as never) // fuera de rango ⇒ se ignora
+    expect(store.data.intervalMs).toBe(2000)
   })
 })

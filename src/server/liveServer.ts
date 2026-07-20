@@ -12,7 +12,18 @@ import { Sampler, resolvePid } from '../core/sampler/sampler'
 import { parseDeviceInfo } from '../core/collectors/deviceInfo'
 import { listPackages } from '../core/adb/listPackages'
 import { isValidPackageName } from '../core/adb/packageName'
-import { defaultAppStoreData, rankPackages, type AppStoreData } from '../core/appStore'
+import {
+  defaultAppStoreData,
+  rankPackages,
+  type AppStoreData,
+  type ConfigPatch,
+} from '../core/appStore'
+import { SessionBuffer } from '../core/session/sessionBuffer'
+import { SessionLog, sessionId } from '../core/session/sessionLog'
+import { buildReportSession } from '../core/session/stats'
+import { generateReportHtml, reportFilename } from '../report/generateReport'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   startHttpServer,
   isLocalOrigin,
@@ -43,10 +54,16 @@ export interface LiveServerOptions {
   proxyPort?: number
   /** ruta a adb (para `adb reverse`); si falta, se asume 'adb' en PATH. */
   adbPath?: string
-  /** store del selector de apps (uso/última/filtro). Sin store, el selector anda sin persistir. */
-  appStore?: { readonly data: AppStoreData; select(pkg: string): void }
+  /** store de config del profiler (selector de apps, tema, intervalo, reportes). */
+  appStore?: {
+    readonly data: AppStoreData
+    select(pkg: string): void
+    set?(patch: ConfigPatch): void
+  }
   /** intervalo del watcher de devices en modo espera (default 2000 ms). */
   devicePollMs?: number
+  /** directorio del historial de sesiones (JSONL). Sin él, no se persiste en disco. */
+  sessionsDir?: string
 }
 
 /** Captura la ficha del device una vez (getprop + /proc/meminfo + SurfaceFlinger GLES). */
@@ -84,9 +101,18 @@ export class LiveServer {
   /** serial del device activo; null = modo espera (el watcher engancha al primero). */
   private serial: string | null
   private deviceWatch: ReturnType<typeof setInterval> | null = null
+  /** buffer de sesión en memoria (export) + espejo en disco (historial). */
+  private readonly buffer = new SessionBuffer()
+  private sessionLog: SessionLog | null = null
+  private intervalMs: number
 
   constructor(private readonly opts: LiveServerOptions) {
     this.serial = opts.serial ?? null
+    this.intervalMs = opts.intervalMs ?? opts.appStore?.data.intervalMs ?? 1000
+  }
+
+  private config(): AppStoreData {
+    return this.opts.appStore?.data ?? defaultAppStoreData()
   }
 
   /**
@@ -126,6 +152,18 @@ export class LiveServer {
         if (url.pathname === '/api/device' && req.method === 'POST') {
           return this.handleSelectDevice(req)
         }
+        if (url.pathname === '/api/report' && req.method === 'GET') {
+          return this.handleReport(url)
+        }
+        if (url.pathname === '/api/sessions' && req.method === 'GET') {
+          return this.handleListSessions()
+        }
+        if (url.pathname === '/api/config' && req.method === 'GET') {
+          return Response.json({ config: this.config() })
+        }
+        if (url.pathname === '/api/config' && req.method === 'PUT') {
+          return this.handlePutConfig(req)
+        }
         const resolved = resolveStaticFile(uiRoot, url.pathname)
         if (!resolved) return new Response('Not found', { status: 404 })
         try {
@@ -158,15 +196,32 @@ export class LiveServer {
     // Modo espera: watchear adb hasta que aparezca un device autorizado y engancharse.
     if (!this.serial) this.startDeviceWatch()
 
-    const interval = this.opts.intervalMs ?? 1000
-    this.timer = setInterval(() => {
-      void this.tick()
-    }, interval)
+    // Historial en disco: una sesión JSONL por corrida del server.
+    if (this.opts.sessionsDir) {
+      const started = new Date()
+      this.sessionLog = new SessionLog(
+        this.opts.sessionsDir,
+        sessionId(started),
+        started.toISOString(),
+        this.opts.packageName,
+        this.device,
+      )
+    }
+
+    this.startTimer()
     // primer sample enseguida (así el dashboard no arranca vacío)
     void this.tick()
 
     const url = `http://localhost:${this.server.port}`
     return { url, device: this.device }
+  }
+
+  /** (Re)arranca el loop de sampling con el intervalo configurado actual. */
+  private startTimer(): void {
+    if (this.timer) clearInterval(this.timer)
+    this.timer = setInterval(() => {
+      void this.tick()
+    }, this.intervalMs)
   }
 
   /**
@@ -273,6 +328,12 @@ export class LiveServer {
         this.server?.broadcast(appMessage(this.appStatus))
       }
       const sample = await sampler.sampleOnce()
+      // registrar en el buffer (export en vivo) y en el historial en disco
+      if (this.appStatus && this.serial) {
+        const entry = { sample, pkg: this.appStatus.packageName, serial: this.serial }
+        this.buffer.push(entry)
+        this.sessionLog?.appendSample(entry)
+      }
       const msg = sampleMessage(sample)
       this.server?.broadcast(msg)
       if (this.opts.jsonlPath) {
@@ -373,6 +434,9 @@ export class LiveServer {
     this.sampler = sampler
     this.appStatus = { packageName: pkg, pid, launched }
     if (recordUsage) this.opts.appStore?.select(pkg)
+    const ev = { ts: Date.now(), kind: 'app' as const, pkg, serial }
+    this.buffer.addEvent(ev)
+    this.sessionLog?.appendEvent(ev)
     this.server?.broadcast(appMessage(this.appStatus))
     return this.appStatus
   }
@@ -446,10 +510,122 @@ export class LiveServer {
     this.serial = serial
     this.device = await captureDeviceInfo(this.opts.transport, serial)
     this.server?.broadcast(deviceMessage(this.device))
+    const ev = { ts: Date.now(), kind: 'device' as const, pkg, serial }
+    this.buffer.addEvent(ev)
+    this.sessionLog?.appendEvent(ev)
+    this.sessionLog?.appendDevice(this.device)
     // en modo espera con --inspect el inspector nunca llegó a arrancar: acá se cablea
     if (this.opts.inspectHttp) await this.startInspector()
     const app = await this.switchApp(pkg, false)
     return { device: this.device, app }
+  }
+
+  /**
+   * GET /api/report — genera el HTML standalone y lo baja como attachment.
+   *   ?window=full | <minutos>   → de la sesión viva (recortada a la app actual)
+   *   ?session=<id>              → de una sesión pasada del historial (último tramo)
+   * Además guarda una copia en la carpeta de reportes configurada.
+   */
+  private async handleReport(url: URL): Promise<Response> {
+    const sessionParam = url.searchParams.get('session')
+    let samples: import('../core/schema').Sample[]
+    let trimmed: boolean
+    let pkg: string
+    let device: DeviceInfo | null
+    let intervalMs = this.intervalMs
+
+    if (sessionParam) {
+      if (!this.opts.sessionsDir) return Response.json({ error: 'sin historial' }, { status: 404 })
+      const data = SessionLog.read(this.opts.sessionsDir, sessionParam)
+      if (!data || data.entries.length === 0) {
+        return Response.json({ error: 'sesión no encontrada o vacía' }, { status: 404 })
+      }
+      // último tramo continuo de la sesión (misma regla que el export en vivo)
+      const last = data.entries[data.entries.length - 1]!
+      let from = data.entries.length - 1
+      while (
+        from > 0 &&
+        data.entries[from - 1]!.pkg === last.pkg &&
+        data.entries[from - 1]!.serial === last.serial
+      ) {
+        from--
+      }
+      samples = data.entries.slice(from).map((e) => e.sample)
+      trimmed = from > 0
+      pkg = last.pkg
+      device = data.device
+      if (samples.length >= 2) {
+        intervalMs = Math.max(250, samples[1]!.ts - samples[0]!.ts)
+      }
+    } else {
+      if (!this.serial || !this.appStatus) {
+        return Response.json({ error: 'sin device activo' }, { status: 409 })
+      }
+      const windowParam = url.searchParams.get('window') ?? 'full'
+      let windowMs: number | undefined
+      if (windowParam !== 'full') {
+        const minutes = Number(windowParam)
+        if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 480) {
+          return Response.json({ error: 'window inválida' }, { status: 400 })
+        }
+        windowMs = minutes * 60_000
+      }
+      const seg = this.buffer.currentSegment(this.appStatus.packageName, this.serial, windowMs)
+      samples = seg.samples
+      trimmed = seg.trimmed
+      pkg = this.appStatus.packageName
+      device = this.device
+    }
+
+    if (samples.length === 0) {
+      return Response.json({ error: 'sin muestras en la ventana pedida' }, { status: 409 })
+    }
+    const session = buildReportSession({ samples, packageName: pkg, device, intervalMs, trimmed })
+    const html = generateReportHtml(session, this.config().theme, new Date())
+    const filename = reportFilename(session, new Date())
+    // copia en la carpeta de reportes (best-effort: el download no depende del disco)
+    try {
+      const dir = this.config().reportsDir
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, filename), html)
+    } catch {
+      /* sin copia local */
+    }
+    return new Response(html, {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'content-disposition': `attachment; filename="${filename}"`,
+      },
+    })
+  }
+
+  /** GET /api/sessions — historial en disco, más recientes primero. */
+  private handleListSessions(): Response {
+    const dir = this.opts.sessionsDir
+    const sessions = dir ? SessionLog.list(dir) : []
+    return Response.json({ sessions, current: this.sessionLog?.id ?? null })
+  }
+
+  /** PUT /api/config — aplica configuración en caliente y la persiste. */
+  private async handlePutConfig(req: Request): Promise<Response> {
+    const origin = req.headers.get('origin')
+    if (origin !== null && !isLocalOrigin(origin)) {
+      return new Response('Forbidden origin', { status: 403 })
+    }
+    let patch: ConfigPatch
+    try {
+      patch = (await req.json()) as ConfigPatch
+    } catch {
+      return Response.json({ error: 'body inválido' }, { status: 400 })
+    }
+    this.opts.appStore?.set?.(patch)
+    const cfg = this.config()
+    // el intervalo aplica en caliente: reiniciar el loop solo si el patch lo cambió
+    if (typeof patch.intervalMs === 'number' && cfg.intervalMs !== this.intervalMs) {
+      this.intervalMs = cfg.intervalMs
+      this.startTimer()
+    }
+    return Response.json({ ok: true, config: cfg })
   }
 
   /** Pollea el pid del package hasta timeout. null si no apareció. */

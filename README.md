@@ -129,9 +129,27 @@ Flags: `--package <pkg>` (fuerza una app, pisa el auto-resume) · `--port <n>` (
 `--inspect` (inspector HTTP) · `--no-open` (no abrir el browser) · `--adb <ruta>` ·
 `--install-platform-tools`.
 
+**Menú ☰ (export · registros · configuración)**: el botón ☰ del header abre un panel con:
+
+- **Exportar reporte** — presets de un click (sesión completa, últimos 5/15/30 min, 1 h) que
+  generan un **HTML standalone** (~2.5 MB, ECharts + fuentes + logos + datos embebidos: se
+  abre en cualquier browser sin el profiler): cards con avg/peak/min/p90 por métrica, batería
+  con % drenado, composición de memoria y timeline de la ventana. Descarga en el browser y
+  guarda copia en la carpeta de reportes. Si en la ventana hubo cambios de app/device, el
+  reporte se **recorta al tramo continuo de la app actual** (stats de UNA sola app) y lo
+  aclara.
+- **Registros de sesiones** — cada corrida del server escribe su sesión en
+  `~/.config/evermore-profiler/sessions/<fecha>.jsonl`; el panel las lista (fecha, apps,
+  duración) y permite exportar el reporte de **cualquier sesión pasada**.
+- **Configuración** — aplica en caliente y persiste: término del chip de filtro, intervalo de
+  sampling (0.5–5 s, reinicia el loop al vuelo), carpeta de reportes y **tema claro/oscuro**
+  (el toggle del header también persiste). Todo vive en
+  `~/.config/evermore-profiler/config.json` (absorbe al viejo `apps.json` con migración
+  automática).
+
 **Demo sin adb**: `bun scripts/smoke-selector.ts` levanta el dashboard con un device fake
-(apps, devices y pids en memoria) en `http://localhost:4599` — sirve para ver el UI y los
-selectores sin teléfono ni adb.
+(apps, devices y pids en memoria) en `http://localhost:4599` — sirve para ver el UI, los
+selectores y el export sin teléfono ni adb.
 
 ## Builds (ejecutables standalone)
 
@@ -175,10 +193,14 @@ bun run scripts/capture-fixtures.ts   # guía la captura mientras jugás ~30 s
   fixtures reales en `fixtures/`.
 - `src/core/sampler/` — loop 1 Hz que corre los collectors y arma cada muestra (best-effort:
   lo que falla queda N/A, no rompe).
-- `src/core/appStore.ts` — persistencia del selector de apps (última usada, ranking de uso,
-  término del filtro) en `~/.config/evermore-profiler/apps.json`.
+- `src/core/appStore.ts` — configuración persistente (selector de apps, tema, intervalo,
+  carpeta de reportes) en `~/.config/evermore-profiler/config.json`.
+- `src/core/session/` — buffer de sesión en memoria (cap ~8 h), historial JSONL en disco y
+  estadísticas puras del reporte (avg/peak/min/p90, drain de batería, recorte por app).
+- `src/report/` — generador del reporte HTML standalone (template + ECharts + assets inline).
 - `src/server/` — server HTTP+WebSocket que sirve el UI, streamea muestras + flows de red, y
-  expone la API del selector (`GET /api/packages`, `POST /api/app` — switch en caliente).
+  expone la API: selectores (`/api/packages`, `/api/app`, `/api/devices`, `/api/device`),
+  export (`/api/report`, `/api/sessions`) y configuración (`/api/config`).
 - `src/ui/` — dashboard web (ECharts) que consume el WebSocket.
 - `docs/wayfinder/` — el **plan vivo**: `map.md` (mapa) + `tickets/` (qué está hecho y qué falta).
 
