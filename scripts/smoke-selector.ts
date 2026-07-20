@@ -25,7 +25,11 @@ const running = new Map<string, number>([['com.evermore.oda.qa', 111]])
 const transport: AdbTransport = {
   isAvailable: async () => true,
   version: async () => '1.0.41',
-  devices: async () => [],
+  devices: async () => [
+    { serial: 'FAKE-SERIAL', state: 'device', description: 'model:SM_FAKE product:smoke' },
+    { serial: 'FAKE-PIXEL', state: 'device', description: 'model:Pixel_7 product:panther' },
+    { serial: 'FAKE-LOCKED', state: 'unauthorized', description: '' },
+  ],
   trackDevices: () => () => {},
   shell: async (_serial, command) => {
     if (command.startsWith('pidof ')) {

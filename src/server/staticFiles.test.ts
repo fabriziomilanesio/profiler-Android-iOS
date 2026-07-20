@@ -7,8 +7,13 @@ describe('resolveStaticFile', () => {
   test('/ → index.html', () => {
     expect(resolveStaticFile(ROOT, '/')).toEqual({
       path: '/app/ui/index.html',
+      rel: 'index.html',
       contentType: 'text/html; charset=utf-8',
     })
+  })
+
+  test('rel usa / (clave del manifest embebido) también en subdirectorios', () => {
+    expect(resolveStaticFile(ROOT, '/vendor/fonts/x.woff2')?.rel).toBe('vendor/fonts/x.woff2')
   })
 
   test('mapea content-type por extensión', () => {

@@ -18,6 +18,8 @@ const CONTENT_TYPES: Record<string, string> = {
 
 export interface ResolvedFile {
   path: string
+  /** ruta relativa saneada con `/` (clave del manifest de assets embebidos). */
+  rel: string
   contentType: string
 }
 
@@ -36,5 +38,9 @@ export function resolveStaticFile(uiRoot: string, pathname: string): ResolvedFil
   const path = normalize(join(root, rel))
   if (path !== root && !path.startsWith(root + sep)) return null
   const ext = extname(path).toLowerCase()
-  return { path, contentType: CONTENT_TYPES[ext] ?? 'application/octet-stream' }
+  const safeRel = path
+    .slice(root.length + 1)
+    .split(sep)
+    .join('/')
+  return { path, rel: safeRel, contentType: CONTENT_TYPES[ext] ?? 'application/octet-stream' }
 }

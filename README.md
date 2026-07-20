@@ -1,10 +1,11 @@
 # Evermore Android Profiler
 
 Herramienta cross-platform (Windows/macOS/Linux) para **profilear apps Android en vivo vía
-ADB**. Pensada para las apps de Evermore pero sirve para cualquiera: elegís la app desde un
-**selector en el dashboard** (lista las instaladas del device, filtradas por "evermore" por
-default), ves las métricas en tiempo real, inspeccionás el tráfico de red, y (próximamente)
-grabás sesiones y exportás reportes de comparación.
+ADB**. Pensada para las apps de Evermore pero sirve para cualquiera: levantás el dashboard
+(con o sin teléfono conectado — se engancha solo cuando aparece), elegís **device** y **app**
+desde selectores en el dashboard (las apps filtradas por "evermore" por default), ves las
+métricas en tiempo real, inspeccionás el tráfico de red, y (próximamente) grabás sesiones y
+exportás reportes de comparación.
 
 **Métricas en vivo:** CPU % · RAM (PSS + composición) · FPS (Unity, vía SurfaceFlinger) ·
 temperatura · GPU % · batería (nivel/temp/mA) · red (KB/s) · inspector de requests HTTP.
@@ -38,9 +39,15 @@ Para **ejecutarlo** hace falta exactamente esto:
    - Verificar: `adb devices` lista tu teléfono como `device` (no `unauthorized`).
 3. Un **device Android** con **depuración USB activada** (Ajustes → Opciones de desarrollador
    → Depuración USB) y autorizado (aceptar el diálogo "¿Permitir depuración USB?" al conectar).
+   No hace falta tenerlo enchufado para arrancar: el dashboard queda esperando y se engancha
+   solo al conectarlo.
 4. Un **browser** — el dashboard es una página local (`http://localhost:4517`).
 
 No hace falta Node, npm, ni instalar nada en el device.
+
+> **Ejecutable standalone**: si usás un binario compilado (`dist/profiler` /
+> `dist/profiler.exe`, ver [Builds](#builds-ejecutables-standalone)), **tampoco hace falta
+> Bun** — el runtime y el dashboard van embebidos. Solo queda adb como dependencia.
 
 ## Instalación
 
@@ -52,19 +59,30 @@ bun install
 
 ## Uso
 
-Conectá el teléfono por USB y:
-
 ```bash
-# Chequeo de entorno (adb + device + app):
-bun run src/cli.ts
+# Dashboard en vivo (default — abre el browser solo en http://localhost:4517):
+bun start
 
-# Monitor en vivo (dashboard web):
-bun run src/cli.ts live
-#   → abrí la URL que imprime (http://localhost:4517)
+# Con inspector de red (setea un proxy en el device; se limpia al cortar con Ctrl-C):
+bun start --inspect
 
-# Monitor + inspector de red (setea un proxy en el device; se limpia al cortar con Ctrl-C):
-bun run src/cli.ts live --inspect
+# Solo el chequeo de entorno (adb + device + app), sin levantar la UI:
+bun start preflight
 ```
+
+**La UI arranca siempre**: el comando default es `live` — el ejecutable compilado
+(doble-click en `profiler.exe`) también abre directo el dashboard. Solo aborta si no
+encuentra adb.
+
+**No hace falta el teléfono para arrancar**: `live` solo aborta si no hay adb. Sin device, el
+dashboard levanta en **modo espera** y se engancha solo al primer device autorizado que
+aparezca (badge `esperando device…`); enchufá el teléfono y empieza a streamear.
+
+**Selector de device**: la ficha del device en el header es clickeable — lista los devices de
+`adb devices` en el momento, con botón **⟳ Refrescar** (enchufaste otro teléfono con el
+dashboard abierto → Refrescar y aparece). Los `unauthorized`/`offline` se ven pero no son
+elegibles. Al cambiar de device, la ficha, el sampler y el inspector se recablean en caliente
+y la app actual se re-engancha en el nuevo device.
 
 **Selector de apps**: no hace falta pasar `--package`. Sin flag, arranca con la **última app
 usada** (primera vez: `com.evermore.oda.qa`) y desde el dashboard cambiás en caliente con el
@@ -76,11 +94,26 @@ profiler la **lanza solo** (badge `🚀 launched`). La selección se persiste en
 editable a mano).
 
 Flags: `--package <pkg>` (fuerza una app, pisa el auto-resume) · `--port <n>` (default 4517) ·
-`--inspect` (inspector HTTP) · `--adb <ruta>` · `--install-platform-tools`.
+`--inspect` (inspector HTTP) · `--no-open` (no abrir el browser) · `--adb <ruta>` ·
+`--install-platform-tools`.
 
-**Demo sin device**: `bun scripts/smoke-selector.ts` levanta el dashboard con un device fake
-(apps y pids en memoria) en `http://localhost:4599` — sirve para ver el UI y el selector sin
-un teléfono conectado.
+**Demo sin adb**: `bun scripts/smoke-selector.ts` levanta el dashboard con un device fake
+(apps, devices y pids en memoria) en `http://localhost:4599` — sirve para ver el UI y los
+selectores sin teléfono ni adb.
+
+## Builds (ejecutables standalone)
+
+```bash
+bun run build       # dist/profiler — ejecutable del OS actual (macOS/Linux/Windows)
+bun run build:win   # dist/profiler.exe — cross-compile a Windows x64 desde cualquier OS
+```
+
+El ejecutable embebe el runtime de Bun **y todos los assets del dashboard**
+(`src/server/embeddedUi.ts` — si agregás un archivo a `src/ui/`, sumalo a ese manifest o el
+binario lo servirá 404). Se corre igual que el CLI: `profiler.exe live`. La máquina destino
+solo necesita **adb** (en Windows: `winget install Google.PlatformTools`, o el installer
+`scripts\install-windows.ps1`). El `.exe` cross-compilado desde macOS/Linux compila y tiene
+formato PE válido; falta validarlo corriendo en un Windows real.
 
 > El inspector muestra los **hosts** de cada request HTTPS y la **URL completa** del tráfico
 > HTTP en claro. Ver URLs/headers/payloads de HTTPS requiere instalar una CA en el device
@@ -89,10 +122,11 @@ un teléfono conectado.
 ## Desarrollo
 
 ```bash
-bun test            # 142 tests (parsers contra fixtures reales + lógica core + API del server)
+bun test            # 147 tests (parsers contra fixtures reales + lógica core + API del server)
 bun run typecheck   # tsc estricto
 bun run fmt         # prettier
 bun run build       # ejecutable self-contained (dist/profiler) para este OS
+bun run build:win   # dist/profiler.exe (cross-compile bun-windows-x64)
 ```
 
 Capturar fixtures de un device nuevo (para soportar otro modelo/SoC):

@@ -1,9 +1,9 @@
-// Entry point del CLI. Corre el preflight gate completo (ticket 013): descubre
-// adb (config → PATH → SDK → managed), opcionalmente instala platform-tools, y
-// muestra la cadena de checks con ✓/✗/– y remedios. La UI web (panel visual +
-// re-check por track-devices) llega con los tickets 007/010.
+// Entry point del CLI. Sin argumentos (o `live`) arranca el dashboard web SIEMPRE —
+// con o sin device (modo espera + auto-attach) — y abre el browser. `preflight`
+// corre solo la cadena de checks (ticket 013) con ✓/✗/– y remedios.
 //
-// Flags: --package <pkg> · --adb <ruta> · --install-platform-tools
+// Flags: --package <pkg> · --port <n> · --inspect · --no-open · --adb <ruta> ·
+//        --install-platform-tools
 // Env:   EVERMORE_PROFILER_ADB (ruta explícita de adb)
 import { accessSync, constants } from 'node:fs'
 import { homedir } from 'node:os'
@@ -17,6 +17,7 @@ import { LiveServer } from './server/liveServer'
 import type { AdbTransport } from './core/adb/AdbTransport'
 import { isValidPackageName } from './core/adb/packageName'
 import { AppStore } from './core/appStore'
+import { run } from './runtime/spawn'
 
 const DEFAULT_PACKAGE = 'com.evermore.oda.qa'
 
@@ -28,20 +29,24 @@ interface CliArgs {
   installPlatformTools: boolean
   port?: number
   inspectHttp: boolean
+  /** no abrir el browser automáticamente al arrancar live. */
+  noOpen?: boolean
 }
 
 function parseArgs(argv: string[]): CliArgs {
+  // Default = live: el ejecutable (doble-click en el .exe incluido) arranca la UI
+  // siempre — sin device queda en modo espera y device/app se eligen del dashboard.
   const args: CliArgs = {
-    command: 'preflight',
+    command: 'live',
     packageName: null,
     installPlatformTools: false,
     inspectHttp: false,
   }
   let i = 0
   if (argv[0] === 'live') {
-    args.command = 'live'
     i = 1
   } else if (argv[0] === 'preflight') {
+    args.command = 'preflight'
     i = 1
   }
   for (; i < argv.length; i++) {
@@ -51,6 +56,7 @@ function parseArgs(argv: string[]): CliArgs {
     else if (arg === '--port' && argv[i + 1]) args.port = Number(argv[++i])
     else if (arg === '--install-platform-tools') args.installPlatformTools = true
     else if (arg === '--inspect' || arg === '--inspect-http') args.inspectHttp = true
+    else if (arg === '--no-open') args.noOpen = true
     else {
       console.error(`Flag desconocido: ${arg}`)
       process.exit(2)
@@ -141,6 +147,19 @@ function uiRoot(): string {
   return join(here, 'ui')
 }
 
+/** Abre la URL en el browser default de la plataforma. Best-effort. */
+function openBrowser(url: string): void {
+  const cmd =
+    process.platform === 'darwin'
+      ? { bin: 'open', args: [url] }
+      : process.platform === 'win32'
+        ? { bin: 'cmd', args: ['/c', 'start', '', url] }
+        : { bin: 'xdg-open', args: [url] }
+  void run(cmd.bin, cmd.args).catch(() => {
+    /* sin browser (SSH/CI): la URL ya está impresa */
+  })
+}
+
 /** Subcomando `profiler live`: preflight → primer device → server WS + dashboard. */
 async function runLive(
   transport: AdbTransport,
@@ -151,11 +170,14 @@ async function runLive(
 ): Promise<void> {
   const report = await new Preflight(transport, packageName).check()
   renderReport(report)
-  if (!report.ready || !report.device) {
+  // Solo adb es bloqueante: sin device (o sin la app) el dashboard levanta igual en
+  // modo espera — el server se engancha al primer device autorizado que aparezca y
+  // la app se elige desde el selector.
+  if (report.state === 'AdbMissing') {
     process.exitCode = 1
     return
   }
-  const serial = report.device.serial
+  const serial = report.device?.serial
 
   // cuenta para el ranking del dropdown y queda como "última usada" (auto-resume)
   store.select(packageName)
@@ -196,7 +218,7 @@ async function runLive(
     cleanup(1)
   })
 
-  let started: { url: string; device: import('./core/schema').DeviceInfo }
+  let started: { url: string; device: import('./core/schema').DeviceInfo | null }
   try {
     started = await server.start()
   } catch (err) {
@@ -206,17 +228,25 @@ async function runLive(
   }
   const { url, device } = started
 
-  console.log(
-    `\nDevice: ${[device.manufacturer, device.model].filter(Boolean).join(' ')} ` +
-      `· Android ${device.androidRelease ?? '?'} (API ${device.apiLevel ?? '?'}) ` +
-      `· ${device.gpu ?? 'GPU ?'} · ${device.soc ?? 'SoC ?'}`,
-  )
-  console.log(`Streaming ${packageName} @ 1 Hz por WebSocket.`)
+  if (device) {
+    console.log(
+      `\nDevice: ${[device.manufacturer, device.model].filter(Boolean).join(' ')} ` +
+        `· Android ${device.androidRelease ?? '?'} (API ${device.apiLevel ?? '?'}) ` +
+        `· ${device.gpu ?? 'GPU ?'} · ${device.soc ?? 'SoC ?'}`,
+    )
+    console.log(`Streaming ${packageName} @ 1 Hz por WebSocket.`)
+  } else {
+    console.log(
+      `\nSin device todavía — el dashboard queda esperando: conectá el teléfono por USB ` +
+        `y se engancha solo (o elegilo desde la ficha del device).`,
+    )
+  }
   if (args.inspectHttp) {
     console.log(`  🔎 Network inspector ON — proxy del device seteado (se limpia al cortar).`)
   }
   console.log(`\n  ▶  Dashboard en vivo:  ${url}\n`)
   console.log('  (Ctrl-C para cortar.)')
+  if (!args.noOpen) openBrowser(url)
 }
 
 async function main(): Promise<void> {

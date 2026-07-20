@@ -167,9 +167,69 @@
         padding: 12px 18px;
         min-width: 0;
         flex: 1 1 auto;
+        position: relative;
       }
       .device-card > div {
         min-width: 0;
+      }
+
+      /* --- Selector de device (la ficha es clickeable; popover con refresh) --- */
+      .dev-btn {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        min-width: 0;
+        flex: 1 1 auto;
+        background: none;
+        border: none;
+        padding: 0;
+        text-align: left;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+      }
+      .dev-btn > div {
+        min-width: 0;
+      }
+      .dev-btn .caret {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .dev-pop {
+        left: 0;
+        right: auto;
+        width: 400px;
+      }
+      .dev-title {
+        flex: 1;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .dev-item-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .dev-serial {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .dev-state {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: var(--warn);
+        border: 1px solid var(--warn);
+        border-radius: 999px;
+        padding: 1px 7px;
+        white-space: nowrap;
+      }
+      .app-list button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
       }
       .device-icon {
         font-size: 26px;
@@ -727,11 +787,22 @@
         <div class="brand-sub">Android Profiler</div>
       </div>
 
-      <div class="device-card card">
-        <div class="device-icon">📱</div>
-        <div>
-          <div class="device-name" id="devName">Waiting for device…</div>
-          <div class="device-specs" id="devSpecs"></div>
+      <div class="device-card card" id="devSelect">
+        <button class="dev-btn" id="devBtn" type="button" title="Cambiar device">
+          <div class="device-icon">📱</div>
+          <div>
+            <div class="device-name" id="devName">Waiting for device…</div>
+            <div class="device-specs" id="devSpecs"></div>
+          </div>
+          <span class="caret">▼</span>
+        </button>
+        <div class="app-pop dev-pop" id="devPop" hidden>
+          <div class="app-pop-controls">
+            <span class="dev-title">Devices conectados (adb)</span>
+            <button class="app-chip" id="devRefresh" type="button">⟳ Refrescar</button>
+          </div>
+          <ul class="app-list" id="devList"></ul>
+          <div class="app-empty" id="devEmpty" hidden>Sin devices.</div>
         </div>
       </div>
 

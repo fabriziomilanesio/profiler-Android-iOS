@@ -3,7 +3,7 @@
 // Transport fake en memoria; el server levanta en un puerto libre (port: 0).
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
-import type { AdbTransport, ShellResult } from '../core/adb/AdbTransport'
+import type { AdbDevice, AdbTransport, ShellResult } from '../core/adb/AdbTransport'
 import { defaultAppStoreData, type AppStoreData } from '../core/appStore'
 import { LiveServer } from './liveServer'
 
@@ -21,10 +21,11 @@ interface SelectBody {
   app: { packageName: string; pid: number | null; launched: boolean }
 }
 
-/** Transport fake: apps "corriendo" por package, lista instalada, y log de comandos. */
+/** Transport fake: apps "corriendo" por package, lista instalada, devices y log de comandos. */
 function fakeTransport(
   running: Map<string, number>,
   installed: string[],
+  deviceList: AdbDevice[] = [],
 ): {
   t: AdbTransport
   cmds: string[]
@@ -33,7 +34,7 @@ function fakeTransport(
   const t: AdbTransport = {
     isAvailable: async () => true,
     version: async () => '1.0.41',
-    devices: async () => [],
+    devices: async () => deviceList,
     trackDevices: () => () => {},
     shell: async (_serial, command): Promise<ShellResult> => {
       cmds.push(command)
@@ -69,16 +70,22 @@ function memoryStore(): { data: AppStoreData; select(pkg: string): void; selecte
   return store
 }
 
-async function startServer(running: Map<string, number>, installed: string[]) {
-  const { t, cmds } = fakeTransport(running, installed)
+async function startServer(
+  running: Map<string, number>,
+  installed: string[],
+  deviceList: AdbDevice[] = [],
+  serial: string | null = 'FAKE-SERIAL',
+) {
+  const { t, cmds } = fakeTransport(running, installed, deviceList)
   const store = memoryStore()
   const server = new LiveServer({
     transport: t,
-    serial: 'FAKE-SERIAL',
+    serial: serial ?? undefined,
     packageName: PKG,
     uiRoot: UI_ROOT,
     port: 0, // puerto libre: los tests no chocan con un live real
     intervalMs: 3_600_000, // sin ticks durante el test
+    devicePollMs: 25, // watcher rápido para el test de modo espera
     appStore: store,
   })
   const { url } = await server.start()
@@ -164,6 +171,105 @@ describe('LiveServer /api/app', () => {
       const body = (await res.json()) as SelectBody
       expect(cmds).toContain('monkey -p com.evermore.arcade 1')
       expect(body.app).toEqual({ packageName: 'com.evermore.arcade', pid: 4242, launched: true })
+    } finally {
+      await server.stop()
+    }
+  })
+})
+
+const DEVICES: AdbDevice[] = [
+  { serial: 'SERIAL-A', state: 'device', description: 'model:SM_A155M' },
+  { serial: 'SERIAL-B', state: 'device', description: 'model:Pixel_7' },
+  { serial: 'SERIAL-C', state: 'unauthorized', description: '' },
+]
+
+interface DevicesBody {
+  devices: AdbDevice[]
+  current: string
+}
+interface DeviceSwitchBody {
+  ok: boolean
+  device: { serial: string }
+  app: { packageName: string; pid: number | null; launched: boolean }
+}
+
+describe('LiveServer /api/devices', () => {
+  test('lista los devices de adb en el momento + el activo', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const res = await fetch(`${url}/api/devices`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as DevicesBody
+      expect(body.devices).toEqual(DEVICES)
+      expect(body.current).toBe('FAKE-SERIAL')
+    } finally {
+      await server.stop()
+    }
+  })
+})
+
+describe('LiveServer /api/device', () => {
+  test('serial no conectado ⇒ 404; unauthorized ⇒ 409', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const missing = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'NO-EXISTE' }),
+      })
+      expect(missing.status).toBe(404)
+      const unauthorized = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-C' }),
+      })
+      expect(unauthorized.status).toBe(409)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('modo espera: arranca sin device, el watcher se engancha al primero que aparece', async () => {
+    const devices: AdbDevice[] = [] // arranca vacío: el watcher polea esta misma lista
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], devices, null)
+    try {
+      // sin device: /api/devices vacío y /api/app rechaza
+      const before = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(before.devices).toEqual([])
+      expect(before.current).toBeNull()
+      const rejected = await fetch(`${url}/api/app`, {
+        method: 'POST',
+        body: JSON.stringify({ package: PKG }),
+      })
+      expect(rejected.status).toBe(409)
+
+      // "enchufar" el device: el watcher (25 ms) debe engancharse solo
+      devices.push({ serial: 'SERIAL-A', state: 'device', description: 'model:SM_A155M' })
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      const after = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(after.current).toBe('SERIAL-A')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('switch de device: nueva ficha, re-engancha la app actual SIN contar uso', async () => {
+    const running = new Map([
+      [PKG, 111], // corriendo en ambos devices (el fake no distingue serial)
+    ])
+    const { server, url, store } = await startServer(running, [], DEVICES)
+    try {
+      const res = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B' }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as DeviceSwitchBody
+      expect(body.device.serial).toBe('SERIAL-B')
+      expect(body.app.packageName).toBe(PKG)
+      // cambiar de device no es elegir una app: el ranking de uso no se toca
+      expect(store.selected).toEqual([])
+
+      const after = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(after.current).toBe('SERIAL-B')
     } finally {
       await server.stop()
     }

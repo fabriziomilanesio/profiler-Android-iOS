@@ -35,7 +35,7 @@
     pkg = app.packageName
     appSel.pkgLabel.textContent = app.packageName
     if (app.pid === null) {
-      appSel.launched.textContent = 'esperando proceso…'
+      appSel.launched.textContent = device ? 'esperando proceso…' : 'esperando device…'
       appSel.launched.className = 'app-launched waiting'
       appSel.launched.hidden = false
     } else if (app.launched) {
@@ -148,9 +148,113 @@
   appSel.pop.addEventListener('click', function (e) {
     e.stopPropagation()
   })
-  document.addEventListener('click', closeAppPop)
+
+  // --- Selector de device (ficha del header + refresh) ---
+  var devSel = {
+    btn: document.getElementById('devBtn'),
+    pop: document.getElementById('devPop'),
+    list: document.getElementById('devList'),
+    empty: document.getElementById('devEmpty'),
+    refresh: document.getElementById('devRefresh'),
+  }
+  var devSwitching = false
+
+  function loadDevices() {
+    devSel.empty.hidden = false
+    devSel.empty.textContent = 'Buscando devices…'
+    devSel.list.innerHTML = ''
+    fetch('/api/devices')
+      .then(function (r) {
+        return r.json()
+      })
+      .then(function (data) {
+        renderDeviceList(data)
+      })
+      .catch(function () {
+        devSel.empty.textContent = 'No se pudo listar los devices.'
+      })
+  }
+
+  function renderDeviceList(data) {
+    devSel.list.innerHTML = ''
+    devSel.empty.hidden = data.devices.length > 0
+    devSel.empty.textContent = 'Sin devices. Conectá por USB y tocá Refrescar.'
+    data.devices.forEach(function (d) {
+      var li = document.createElement('li')
+      var b = document.createElement('button')
+      b.type = 'button'
+      var isCurrent = d.serial === data.current
+      if (isCurrent) b.className = 'current'
+      // "model:SM_A155M product:a15ub ..." → SM A155M
+      var modelMatch = (d.description || '').match(/model:(\S+)/)
+      var label = modelMatch ? modelMatch[1].replace(/_/g, ' ') : d.serial
+      var name = document.createElement('span')
+      name.className = 'dev-item-name'
+      name.textContent = (isCurrent ? '✓ ' : '') + label
+      var serial = document.createElement('span')
+      serial.className = 'dev-serial'
+      serial.textContent = d.serial
+      b.appendChild(name)
+      b.appendChild(serial)
+      if (d.state !== 'device') {
+        // unauthorized/offline: visible pero no elegible
+        var state = document.createElement('span')
+        state.className = 'dev-state'
+        state.textContent = d.state
+        b.appendChild(state)
+        b.disabled = true
+      } else {
+        b.addEventListener('click', function () {
+          selectDevice(d.serial)
+        })
+      }
+      li.appendChild(b)
+      devSel.list.appendChild(li)
+    })
+  }
+
+  function selectDevice(serial) {
+    if (devSwitching) return
+    devSwitching = true
+    closeDevPop()
+    document.getElementById('devName').textContent = 'Cambiando de device…'
+    fetch('/api/device', { method: 'POST', body: JSON.stringify({ serial: serial }) })
+      .then(function (r) {
+        if (!r.ok) throw new Error('switch failed')
+        // la ficha nueva llega por WS ({type:"device"} + {type:"app"})
+      })
+      .catch(function () {
+        if (device) ProfilerDashboard.setDevice(device, pkg)
+      })
+      .finally(function () {
+        devSwitching = false
+      })
+  }
+
+  function closeDevPop() {
+    devSel.pop.hidden = true
+  }
+
+  devSel.btn.addEventListener('click', function (e) {
+    e.stopPropagation()
+    devSel.pop.hidden = !devSel.pop.hidden
+    if (!devSel.pop.hidden) loadDevices()
+  })
+  devSel.refresh.addEventListener('click', function (e) {
+    e.stopPropagation()
+    loadDevices()
+  })
+  devSel.pop.addEventListener('click', function (e) {
+    e.stopPropagation()
+  })
+
+  function closePops() {
+    closeAppPop()
+    closeDevPop()
+  }
+  document.addEventListener('click', closePops)
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closeAppPop()
+    if (e.key === 'Escape') closePops()
   })
 
   // --- Network inspector (tabla de requests en vivo, debajo de la red) ---
@@ -221,6 +325,8 @@
         return
       }
       if (msg.type === 'device') {
+        // cambio de device: las series del timeline son del device anterior
+        if (device && device.serial !== msg.device.serial) ProfilerDashboard.resetSeries()
         device = msg.device
         // el package lo anuncia el server con {type:"app"} — acá solo la ficha
         ProfilerDashboard.setDevice(device, pkg)
