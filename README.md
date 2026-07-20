@@ -14,14 +14,27 @@ temperatura · GPU % · batería (nivel/temp/mA) · red (KB/s) · inspector de r
 
 ---
 
+## Windows 11 — instalación en 3 pasos (sin conocimientos técnicos)
+
+1. **Descargá el proyecto**: en GitHub, botón verde **Code → Download ZIP**, y descomprimilo
+   (o `git clone` si sabés usarlo).
+2. **Doble click en `INSTALAR.bat`** — instala solo todo lo necesario (Bun y adb, paquetes
+   oficiales vía winget) y deja el proyecto listo. Se corre **una sola vez**; si algo ya
+   estaba instalado, lo saltea.
+3. **Doble click en `INICIAR.bat`** — el dashboard se abre solo en el navegador. Conectá el
+   teléfono por USB y listo (no importa el orden: el dashboard lo detecta solo cuando
+   aparece).
+
+En el teléfono, una sola vez: activá **Depuración USB** (Ajustes → Acerca del teléfono →
+tocá 7 veces "Número de compilación" → volvé → Opciones de desarrollador → Depuración USB)
+y al conectarlo aceptá el diálogo "¿Permitir depuración USB?" marcando "Permitir siempre".
+
+Todo lo que sigue es para uso desde terminal / desarrollo.
+
 ## Requisitos
 
-Para **ejecutarlo** hace falta exactamente esto:
-
-> **Windows 11 — instalador automático**: cloná el repo y corré
-> `powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1` — instala Bun y
-> adb vía winget (paquetes oficiales `Oven-sh.Bun` y `Google.PlatformTools`), verifica ambos
-> y corre `bun install`. Idempotente: lo ya instalado se saltea. Después salteá al paso 3.
+Para **ejecutarlo** hace falta exactamente esto (en Windows 11, `INSTALAR.bat` hace los
+pasos 1 y 2 solo):
 
 1. **Bun ≥ 1.3** (runtime — corre el CLI, los tests y el server del dashboard):
    - macOS/Linux: `curl -fsSL https://bun.sh/install | bash`

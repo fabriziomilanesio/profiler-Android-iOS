@@ -1,0 +1,2 @@
+# Los .bat deben viajar con CRLF: cmd.exe se comporta raro con finales LF
+*.bat text eol=crlf

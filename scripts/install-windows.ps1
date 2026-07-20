@@ -76,11 +76,15 @@ if (Test-Path (Join-Path $repoRoot 'package.json')) {
 
 Write-Host @'
 
-Listo. Próximos pasos:
-  1. Activá "Depuración USB" en el teléfono (Ajustes → Opciones de desarrollador).
-  2. Conectalo por USB y aceptá el diálogo "¿Permitir depuración USB?".
-  3. Corré:  bun run src/cli.ts live
-     y abrí la URL que imprime (http://localhost:4517).
+Listo. Para usar el profiler:
 
-(Si bun o adb no se encuentran, abrí una terminal nueva: el PATH se refresca al reabrir.)
+  → Doble click en INICIAR.bat (en la carpeta del proyecto).
+    El dashboard se abre solo en el navegador.
+
+En el teléfono (una sola vez):
+  1. Activá "Depuración USB": Ajustes → Acerca del teléfono → tocá 7 veces
+     "Número de compilación" → volvé → Opciones de desarrollador → Depuración USB.
+  2. Conectalo por USB y aceptá "¿Permitir depuración USB?" (marcá "Permitir siempre").
+
+No hace falta el teléfono para arrancar: el dashboard queda esperando y lo detecta solo.
 '@ -ForegroundColor Magenta
