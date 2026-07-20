@@ -1,2 +1,4 @@
 # Los .bat deben viajar con CRLF: cmd.exe se comporta raro con finales LF
 *.bat text eol=crlf
+# PowerShell 5.1 lee .ps1 sin BOM como ANSI: el BOM va en el archivo; CRLF por prolijidad
+*.ps1 text eol=crlf

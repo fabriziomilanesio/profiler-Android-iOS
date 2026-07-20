@@ -1,4 +1,4 @@
-# install-windows.ps1 — bootstrap del Evermore Android Profiler en Windows 11.
+﻿# install-windows.ps1 — bootstrap del Evermore Android Profiler en Windows 11.
 # Instala los dos requisitos (Bun + adb/platform-tools) vía winget y deja el repo listo.
 #
 # Uso (desde la raíz del repo, en PowerShell):
