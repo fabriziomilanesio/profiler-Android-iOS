@@ -363,7 +363,7 @@
   function fillConfig(cfg) {
     menu.cfgFilter.value = cfg.filterTerm
     menu.cfgInterval.value = String(cfg.intervalMs)
-    menu.cfgTheme.value = cfg.theme
+    menu.cfgTheme.checked = cfg.theme === 'dark'
     menu.cfgReports.value = cfg.reportsDir
   }
 
@@ -383,7 +383,7 @@
     var patch = {
       filterTerm: menu.cfgFilter.value.trim(),
       intervalMs: Number(menu.cfgInterval.value),
-      theme: menu.cfgTheme.value,
+      theme: menu.cfgTheme.checked ? 'dark' : 'light',
       reportsDir: menu.cfgReports.value.trim(),
     }
     setStatus(menu.cfgStatus, 'Guardando…')
@@ -427,11 +427,15 @@
     e.stopPropagation()
   })
 
-  // Tema persistido: aplicar el guardado al cargar. El select de Configuración
-  // es el único control: al cambiarlo previsualiza al toque; Guardar lo persiste.
+  // Tema persistido: aplicar el guardado al cargar. El toggle de Configuración
+  // es el único control: aplica y persiste al instante (no requiere Guardar).
   void loadConfig(true)
   menu.cfgTheme.addEventListener('change', function () {
-    ProfilerDashboard.setTheme(menu.cfgTheme.value)
+    var theme = menu.cfgTheme.checked ? 'dark' : 'light'
+    ProfilerDashboard.setTheme(theme)
+    fetch('/api/config', { method: 'PUT', body: JSON.stringify({ theme: theme }) }).catch(
+      function () {},
+    )
   })
 
   function closePops() {

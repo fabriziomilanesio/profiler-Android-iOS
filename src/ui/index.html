@@ -515,6 +515,53 @@
         gap: 10px;
         margin-top: 10px;
       }
+      .switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+        justify-self: start;
+      }
+      .switch input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .switch .slider {
+        width: 40px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        position: relative;
+        transition: background 0.15s ease;
+        flex: 0 0 auto;
+      }
+      .switch .slider::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition:
+          transform 0.15s ease,
+          background 0.15s ease;
+      }
+      .switch input:checked + .slider {
+        background: var(--primary);
+        border-color: var(--primary);
+      }
+      .switch input:checked + .slider::after {
+        transform: translateX(18px);
+        background: #fff;
+      }
+      .switch-icons {
+        font-size: 13px;
+      }
       .cfg-save {
         font: 600 12px var(--font-body);
         color: #fff;
@@ -987,11 +1034,12 @@
                   <option value="2000">2 s</option>
                   <option value="5000">5 s</option>
                 </select>
-                <label for="cfgTheme">Tema</label>
-                <select id="cfgTheme">
-                  <option value="light">Claro</option>
-                  <option value="dark">Oscuro</option>
-                </select>
+                <label for="cfgTheme">Modo oscuro</label>
+                <label class="switch">
+                  <input type="checkbox" id="cfgTheme" />
+                  <span class="slider"></span>
+                  <span class="switch-icons">🌙</span>
+                </label>
                 <label for="cfgReports">Carpeta reportes</label>
                 <input id="cfgReports" type="text" autocomplete="off" spellcheck="false" />
               </div>
