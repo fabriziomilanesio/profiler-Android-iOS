@@ -3,12 +3,17 @@
 // si falla (comando N/A del device o excepción de transporte), su métrica queda null
 // y el tick sigue — nunca se reintenta dentro del mismo tick.
 //
+// Multi-proceso: la app puede correr procesos hijos (`pkg:servicio`, WebView sandbox).
+// refreshPid los detecta vía `ps -A` (un solo comando, reemplaza a pidof en el loop);
+// CPU y PSS agregan main + hijos. Sin hijos, el costo por tick es idéntico al de antes.
+//
 // La costura: TODO acceso a adb pasa por AdbTransport (inyectado). El sampler no
 // conoce el binario adb ni el runtime.
 import type { AdbTransport } from '../adb/AdbTransport'
 import type { Sample } from '../schema'
-import { parseMeminfo } from '../collectors/meminfo'
-import { parseCpu, type CpuSnapshot } from '../collectors/cpu'
+import { parseMeminfo, mergeMemSamples } from '../collectors/meminfo'
+import { parseCpu, parseDeviceCpu, type CpuSnapshot } from '../collectors/cpu'
+import { parseDeviceMemUsedMb } from '../collectors/deviceMem'
 import { parseFps } from '../collectors/fps'
 import { parseTemp } from '../collectors/temp'
 import { parseGpu } from '../collectors/gpu'
@@ -18,8 +23,14 @@ import { parseNetDev, netThroughputKb, type NetSnapshot } from '../collectors/ne
 /** Comandos shell por métrica (fuentes confirmadas en el SM-A155M / API 36). */
 export const SHELL_COMMANDS = {
   meminfo: (pkg: string) => `dumpsys meminfo ${pkg}`,
-  // combinamos /proc/stat y /proc/<pid>/stat en una llamada
-  cpu: (pid: number) => `cat /proc/stat /proc/${pid}/stat`,
+  /** meminfo de un proceso hijo puntual (los hijos no matchean por nombre de package) */
+  meminfoPid: (pid: number) => `dumpsys meminfo ${pid}`,
+  // /proc/stat (CPU device + base del share), /proc/meminfo (RAM device) y los
+  // /proc/<pid>/stat de todos los procesos de la app — UNA sola llamada.
+  cpu: (pids: number[]) =>
+    ['cat /proc/stat /proc/meminfo', ...pids.map((p) => `/proc/${p}/stat`)].join(' '),
+  /** main + hijos del package en un comando (reemplaza a pidof en el loop) */
+  pids: 'ps -A -o PID,NAME',
   // primaria del device (kgsl y mali fallan acá → ver research §5 para fallbacks)
   gpu: 'cat /sys/kernel/gpu/gpu_busy',
   temp: 'dumpsys thermalservice',
@@ -49,6 +60,22 @@ export async function resolvePid(
   }
 }
 
+/** Procesos del package (main + hijos `pkg:*`) desde una salida de `ps -A -o PID,NAME`. */
+export function parsePids(psOut: string, pkg: string): { main: number | null; children: number[] } {
+  let main: number | null = null
+  const children: number[] = []
+  for (const line of psOut.split('\n')) {
+    const m = line.trim().match(/^(\d+)\s+(\S+)$/)
+    if (!m) continue
+    const pid = Number(m[1])
+    const name = m[2]!
+    if (!Number.isFinite(pid) || pid <= 0) continue
+    if (name === pkg) main = pid
+    else if (name.startsWith(pkg + ':')) children.push(pid)
+  }
+  return { main, children }
+}
+
 /** Corre un collector best-effort: cualquier error ⇒ el fallback (típicamente null). */
 async function best<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
@@ -58,10 +85,17 @@ async function best<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   }
 }
 
+/** Snapshot combinado de /proc: CPU (device + pids) y RAM del device. */
+interface ProcSnapshot {
+  cpu: CpuSnapshot
+  deviceRamUsedMb: number | null
+}
+
 export class Sampler {
   private t = 0
   private prevCpu: CpuSnapshot | null = null
   private prevNet: NetSnapshot | null = null
+  private childPids: number[] = []
 
   constructor(
     private readonly transport: AdbTransport,
@@ -97,32 +131,48 @@ export class Sampler {
   async sampleOnce(): Promise<Sample> {
     const shell = (cmd: string) => this.transport.shell(this.serial, cmd)
 
-    // Correr todo en paralelo; cada uno best-effort.
-    const [memRaw, gpuRaw, tempRaw, fpsRaw, batRaw, netRaw, cpuSnap] = await Promise.all([
-      best(async () => (await shell(SHELL_COMMANDS.meminfo(this.pkg))).stdout, ''),
-      best(async () => (await shell(SHELL_COMMANDS.gpu)).stdout, ''),
-      best(async () => (await shell(SHELL_COMMANDS.temp)).stdout, ''),
-      best(async () => (await shell(SHELL_COMMANDS.fps)).stdout, ''),
-      best(async () => (await shell(SHELL_COMMANDS.battery)).stdout, ''),
-      best(async () => (await shell(SHELL_COMMANDS.net)).stdout, ''),
-      best<CpuSnapshot | null>(async () => this.readCpuSnapshot(), null),
-    ])
+    // Correr todo en paralelo; cada uno best-effort. Los meminfo de hijos solo
+    // existen si hay hijos (caso Evermore: lista vacía, costo cero).
+    const [memRaw, childMemRaws, gpuRaw, tempRaw, fpsRaw, batRaw, netRaw, procSnap] =
+      await Promise.all([
+        best(async () => (await shell(SHELL_COMMANDS.meminfo(this.pkg))).stdout, ''),
+        Promise.all(
+          this.childPids.map((p) =>
+            best(async () => (await shell(SHELL_COMMANDS.meminfoPid(p))).stdout, ''),
+          ),
+        ),
+        best(async () => (await shell(SHELL_COMMANDS.gpu)).stdout, ''),
+        best(async () => (await shell(SHELL_COMMANDS.temp)).stdout, ''),
+        best(async () => (await shell(SHELL_COMMANDS.fps)).stdout, ''),
+        best(async () => (await shell(SHELL_COMMANDS.battery)).stdout, ''),
+        best(async () => (await shell(SHELL_COMMANDS.net)).stdout, ''),
+        best<ProcSnapshot | null>(async () => this.readProcSnapshot(), null),
+      ])
 
-    const mem = safe(() => parseMeminfo(memRaw), {
-      pss: null,
-      java: null,
-      native: null,
-      graphics: null,
-      code: null,
-      stack: null,
-      other: null,
-    } as Sample['mem'])
+    const memParts = [memRaw, ...childMemRaws]
+      .filter((raw) => raw !== '')
+      .map((raw) =>
+        safe(() => parseMeminfo(raw), {
+          pss: null,
+          java: null,
+          native: null,
+          graphics: null,
+          code: null,
+          stack: null,
+          other: null,
+        } as Sample['mem']),
+      )
+    const mem = mergeMemSamples(memParts)
 
     // CPU necesita dos snapshots: null en la primera muestra.
     let cpu: number | null = null
-    if (cpuSnap) {
-      if (this.prevCpu) cpu = safe(() => parseCpu(this.prevCpu!, cpuSnap), null)
-      this.prevCpu = cpuSnap
+    let deviceCpu: number | null = null
+    if (procSnap) {
+      if (this.prevCpu) {
+        cpu = safe(() => parseCpu(this.prevCpu!, procSnap.cpu), null)
+        deviceCpu = safe(() => parseDeviceCpu(this.prevCpu!, procSnap.cpu), null)
+      }
+      this.prevCpu = procSnap.cpu
     }
 
     // Red: igual que CPU, delta entre snapshots → KB/s. null en la primera muestra.
@@ -144,6 +194,8 @@ export class Sampler {
       t: this.t++,
       ts: Date.now(),
       cpu,
+      deviceCpu,
+      deviceRamUsedMb: procSnap?.deviceRamUsedMb ?? null,
       gpu: safe(() => parseGpu(gpuRaw), null),
       // filtrar el layer de la app (el dump lista NotificationShade/StatusBar también)
       fps: safe(() => parseFps(fpsRaw, this.pkg), null),
@@ -171,30 +223,55 @@ export class Sampler {
     return sample
   }
 
-  private async readCpuSnapshot(): Promise<CpuSnapshot | null> {
-    const r = await this.transport.shell(this.serial, SHELL_COMMANDS.cpu(this.pid))
+  private async readProcSnapshot(): Promise<ProcSnapshot | null> {
+    const pids = [this.pid, ...this.childPids].filter((p) => p > 0)
+    const r = await this.transport.shell(this.serial, SHELL_COMMANDS.cpu(pids))
     if (r.exitCode !== 0 && !r.stdout.includes('cpu')) return null
-    // El combinado imprime /proc/stat (empieza con "cpu ...") y luego /proc/<pid>/stat
-    // (una línea "<pid> (comm) ..."). Los separamos.
+    // El combinado imprime /proc/stat (líneas "cpu..."), /proc/meminfo ("MemTotal:...")
+    // y una línea "<pid> (comm) ..." por proceso. Los separamos por forma.
     const out = r.stdout
-    const pidLineMatch = out.match(/^\d+ \(.*\).*$/m)
-    const pidStat = pidLineMatch ? pidLineMatch[0] : ''
-    // cpuStat = todo lo que empieza con "cpu"
+    const pidStats = out.split('\n').filter((l) => /^\d+ \(/.test(l))
     const cpuStat = out
       .split('\n')
       .filter((l) => /^cpu/.test(l))
       .join('\n')
-    if (!cpuStat || !pidStat) return null
-    return { pidStat, cpuStat }
+    if (!cpuStat) return null
+    return {
+      cpu: { pidStats, cpuStat },
+      deviceRamUsedMb: safe(() => parseDeviceMemUsedMb(out), null),
+    }
   }
 
-  /** Refresca el pid (la app pudo reiniciarse). Best-effort. */
-  async refreshPid(): Promise<void> {
-    const pid = await resolvePid(this.transport, this.serial, this.pkg)
-    if (pid !== null && pid !== this.pid) {
-      this.pid = pid
+  /**
+   * Refresca los pids del package (main + hijos) con UN comando. Devuelve si la app
+   * está viva. null = no se pudo saber (adb falló) — el caller no debe tomar acción.
+   */
+  async refreshPid(): Promise<boolean | null> {
+    let psOut: string
+    try {
+      const r = await this.transport.shell(this.serial, SHELL_COMMANDS.pids)
+      psOut = r.stdout
+    } catch {
+      return null
+    }
+    // ps corrió pero vino vacío/raro: tampoco concluir que la app murió
+    if (!/^\s*\d+\s+\S+/m.test(psOut)) return null
+
+    const { main, children } = parsePids(psOut, this.pkg)
+    this.childPids = children
+    if (main === null) {
+      // proceso muerto: dejar de catear su /proc y cortar el delta de CPU
+      if (this.pid !== 0) {
+        this.pid = 0
+        this.prevCpu = null
+      }
+      return false
+    }
+    if (main !== this.pid) {
+      this.pid = main
       this.prevCpu = null // el delta contra el pid viejo no sirve
     }
+    return true
   }
 }
 

@@ -54,8 +54,12 @@ export interface Sample {
   t: number
   /** timestamp epoch (ms) del tick */
   ts: number
-  /** CPU del proceso, share-of-device 0–100 (%) */
+  /** CPU de la app (suma de sus procesos), share-of-device 0–100 (%) */
   cpu: number | null
+  /** CPU total del device (todos los procesos), 0–100 (%) */
+  deviceCpu: number | null
+  /** RAM usada total del device en MB (MemTotal − MemAvailable) */
+  deviceRamUsedMb: number | null
   /** GPU utilization 0–100 (%) */
   gpu: number | null
   /** FPS promedio (averageFPS de SurfaceFlinger timestats) */
@@ -89,4 +93,6 @@ export interface DeviceInfo {
   gpu: string | null
   /** RAM total en MB (MemTotal de /proc/meminfo) */
   ramTotalMb: number | null
+  /** cores de CPU online (nproc) — para el label "≈ X% de un core" */
+  cores: number | null
 }

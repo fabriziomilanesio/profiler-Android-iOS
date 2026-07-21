@@ -56,3 +56,22 @@ export function parseMeminfo(raw: string): MemSample {
     other: toMb(otherKb),
   }
 }
+
+const MEM_KEYS = ['pss', 'java', 'native', 'graphics', 'code', 'stack', 'other'] as const
+
+/**
+ * Agrega los MemSample de los procesos de un package (main + hijos `pkg:*`).
+ * Por categoría: suma de los no-null; todos null ⇒ null (conserva la convención N/A).
+ */
+export function mergeMemSamples(parts: MemSample[]): MemSample {
+  const out = {} as Record<(typeof MEM_KEYS)[number], number | null>
+  for (const k of MEM_KEYS) {
+    let sum: number | null = null
+    for (const p of parts) {
+      const v = p[k]
+      if (v !== null) sum = (sum ?? 0) + v
+    }
+    out[k] = sum
+  }
+  return out
+}

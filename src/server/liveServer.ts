@@ -78,13 +78,14 @@ export async function captureDeviceInfo(
       return ''
     }
   }
-  const [getprop, procMeminfo, sf] = await Promise.all([
+  const [getprop, procMeminfo, sf, nproc] = await Promise.all([
     safe('getprop'),
     safe('cat /proc/meminfo'),
     // grep de la línea GLES: (aparece varias líneas abajo, no en el header)
     safe('dumpsys SurfaceFlinger | grep -m1 "GLES:"'),
+    safe('nproc'),
   ])
-  return parseDeviceInfo({ getprop, procMeminfo, surfaceflingerGles: sf, serial })
+  return parseDeviceInfo({ getprop, procMeminfo, surfaceflingerGles: sf, nproc, serial })
 }
 
 export class LiveServer {
@@ -97,6 +98,10 @@ export class LiveServer {
   private proxyApplied = false
   private ticking = false
   private appStatus: AppStatus | null = null
+  /** app sin proceso vivo: se sigue sampleando/broadcasteando pero NO se persiste. */
+  private appDead = false
+  /** debounce: recién tras N refresh consecutivos sin proceso se declara muerta. */
+  private deadTicks = 0
   private switching = false
   /** serial del device activo; null = modo espera (el watcher engancha al primero). */
   private serial: string | null
@@ -130,6 +135,8 @@ export class LiveServer {
       // habilitar timestats de SurfaceFlinger (FPS acumula desde acá)
       await sampler.init()
     }
+    // sin proceso al arrancar: persistencia en pausa hasta que la app aparezca
+    this.appDead = !(this.sampler && this.sampler.processId > 0)
     this.appStatus = {
       packageName: this.opts.packageName,
       pid: this.sampler?.processId || null,
@@ -321,15 +328,18 @@ export class LiveServer {
       const sampler = this.sampler
       if (!sampler) return
       // por si la app se reinició (nuevo pid); best-effort, barato cada tick.
-      await sampler.refreshPid()
+      const alive = await sampler.refreshPid()
+      this.trackAppLife(alive)
       // la app seleccionada estaba cerrada y recién aparece su proceso: avisar al dashboard
       if (this.appStatus && this.appStatus.pid === null && sampler.processId > 0) {
         this.appStatus = { ...this.appStatus, pid: sampler.processId }
         this.server?.broadcast(appMessage(this.appStatus))
       }
       const sample = await sampler.sampleOnce()
-      // registrar en el buffer (export en vivo) y en el historial en disco
-      if (this.appStatus && this.serial) {
+      // Registrar en el buffer (export en vivo) y en el historial en disco — solo con
+      // la app viva. Con el proceso muerto el dashboard sigue en vivo (broadcast),
+      // pero no se persisten horas de ticks null: quedan los eventos died/restarted.
+      if (this.appStatus && this.serial && !this.appDead) {
         const entry = { sample, pkg: this.appStatus.packageName, serial: this.serial }
         this.buffer.push(entry)
         this.sessionLog?.appendSample(entry)
@@ -348,6 +358,43 @@ export class LiveServer {
       /* un tick que explota no debe matar el loop */
     } finally {
       this.ticking = false
+    }
+  }
+
+  /**
+   * Debounce de vida del proceso (3 refresh seguidos sin verlo = muerto): pausa la
+   * persistencia y deja eventos app-died/app-restarted en el historial, así el
+   * timeline muestra el hueco honesto en vez de horas de samples null.
+   */
+  private trackAppLife(alive: boolean | null): void {
+    if (alive === null) return // adb no contestó: no concluir nada este tick
+    const pkg = this.appStatus?.packageName ?? this.opts.packageName
+    const serial = this.serial
+    if (alive) {
+      this.deadTicks = 0
+      if (this.appDead) {
+        this.appDead = false
+        if (serial) {
+          const ev = { ts: Date.now(), kind: 'app-restarted' as const, pkg, serial }
+          this.buffer.addEvent(ev)
+          this.sessionLog?.appendEvent(ev)
+        }
+      }
+      return
+    }
+    this.deadTicks++
+    if (this.appDead || this.deadTicks < 3) return
+    this.appDead = true
+    const wasAlive = this.appStatus?.pid != null
+    if (this.appStatus) {
+      this.appStatus = { ...this.appStatus, pid: null }
+      this.server?.broadcast(appMessage(this.appStatus))
+    }
+    // sin pid previo no hubo vida que registrar (app nunca lanzada): no es una muerte
+    if (wasAlive && serial) {
+      const ev = { ts: Date.now(), kind: 'app-died' as const, pkg, serial }
+      this.buffer.addEvent(ev)
+      this.sessionLog?.appendEvent(ev)
     }
   }
 
@@ -432,6 +479,9 @@ export class LiveServer {
     const sampler = new Sampler(transport, serial, pkg, pid ?? 0)
     await sampler.init()
     this.sampler = sampler
+    // estado de vida fresco: sin proceso arranca en pausa (no persistir nulls de espera)
+    this.appDead = pid === null
+    this.deadTicks = 0
     this.appStatus = { packageName: pkg, pid, launched }
     if (recordUsage) this.opts.appStore?.select(pkg)
     const ev = { ts: Date.now(), kind: 'app' as const, pkg, serial }

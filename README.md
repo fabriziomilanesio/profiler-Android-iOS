@@ -7,8 +7,20 @@ desde selectores en el dashboard (las apps filtradas por "evermore" por default)
 métricas en tiempo real, inspeccionás el tráfico de red, y (próximamente) grabás sesiones y
 exportás reportes de comparación.
 
-**Métricas en vivo:** CPU % · RAM (PSS + composición) · FPS (Unity, vía SurfaceFlinger) ·
-temperatura · GPU % · batería (nivel/temp/mA) · red (KB/s) · inspector de requests HTTP.
+**Métricas en vivo:** CPU % de la app (share-of-device, con conversión "≈ X% de un core") ·
+CPU % total del device · RAM de la app (PSS + composición; suma procesos hijos `pkg:*` si los
+hay) · RAM usada total del device · FPS (Unity, vía SurfaceFlinger) · temperatura · GPU % ·
+batería (nivel/temp/mA) · red (KB/s) · inspector de requests HTTP.
+
+> **Convenciones de medición.** El CPU de la app es *share-of-device* (0–100% del teléfono
+> entero, ya normalizado por cores): un thread saturando 1 de 8 cores marca 12.5%, no 100% —
+> por eso el gauge muestra también la conversión a "% de un core". La RAM de la app es **PSS**
+> (`dumpsys meminfo`, memoria compartida prorrateada — la métrica que usa Android para decidir
+> kills). Apps multi-proceso (p.ej. Chrome y sus pestañas `:sandboxed_process`) se agregan
+> sumando main + hijos; el uso total del device sale de `/proc/stat` y `/proc/meminfo`
+> (MemTotal − MemAvailable). Si la app muere, el profiler sigue en vivo pero **pausa la
+> persistencia** (deja eventos `app-died`/`app-restarted` en el historial en vez de horas de
+> ticks vacíos) y re-engancha solo cuando el proceso reaparece.
 
 **Stack:** TypeScript + [Bun](https://bun.sh) · UI web local (WebSocket) · Apache ECharts.
 

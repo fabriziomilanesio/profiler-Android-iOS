@@ -61,7 +61,14 @@
   var FONT_BODY = "'Inter', system-ui, sans-serif"
 
   var deviceRamMb = 8192 // updated from DeviceInfo.ramTotalMb when it arrives
+  var deviceCores = null // DeviceInfo.cores → "≈ X% core" under the CPU gauge
   var WINDOW_S = 120
+
+  // Adaptive RAM unit: apps live in MB (a 118 MB app frozen at "0.12 GB" hides
+  // every real change); switch to GB only past 1 GiB.
+  function fmtMb(mb) {
+    return mb >= 1024 ? (mb / 1024).toFixed(2) + ' GB' : Math.round(mb) + ' MB'
+  }
 
   function bands(warn, bad) {
     return function (v) {
@@ -83,8 +90,13 @@
         min: 0,
         max: 100,
         color: bands(55, 75),
+        device: true, // anillo secundario: CPU total del device
         fmt: function (v) {
-          return v === null ? NA : Math.round(v) + '{u|%}'
+          if (v === null) return NA
+          // share-of-device esconde un main thread clavado (6% device = 49% de un
+          // core en 8 cores): mostrar la conversión al lado
+          var core = deviceCores ? '\n{fps|≈ ' + Math.round(v * deviceCores) + '% core}' : ''
+          return Math.round(v) + '{u|%}' + core
         },
       },
       gpu: {
@@ -111,8 +123,10 @@
         min: 0,
         max: deviceRamMb,
         color: bands(deviceRamMb * 0.45, deviceRamMb * 0.7),
+        device: true, // anillo secundario: RAM usada total del device
         fmt: function (v) {
-          return v === null ? NA : (v / 1024).toFixed(2) + '{u|GB}'
+          if (v === null) return NA
+          return v >= 1024 ? (v / 1024).toFixed(2) + '{u|GB}' : Math.round(v) + '{u|MB}'
         },
       },
       bat: {
@@ -129,78 +143,101 @@
 
   function makeGauge(cfg) {
     var chart = echarts.init(document.getElementById(cfg.el), null, { renderer: 'canvas' })
-    chart.setOption({
-      series: [
-        {
-          type: 'gauge',
-          startAngle: 90,
-          endAngle: -270,
-          min: cfg.min,
-          max: cfg.max,
-          pointer: { show: false },
-          progress: {
-            show: true,
-            width: 13,
-            roundCap: true,
-            itemStyle: { color: C.ok, shadowColor: 'rgba(0,0,0,.25)', shadowBlur: 5 },
-          },
-          axisLine: { lineStyle: { width: 13, color: [[1, C.track]] } },
-          axisTick: { show: false },
-          splitLine: { show: false },
-          axisLabel: { show: false },
-          anchor: { show: false },
-          title: { show: false },
-          detail: {
-            valueAnimation: true,
-            offsetCenter: [0, 0],
-            formatter: cfg.fmt,
-            color: C.text,
-            fontFamily: FONT_TITLE,
-            fontWeight: 800,
-            fontSize: 30,
-            lineHeight: 34,
-            rich: {
-              u: {
-                color: C.muted,
-                fontSize: 13,
-                fontFamily: FONT_BODY,
-                fontWeight: 500,
-                padding: [8, 0, 0, 2],
-              },
-              fps: {
-                color: C.muted,
-                fontSize: 14,
-                fontFamily: FONT_BODY,
-                fontWeight: 600,
-                padding: [4, 0, 0, 0],
-              },
-              na: { color: C.muted, fontSize: 20, fontFamily: FONT_BODY, fontWeight: 600 },
-            },
-          },
-          data: [{ value: cfg.min }],
+    var series = [
+      {
+        type: 'gauge',
+        startAngle: 90,
+        endAngle: -270,
+        min: cfg.min,
+        max: cfg.max,
+        pointer: { show: false },
+        progress: {
+          show: true,
+          width: 13,
+          roundCap: true,
+          itemStyle: { color: C.ok, shadowColor: 'rgba(0,0,0,.25)', shadowBlur: 5 },
         },
-      ],
-    })
+        axisLine: { lineStyle: { width: 13, color: [[1, C.track]] } },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: { show: false },
+        anchor: { show: false },
+        title: { show: false },
+        detail: {
+          valueAnimation: true,
+          offsetCenter: [0, 0],
+          formatter: cfg.fmt,
+          color: C.text,
+          fontFamily: FONT_TITLE,
+          fontWeight: 800,
+          fontSize: 30,
+          lineHeight: 34,
+          rich: {
+            u: {
+              color: C.muted,
+              fontSize: 13,
+              fontFamily: FONT_BODY,
+              fontWeight: 500,
+              padding: [8, 0, 0, 2],
+            },
+            fps: {
+              color: C.muted,
+              fontSize: 14,
+              fontFamily: FONT_BODY,
+              fontWeight: 600,
+              padding: [4, 0, 0, 0],
+            },
+            na: { color: C.muted, fontSize: 20, fontFamily: FONT_BODY, fontWeight: 600 },
+          },
+        },
+        data: [{ value: cfg.min }],
+      },
+    ]
+    // anillo interior tenue: total del DEVICE en la misma escala que la app
+    if (cfg.device) {
+      series.push({
+        type: 'gauge',
+        startAngle: 90,
+        endAngle: -270,
+        min: cfg.min,
+        max: cfg.max,
+        radius: '68%',
+        pointer: { show: false },
+        progress: { show: true, width: 5, roundCap: true, itemStyle: { color: C.legendOff } },
+        axisLine: { lineStyle: { width: 5, color: [[1, 'transparent']] } },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: { show: false },
+        anchor: { show: false },
+        title: { show: false },
+        detail: { show: false },
+        data: [{ value: cfg.min }],
+      })
+    }
+    chart.setOption({ series: series })
     cfg.chart = chart
     return cfg
   }
 
-  function updateGauge(cfg, value) {
+  function updateGauge(cfg, value, deviceValue) {
     // null → keep ring at min (grey) and show N/A text
     var ringVal = value === null ? cfg.min : value
-    cfg.chart.setOption({
-      series: [
-        {
-          data: [{ value: ringVal }],
-          progress: { itemStyle: { color: value === null ? C.track : cfg.color(value) } },
-          detail: {
-            formatter: function () {
-              return cfg.fmt(value)
-            },
+    var series = [
+      {
+        data: [{ value: ringVal }],
+        progress: { itemStyle: { color: value === null ? C.track : cfg.color(value) } },
+        detail: {
+          formatter: function () {
+            return cfg.fmt(value)
           },
         },
-      ],
-    })
+      },
+    ]
+    if (cfg.device) {
+      var dv = deviceValue === null || deviceValue === undefined ? cfg.min : deviceValue
+      series.push({ data: [{ value: dv }] })
+    }
+    cfg.chart.setOption({ series: series })
   }
 
   // ---------- memory pie ----------
@@ -280,7 +317,7 @@
 
   function updateMemPie(mem, pssMb) {
     memPie.setOption({
-      title: { text: pssMb === null ? 'N/A' : (pssMb / 1024).toFixed(2) + ' GB' },
+      title: { text: pssMb === null ? 'N/A' : fmtMb(pssMb) },
       series: [
         {
           data: memMeta().map(function (m) {
@@ -307,11 +344,13 @@
       {
         name: 'RAM',
         color: C.violet,
+        // placeholder: la serie RAM se re-normaliza al rango visible en render()
+        // (auto-escala; % del device aplastaba una app de 118 MB contra el piso)
         plot: function (s) {
           return (s.mem.pss / deviceRamMb) * 100
         },
         real: function (s) {
-          return (s.mem.pss / 1024).toFixed(2) + ' GB'
+          return fmtMb(s.mem.pss)
         },
       },
       {
@@ -344,6 +383,30 @@
           return s.battery.levelPct.toFixed(0) + ' %'
         },
       },
+      // Totales del DEVICE: punteados y translúcidos, misma escala 0-100 (% de la
+      // capacidad del teléfono) — responde "¿el cuello es mi app o el teléfono?"
+      {
+        name: 'CPU dev',
+        color: C.primary,
+        dim: true,
+        plot: function (s) {
+          return s.deviceCpu
+        },
+        real: function (s) {
+          return s.deviceCpu.toFixed(0) + ' %'
+        },
+      },
+      {
+        name: 'RAM dev',
+        color: C.violet,
+        dim: true,
+        plot: function (s) {
+          return (s.deviceRamUsedMb / deviceRamMb) * 100
+        },
+        real: function (s) {
+          return fmtMb(s.deviceRamUsedMb)
+        },
+      },
     ]
   }
   // which sample field each series needs (null → skip point)
@@ -363,7 +426,14 @@
     function (s) {
       return s.battery.levelPct
     },
+    function (s) {
+      return s.deviceCpu === undefined ? null : s.deviceCpu
+    },
+    function (s) {
+      return s.deviceRamUsedMb === undefined ? null : s.deviceRamUsedMb
+    },
   ]
+  var RAM_SERIES_IDX = 1
   var SERIES = seriesMeta()
 
   function makeTimeline() {
@@ -419,8 +489,13 @@
           showSymbol: false,
           smooth: 0.25,
           connectNulls: false,
-          lineStyle: { width: 2, color: s.color },
-          itemStyle: { color: s.color },
+          lineStyle: {
+            width: s.dim ? 1.5 : 2,
+            color: s.color,
+            type: s.dim ? 'dashed' : 'solid',
+            opacity: s.dim ? 0.45 : 1,
+          },
+          itemStyle: { color: s.color, opacity: s.dim ? 0.45 : 1 },
           emphasis: { disabled: true },
           data: [],
         }
@@ -536,10 +611,10 @@
   function render(s) {
     lastSample = s
     latestFps = s.fps
-    updateGauge(gauges.cpu, s.cpu)
+    updateGauge(gauges.cpu, s.cpu, s.deviceCpu === undefined ? null : s.deviceCpu)
     updateGauge(gauges.gpu, s.gpu)
     updateGauge(gauges.temp, s.tempC)
-    updateGauge(gauges.ram, s.mem.pss)
+    updateGauge(gauges.ram, s.mem.pss, s.deviceRamUsedMb === undefined ? null : s.deviceRamUsedMb)
     updateGauge(gauges.bat, s.battery.levelPct)
 
     // charging chip
@@ -552,9 +627,29 @@
     SERIES.forEach(function (meta, i) {
       var raw = SERIES_VAL[i](s)
       if (raw === null || raw === undefined) return // gap for N/A
-      tlData[i].push({ value: [now, meta.plot(s), meta.real(s)] })
+      // value[3] = valor crudo (la serie RAM se re-normaliza abajo con él)
+      tlData[i].push({ value: [now, meta.plot(s), meta.real(s), raw] })
       while (tlData[i].length > WINDOW_S) tlData[i].shift()
     })
+    // Auto-escala de la RAM de la app: re-normalizar el buffer visible a su propio
+    // rango (con padding). En % del device, una app de 118 MB era una línea plana
+    // pegada al piso; así, un leak de 5 MB/min se VE.
+    var ramArr = tlData[RAM_SERIES_IDX]
+    if (ramArr.length) {
+      var lo = Infinity
+      var hi = -Infinity
+      ramArr.forEach(function (p) {
+        var mb = p.value[3]
+        if (mb < lo) lo = mb
+        if (mb > hi) hi = mb
+      })
+      var pad = Math.max((hi - lo) * 0.15, hi * 0.02, 1)
+      var floor = Math.max(0, lo - pad)
+      var span = hi + pad - floor
+      ramArr.forEach(function (p) {
+        p.value[1] = ((p.value[3] - floor) / span) * 100
+      })
+    }
     timeline.setOption({
       series: SERIES.map(function (_, i) {
         return { data: tlData[i] }
@@ -602,6 +697,10 @@
     }
     if (info.gpu) specs.push(info.gpu)
     if (info.soc) specs.push(info.soc)
+    if (info.cores) {
+      deviceCores = info.cores
+      specs.push(info.cores + ' cores')
+    }
     specs.push(info.serial)
     var el = document.getElementById('devSpecs')
     el.innerHTML = ''
@@ -612,9 +711,9 @@
       el.appendChild(span)
     })
     if (pkg) document.getElementById('appPkg').textContent = pkg
-    // rebuild RAM gauge to pick up the real max
+    // rebuild RAM gauge to pick up the real max (ambos anillos: app y device)
     if (gauges && gauges.ram) {
-      gauges.ram.chart.setOption({ series: [{ max: deviceRamMb }] })
+      gauges.ram.chart.setOption({ series: [{ max: deviceRamMb }, { max: deviceRamMb }] })
       gauges.ram.color = bands(deviceRamMb * 0.45, deviceRamMb * 0.7)
     }
   }

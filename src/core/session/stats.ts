@@ -26,6 +26,10 @@ export interface ReportSummary {
   fps: ScalarStats | null
   tempC: ScalarStats | null
   ramMb: ScalarStats | null
+  /** CPU total del device (0–100%) */
+  deviceCpu: ScalarStats | null
+  /** RAM usada total del device (MB) */
+  deviceRamMb: ScalarStats | null
   battery: BatterySummary
   memAvg: Record<'java' | 'native' | 'graphics' | 'code' | 'stack' | 'other', number | null>
 }
@@ -39,6 +43,8 @@ export interface ReportSeriesPoint {
   fps: number | null
   tempC: number | null
   ramMb: number | null
+  deviceCpu: number | null
+  deviceRamMb: number | null
   mem: Omit<MemSample, 'pss'>
   battery: { level: number | null; tempC: number | null; mA: number | null }
   netRxKb: number | null
@@ -54,6 +60,7 @@ export interface ReportSession {
     ramMb: number | null
     gpu: string | null
     soc: string | null
+    cores: number | null
     serial: string
   } | null
   startedAt: string
@@ -122,6 +129,8 @@ export function summarize(samples: Sample[]): ReportSummary {
     fps: scalarStats(pick(samples, (s) => s.fps)),
     tempC: scalarStats(pick(samples, (s) => s.tempC)),
     ramMb: scalarStats(pick(samples, (s) => s.mem.pss)),
+    deviceCpu: scalarStats(pick(samples, (s) => s.deviceCpu)),
+    deviceRamMb: scalarStats(pick(samples, (s) => s.deviceRamUsedMb)),
     battery: {
       levelStart,
       levelEnd,
@@ -147,7 +156,11 @@ export function buildReportSession(opts: BuildReportOptions): ReportSession {
   const { samples, device } = opts
   const first = samples[0]
   const last = samples[samples.length - 1]
-  const durationS = first && last ? Math.max(1, Math.round((last.ts - first.ts) / 1000) + 1) : 0
+  // Duración ACTIVA: con la persistencia pausada mientras la app está muerta, el span
+  // first→last puede incluir huecos; contar samples × intervalo excluye el tiempo muerto.
+  const spanS = first && last ? Math.round((last.ts - first.ts) / 1000) + 1 : 0
+  const activeS = Math.round((samples.length * opts.intervalMs) / 1000)
+  const durationS = samples.length ? Math.max(1, Math.min(spanS, activeS)) : 0
   return {
     app: opts.packageName.split('.').pop() ?? opts.packageName,
     bundleId: opts.packageName,
@@ -158,6 +171,7 @@ export function buildReportSession(opts: BuildReportOptions): ReportSession {
           ramMb: device.ramTotalMb ?? null,
           gpu: device.gpu ?? null,
           soc: device.soc ?? null,
+          cores: device.cores ?? null,
           serial: device.serial,
         }
       : null,
@@ -174,6 +188,9 @@ export function buildReportSession(opts: BuildReportOptions): ReportSession {
       fps: s.fps,
       tempC: s.tempC,
       ramMb: s.mem.pss,
+      // ?? null: sesiones viejas del historial no traen estos campos
+      deviceCpu: s.deviceCpu ?? null,
+      deviceRamMb: s.deviceRamUsedMb ?? null,
       mem: {
         java: s.mem.java,
         native: s.mem.native,

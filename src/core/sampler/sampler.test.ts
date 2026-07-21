@@ -32,14 +32,23 @@ function fixtureTransport(routes: Array<[RegExp, string | (() => ShellResult)]>)
 
 function happyRoutes(): Array<[RegExp, string]> {
   return [
-    [/meminfo/, read('oneshot/dumpsys-meminfo.txt')],
+    // `dumpsys meminfo` explícito: el cat combinado también contiene "/proc/meminfo"
+    [/dumpsys meminfo/, read('oneshot/dumpsys-meminfo.txt')],
     [/gpu_busy/, read('oneshot/gpu-samsung-gpu-busy.txt')],
     [/thermalservice/, read('oneshot/dumpsys-thermalservice.txt')],
     [/timestats/, read('session/final/timestats-dump.txt')],
     [/dumpsys battery/, read('oneshot/dumpsys-battery.txt')],
-    [/pidof|ps -A|pgrep/, '18078\n'],
-    // el comando real combina ambos: `cat /proc/stat /proc/<pid>/stat`
-    [/cat \/proc\/stat/, read('oneshot/proc-stat.txt') + '\n' + read('oneshot/proc-pid-stat.txt')],
+    [/pidof/, '18078\n'],
+    [/ps -A/, 'PID NAME\n1 init\n18078 ' + PKG + '\n'],
+    // el comando real combina: `cat /proc/stat /proc/meminfo /proc/<pid>/stat`
+    [
+      /cat \/proc\/stat/,
+      read('oneshot/proc-stat.txt') +
+        '\n' +
+        read('oneshot/proc-meminfo.txt') +
+        '\n' +
+        read('oneshot/proc-pid-stat.txt'),
+    ],
   ]
 }
 
@@ -65,9 +74,61 @@ describe('Sampler', () => {
     const sampler = new Sampler(t, 'REDACTED-SERIAL', PKG, 18078)
     const first = await sampler.sampleOnce()
     expect(first.cpu).toBeNull() // sin previo
+    expect(first.deviceCpu).toBeNull() // device CPU también es delta
     const second = await sampler.sampleOnce()
     expect(second.cpu).not.toBeNull() // ya hay delta (aunque sea 0)
     expect(second.cpu).toBeGreaterThanOrEqual(0)
+    expect(second.deviceCpu).not.toBeNull()
+    expect(second.deviceCpu!).toBeGreaterThanOrEqual(0)
+    expect(second.deviceCpu!).toBeLessThanOrEqual(100)
+  })
+
+  test('deviceRamUsedMb sale del /proc/meminfo del cat combinado (primer tick ya)', async () => {
+    const t = fixtureTransport(happyRoutes())
+    const sampler = new Sampler(t, 'REDACTED-SERIAL', PKG, 18078)
+    const s = await sampler.sampleOnce()
+    expect(s.deviceRamUsedMb).not.toBeNull()
+    expect(s.deviceRamUsedMb!).toBeGreaterThan(0)
+    expect(s.deviceRamUsedMb!).toBeLessThan(3667) // ≤ MemTotal del fixture
+  })
+
+  test('refreshPid detecta hijos y agrega su PSS al de la app', async () => {
+    const psOut = ['PID NAME', '1 init', `18078 ${PKG}`, `18100 ${PKG}:service`].join('\n')
+    const mainMem = read('oneshot/dumpsys-meminfo.txt') // TOTAL PSS ≈ 905 MB
+    // hijo sintético con App Summary mínimo: TOTAL PSS 102400 KB = 100 MB
+    const childMem = [
+      'App Summary',
+      '   Java Heap:    1024',
+      '   TOTAL PSS:   102400       TOTAL RSS: 1 TOTAL SWAP PSS: 0',
+    ].join('\n')
+    const routes: Array<[RegExp, string]> = [
+      [/dumpsys meminfo 18100/, childMem],
+      [/dumpsys meminfo/, mainMem],
+      [/ps -A/, psOut],
+      [
+        /cat \/proc\/stat/,
+        read('oneshot/proc-stat.txt') + '\n' + read('oneshot/proc-pid-stat.txt'),
+      ],
+    ]
+    const t = fixtureTransport(routes)
+    const sampler = new Sampler(t, 'REDACTED-SERIAL', PKG, 18078)
+    const alive = await sampler.refreshPid()
+    expect(alive).toBe(true)
+    const s = await sampler.sampleOnce()
+    expect(s.mem.pss).toBeCloseTo(905 + 100, 0) // main + hijo
+    expect(s.mem.java).toBeCloseTo(12.64 + 1, 0)
+  })
+
+  test('refreshPid: proceso desaparecido ⇒ false y pid 0; ps que falla ⇒ null (sin concluir)', async () => {
+    const t = fixtureTransport([[/ps -A/, 'PID NAME\n1 init\n']])
+    const sampler = new Sampler(t, 'REDACTED-SERIAL', PKG, 18078)
+    expect(await sampler.refreshPid()).toBe(false)
+    expect(sampler.processId).toBe(0)
+
+    const broken = fixtureTransport([]) // ps devuelve exitCode 1 sin output útil
+    const sampler2 = new Sampler(broken, 'REDACTED-SERIAL', PKG, 18078)
+    expect(await sampler2.refreshPid()).toBeNull()
+    expect(sampler2.processId).toBe(18078) // no tocó el pid
   })
 
   test('best-effort: un collector que falla ⇒ su métrica null, el resto sigue', async () => {

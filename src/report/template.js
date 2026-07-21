@@ -56,6 +56,11 @@
     if (mb === null || mb === undefined) return 'N/A'
     return (mb / 1024).toFixed(2)
   }
+  // unidad adaptativa: apps chicas viven en MB (118 MB como "0.12 GB" congela el número)
+  function fmtMb(mb) {
+    if (mb === null || mb === undefined || !isFinite(mb)) return 'N/A'
+    return mb >= 1024 ? (mb / 1024).toFixed(2) + ' GB' : Math.round(mb) + ' MB'
+  }
   function fmtDuration(s) {
     var m = Math.floor(s / 60),
       ss = s % 60
@@ -130,6 +135,7 @@
   function metricCardDefs(sess) {
     var S = sess.summary
     var B = S.battery
+    var cores = sess.device ? sess.device.cores : null
     return [
       {
         title: '🔋 Battery',
@@ -160,7 +166,8 @@
             nf(S.cpu.min, 0) +
             '% · p90 ' +
             nf(S.cpu.p90, 0) +
-            '%'
+            '%' +
+            (cores ? ' · avg ≈ ' + Math.round(S.cpu.avg * cores) + '% core' : '')
           : 'sin datos',
       },
       {
@@ -204,15 +211,26 @@
       },
       {
         title: 'RAM (PSS)',
-        big: S.ramMb ? gb(S.ramMb.avg) : 'N/A',
-        unit: S.ramMb ? 'GB' : '',
+        big: S.ramMb ? (S.ramMb.avg >= 1024 ? gb(S.ramMb.avg) : Math.round(S.ramMb.avg)) : 'N/A',
+        unit: S.ramMb ? (S.ramMb.avg >= 1024 ? 'GB' : 'MB') : '',
         sub: S.ramMb
-          ? '<span class="hi">peak ' +
-            gb(S.ramMb.peak) +
-            ' GB</span> · min ' +
-            gb(S.ramMb.min) +
-            ' GB'
+          ? '<span class="hi">peak ' + fmtMb(S.ramMb.peak) + '</span> · min ' + fmtMb(S.ramMb.min)
           : 'sin datos',
+      },
+      {
+        title: '📱 Device',
+        big: S.deviceCpu ? S.deviceCpu.avg.toFixed(0) : 'N/A',
+        unit: S.deviceCpu ? '% CPU' : '',
+        sub:
+          S.deviceCpu || S.deviceRamMb
+            ? (S.deviceCpu ? '<span class="hi">peak ' + nf(S.deviceCpu.peak, 0) + '%</span>' : '') +
+              (S.deviceRamMb
+                ? (S.deviceCpu ? ' · ' : '') +
+                  'RAM ' +
+                  fmtMb(S.deviceRamMb.avg) +
+                  (sess.device && sess.device.ramMb ? ' / ' + fmtMb(sess.device.ramMb) : '')
+                : '')
+            : 'uso total del teléfono (sin datos)',
       },
     ]
   }
@@ -269,7 +287,7 @@
         },
       },
       title: {
-        text: sess.summary.ramMb ? gb(sess.summary.ramMb.avg) + ' GB' : 'N/A',
+        text: sess.summary.ramMb ? fmtMb(sess.summary.ramMb.avg) : 'N/A',
         left: 'center',
         top: '40%',
         textStyle: { color: C.text, fontFamily: FONT_TITLE, fontWeight: 800, fontSize: 22 },
@@ -318,6 +336,23 @@
   // ---------- timeline (normalizado 0-100, tooltip con valor real) ----------
   function tlMeta(sess) {
     var ramTotal = sess.device && sess.device.ramMb ? sess.device.ramMb : 4096
+    // Auto-escala de la RAM de la app: normalizada a su propio rango de la sesión
+    // (en % del device una app de 118 MB era una línea plana pegada al piso).
+    var lo = Infinity
+    var hi = -Infinity
+    sess.series.forEach(function (s) {
+      if (s.ramMb !== null && s.ramMb !== undefined) {
+        if (s.ramMb < lo) lo = s.ramMb
+        if (s.ramMb > hi) hi = s.ramMb
+      }
+    })
+    var ramFloor = 0
+    var ramSpan = ramTotal
+    if (hi >= lo) {
+      var pad = Math.max((hi - lo) * 0.15, hi * 0.02, 1)
+      ramFloor = Math.max(0, lo - pad)
+      ramSpan = hi + pad - ramFloor
+    }
     return [
       {
         name: 'CPU %',
@@ -333,10 +368,10 @@
         name: 'RAM',
         color: C.violet,
         norm: function (s) {
-          return s.ramMb === null ? null : (s.ramMb / ramTotal) * 100
+          return s.ramMb === null ? null : ((s.ramMb - ramFloor) / ramSpan) * 100
         },
         real: function (s) {
-          return s.ramMb === null ? 'N/A' : gb(s.ramMb) + ' GB'
+          return s.ramMb === null ? 'N/A' : fmtMb(s.ramMb)
         },
       },
       {
@@ -367,6 +402,33 @@
         },
         real: function (s) {
           return nf(s.battery.level, 1, ' %')
+        },
+      },
+      // Totales del DEVICE (punteados): misma escala 0-100 = % de la capacidad
+      {
+        name: 'CPU dev',
+        color: C.primary,
+        dim: true,
+        norm: function (s) {
+          return s.deviceCpu === null || s.deviceCpu === undefined ? null : s.deviceCpu
+        },
+        real: function (s) {
+          return nf(s.deviceCpu, 0, ' %')
+        },
+      },
+      {
+        name: 'RAM dev',
+        color: C.violet,
+        dim: true,
+        norm: function (s) {
+          return s.deviceRamMb === null || s.deviceRamMb === undefined
+            ? null
+            : (s.deviceRamMb / ramTotal) * 100
+        },
+        real: function (s) {
+          return s.deviceRamMb === null || s.deviceRamMb === undefined
+            ? 'N/A'
+            : fmtMb(s.deviceRamMb)
         },
       },
     ]
@@ -431,8 +493,13 @@
           showSymbol: false,
           smooth: 0.2,
           connectNulls: false,
-          lineStyle: { width: 2, color: m.color },
-          itemStyle: { color: m.color },
+          lineStyle: {
+            width: m.dim ? 1.5 : 2,
+            color: m.color,
+            type: m.dim ? 'dashed' : 'solid',
+            opacity: m.dim ? 0.45 : 1,
+          },
+          itemStyle: { color: m.color, opacity: m.dim ? 0.45 : 1 },
           emphasis: { disabled: true },
           data: sess.series.map(function (s) {
             return { value: [s.ts, m.norm(s), m.real(s)] }

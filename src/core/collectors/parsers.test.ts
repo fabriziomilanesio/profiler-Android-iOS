@@ -4,8 +4,10 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseMeminfo } from './meminfo'
-import { parseCpu } from './cpu'
+import { parseMeminfo, mergeMemSamples } from './meminfo'
+import { parseCpu, parseDeviceCpu } from './cpu'
+import { parseDeviceMemUsedMb } from './deviceMem'
+import { parsePids } from '../sampler/sampler'
 import { parseFps } from './fps'
 import { parseTemp } from './temp'
 import { parseGpu } from './gpu'
@@ -57,8 +59,8 @@ describe('parseCpu (deltas /proc/<pid>/stat vs /proc/stat)', () => {
     const nextPidStat = read('oneshot/proc-pid-stat.txt') // mismo ⇒ delta 0 proc
     const nextCpuStat = read('session/tick-000/proc-stat.txt')
     const cpu = parseCpu(
-      { pidStat: prevPidStat, cpuStat: prevCpuStat },
-      { pidStat: nextPidStat, cpuStat: nextCpuStat },
+      { pidStats: [prevPidStat], cpuStat: prevCpuStat },
+      { pidStats: [nextPidStat], cpuStat: nextCpuStat },
     )
     // delta proc = 0 (mismo stat) ⇒ 0% pero válido (número, no null)
     expect(cpu).not.toBeNull()
@@ -72,8 +74,35 @@ describe('parseCpu (deltas /proc/<pid>/stat vs /proc/stat)', () => {
     const prevCpu = 'cpu  0 0 0 0 0 0 0 0 0 0'
     const nextCpu = 'cpu  500 0 500 0 0 0 0 0 0 0' // +1000 total
     const cpu = parseCpu(
-      { pidStat: prevPid, cpuStat: prevCpu },
-      { pidStat: nextPid, cpuStat: nextCpu },
+      { pidStats: [prevPid], cpuStat: prevCpu },
+      { pidStats: [nextPid], cpuStat: nextCpu },
+    )
+    expect(cpu).toBeCloseTo(10, 5)
+  })
+
+  test('multi-proceso: suma los deltas de main + hijos (matcheados por pid)', () => {
+    const prevMain = '1 (app) S 0 0 0 0 0 0 0 0 0 0 100 0 0 0'
+    const nextMain = '1 (app) S 0 0 0 0 0 0 0 0 0 0 150 0 0 0' // +50
+    const prevChild = '2 (app:svc) S 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
+    const nextChild = '2 (app:svc) S 0 0 0 0 0 0 0 0 0 0 50 0 0 0' // +50
+    const prevCpu = 'cpu  0 0 0 0 0 0 0 0 0 0'
+    const nextCpu = 'cpu  500 0 500 0 0 0 0 0 0 0' // +1000 ⇒ (50+50)/1000 = 10%
+    const cpu = parseCpu(
+      { pidStats: [prevMain, prevChild], cpuStat: prevCpu },
+      { pidStats: [nextMain, nextChild], cpuStat: nextCpu },
+    )
+    expect(cpu).toBeCloseTo(10, 5)
+  })
+
+  test('hijo que nace entre snapshots no aporta delta (no infla el %)', () => {
+    const prevMain = '1 (app) S 0 0 0 0 0 0 0 0 0 0 100 0 0 0'
+    const nextMain = '1 (app) S 0 0 0 0 0 0 0 0 0 0 200 0 0 0' // +100
+    const newChild = '9 (app:new) S 0 0 0 0 0 0 0 0 0 0 99999 0 0 0' // sin prev
+    const prevCpu = 'cpu  0 0 0 0 0 0 0 0 0 0'
+    const nextCpu = 'cpu  500 0 500 0 0 0 0 0 0 0'
+    const cpu = parseCpu(
+      { pidStats: [prevMain], cpuStat: prevCpu },
+      { pidStats: [nextMain, newChild], cpuStat: nextCpu },
     )
     expect(cpu).toBeCloseTo(10, 5)
   })
@@ -84,12 +113,120 @@ describe('parseCpu (deltas /proc/<pid>/stat vs /proc/stat)', () => {
     const prevCpu = 'cpu  0 0 0 0 0 0 0'
     const nextCpu = 'cpu  0 0 1000 0 0 0 0'
     expect(
-      parseCpu({ pidStat: prevPid, cpuStat: prevCpu }, { pidStat: nextPid, cpuStat: nextCpu }),
+      parseCpu(
+        { pidStats: [prevPid], cpuStat: prevCpu },
+        { pidStats: [nextPid], cpuStat: nextCpu },
+      ),
     ).toBeCloseTo(10, 5)
   })
 
   test('formato desconocido ⇒ null', () => {
-    expect(parseCpu({ pidStat: 'x', cpuStat: 'y' }, { pidStat: 'x', cpuStat: 'y' })).toBeNull()
+    expect(
+      parseCpu({ pidStats: ['x'], cpuStat: 'y' }, { pidStats: ['x'], cpuStat: 'y' }),
+    ).toBeNull()
+  })
+})
+
+describe('parseDeviceCpu (CPU total del device desde /proc/stat)', () => {
+  test('busy = total − idle − iowait sobre el delta', () => {
+    // Δtotal = 1000, Δidle(3º) = 600, Δiowait(4º) = 100 ⇒ busy 300/1000 = 30%
+    const prev = 'cpu  0 0 0 0 0 0 0 0 0 0'
+    const next = 'cpu  200 0 100 600 100 0 0 0 0 0'
+    expect(
+      parseDeviceCpu({ pidStats: [], cpuStat: prev }, { pidStats: [], cpuStat: next }),
+    ).toBeCloseTo(30, 5)
+  })
+
+  test('snapshots reales del device ⇒ 0–100', () => {
+    const prev = read('oneshot/proc-stat.txt')
+    const next = read('session/tick-000/proc-stat.txt')
+    const v = parseDeviceCpu({ pidStats: [], cpuStat: prev }, { pidStats: [], cpuStat: next })
+    expect(v).not.toBeNull()
+    expect(v!).toBeGreaterThanOrEqual(0)
+    expect(v!).toBeLessThanOrEqual(100)
+  })
+
+  test('formato desconocido ⇒ null', () => {
+    expect(
+      parseDeviceCpu({ pidStats: [], cpuStat: 'x' }, { pidStats: [], cpuStat: 'y' }),
+    ).toBeNull()
+  })
+})
+
+describe('parseDeviceMemUsedMb (/proc/meminfo → RAM usada del device)', () => {
+  test('MemTotal − MemAvailable en MB desde el fixture real', () => {
+    const raw = read('oneshot/proc-meminfo.txt')
+    const used = parseDeviceMemUsedMb(raw)
+    expect(used).not.toBeNull()
+    expect(used!).toBeGreaterThan(0)
+    // nunca más que el total del fixture (3754184 kB ≈ 3666 MB)
+    expect(used!).toBeLessThan(3667)
+  })
+
+  test('sintético: 4 GB total, 1 GB available ⇒ 3072 MB usados', () => {
+    const raw = 'MemTotal:  4194304 kB\nMemFree:  100000 kB\nMemAvailable:  1048576 kB\n'
+    expect(parseDeviceMemUsedMb(raw)).toBeCloseTo(3072, 5)
+  })
+
+  test('sin MemAvailable ⇒ null', () => {
+    expect(parseDeviceMemUsedMb('MemTotal: 1000 kB\n')).toBeNull()
+    expect(parseDeviceMemUsedMb('')).toBeNull()
+  })
+})
+
+describe('mergeMemSamples (agregación multi-proceso)', () => {
+  const base = {
+    pss: null,
+    java: null,
+    native: null,
+    graphics: null,
+    code: null,
+    stack: null,
+    other: null,
+  }
+
+  test('suma por categoría los no-null', () => {
+    const merged = mergeMemSamples([
+      { ...base, pss: 100, java: 10, graphics: 50 },
+      { ...base, pss: 40, java: 5, native: 8 },
+    ])
+    expect(merged.pss).toBe(140)
+    expect(merged.java).toBe(15)
+    expect(merged.native).toBe(8)
+    expect(merged.graphics).toBe(50)
+    expect(merged.code).toBeNull() // todos null ⇒ null, no 0
+  })
+
+  test('lista vacía ⇒ todo null', () => {
+    expect(mergeMemSamples([]).pss).toBeNull()
+  })
+})
+
+describe('parsePids (ps -A → main + hijos del package)', () => {
+  const ps = [
+    'PID NAME',
+    '1 init',
+    '17276 com.android.chrome',
+    '23490 com.android.chrome:privileged_process0',
+    '23583 com.android.chrome:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:1',
+    '17833 com.evermore.oda.qa',
+    '999 com.android.chromecustom', // prefijo parecido SIN ":" ⇒ no es hijo
+  ].join('\n')
+
+  test('main exacto + hijos pkg:*', () => {
+    const r = parsePids(ps, 'com.android.chrome')
+    expect(r.main).toBe(17276)
+    expect(r.children).toEqual([23490, 23583])
+  })
+
+  test('app single-process: main y cero hijos (caso Evermore)', () => {
+    const r = parsePids(ps, 'com.evermore.oda.qa')
+    expect(r.main).toBe(17833)
+    expect(r.children).toEqual([])
+  })
+
+  test('app no corriendo ⇒ main null', () => {
+    expect(parsePids(ps, 'com.no.esta').main).toBeNull()
   })
 })
 
@@ -251,6 +388,18 @@ describe('parseDeviceInfo (getprop + /proc/meminfo)', () => {
     expect(info.gpu).not.toMatch(/Ganesh|GLES/i)
     // MemTotal 3754184 KB ≈ 3666 MB
     expect(info.ramTotalMb).toBeCloseTo(3666, 0)
+  })
+
+  test('nproc → cores; ausente/basura ⇒ null', () => {
+    const inputs = {
+      getprop: '[ro.product.model]: [X]\n',
+      procMeminfo: '',
+      surfaceflingerGles: '',
+      serial: 'S',
+    }
+    expect(parseDeviceInfo({ ...inputs, nproc: '8\n' }).cores).toBe(8)
+    expect(parseDeviceInfo({ ...inputs, nproc: 'garbage' }).cores).toBeNull()
+    expect(parseDeviceInfo(inputs).cores).toBeNull()
   })
 
   test('sin SurfaceFlinger GLES cae a ro.hardware.vulkan / N/A limpio', () => {

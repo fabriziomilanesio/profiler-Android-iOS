@@ -33,6 +33,8 @@ export interface DeviceInfoInputs {
   getprop: string
   procMeminfo: string
   surfaceflingerGles: string
+  /** salida de `nproc` (cores online). Vacío ⇒ cores null. */
+  nproc?: string
   serial: string
 }
 
@@ -59,6 +61,10 @@ export function parseDeviceInfo(inputs: DeviceInfoInputs): DeviceInfo {
   const ramTotalMb =
     memMatch && memMatch[1] !== undefined ? Math.round(Number(memMatch[1]) / 1024) : null
 
+  // nproc: cores online — para convertir share-of-device a "% de un core" en la UI.
+  const nprocNum = Number(inputs.nproc?.trim())
+  const cores = Number.isFinite(nprocNum) && nprocNum > 0 ? nprocNum : null
+
   return {
     serial: inputs.serial,
     model,
@@ -68,5 +74,6 @@ export function parseDeviceInfo(inputs: DeviceInfoInputs): DeviceInfo {
     soc,
     gpu,
     ramTotalMb,
+    cores,
   }
 }
