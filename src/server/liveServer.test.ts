@@ -372,3 +372,74 @@ describe('LiveServer export/config/sesiones', () => {
     }
   })
 })
+
+describe('LiveServer /api/inspector (toggle en caliente)', () => {
+  test('ON setea el proxy del device; OFF restaura con ":0" + limpia host/port (API 36)', async () => {
+    const running = new Map([[PKG, 4242]])
+    const { t, cmds } = fakeTransport(running, [PKG])
+    const server = new LiveServer({
+      transport: t,
+      serial: 'FAKE-SERIAL',
+      packageName: PKG,
+      uiRoot: UI_ROOT,
+      port: 0,
+      intervalMs: 3_600_000,
+      appStore: memoryStore(),
+      adbPath: 'true', // `true` acepta cualquier arg y sale 0: stub del adb reverse
+      proxyPort: 0, // puerto libre para el proxy real del test
+    })
+    const { url } = await server.start()
+    try {
+      const before = (await (await fetch(`${url}/api/config`)).json()) as {
+        inspector: { enabled: boolean; running: boolean }
+      }
+      expect(before.inspector.enabled).toBe(false)
+      expect(before.inspector.running).toBe(false)
+
+      const on = await fetch(`${url}/api/inspector`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled: true }),
+      })
+      expect(on.status).toBe(200)
+      const onBody = (await on.json()) as { inspector: { enabled: boolean; running: boolean } }
+      expect(onBody.inspector.enabled).toBe(true)
+      expect(onBody.inspector.running).toBe(true)
+      expect(cmds.some((c) => c.startsWith('settings put global http_proxy 127.0.0.1:'))).toBe(true)
+
+      const off = await fetch(`${url}/api/inspector`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled: false }),
+      })
+      expect(off.status).toBe(200)
+      const offBody = (await off.json()) as { inspector: { enabled: boolean; running: boolean } }
+      expect(offBody.inspector.enabled).toBe(false)
+      expect(offBody.inspector.running).toBe(false)
+      // restauración a prueba de API 36: ":0" explícito + borrar las claves hermanas
+      // (un `delete global http_proxy` solo deja el device sin internet — visto en el A15)
+      expect(cmds).toContain('settings put global http_proxy :0')
+      expect(cmds).toContain('settings delete global global_http_proxy_host')
+      expect(cmds).toContain('settings delete global global_http_proxy_port')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('enabled no-boolean ⇒ 400; sin device conectado ⇒ 409', async () => {
+    const { server, url } = await startServer(new Map(), [], [], null)
+    try {
+      const bad = await fetch(`${url}/api/inspector`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled: 'yes' }),
+      })
+      expect(bad.status).toBe(400)
+
+      const noDevice = await fetch(`${url}/api/inspector`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled: true }),
+      })
+      expect(noDevice.status).toBe(409)
+    } finally {
+      await server.stop()
+    }
+  })
+})

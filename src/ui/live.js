@@ -375,6 +375,8 @@
       .then(function (data) {
         fillConfig(data.config)
         if (applyTheme) ProfilerDashboard.setTheme(data.config.theme)
+        // estado real del inspector (pudo arrancar prendido con --inspect)
+        if (data.inspector) setInspectorUi(data.inspector.enabled)
         return data.config
       })
   }
@@ -446,6 +448,46 @@
   document.addEventListener('click', closePops)
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closePops()
+  })
+
+  // --- Toggle del inspector HTTP (proxy del device, en caliente) ---
+  var inspBtn = document.getElementById('inspToggle')
+  var inspStateEl = document.getElementById('inspState')
+  var inspectorOn = false
+
+  function setInspectorUi(on) {
+    inspectorOn = on
+    inspStateEl.textContent = on ? 'ON' : 'OFF'
+    inspBtn.classList.toggle('on', on)
+    if (on) {
+      // mostrar la tabla ya (aunque todavía no haya flows) para que se vea que graba
+      var section = document.getElementById('inspector')
+      if (section) section.hidden = false
+    }
+  }
+
+  inspBtn.addEventListener('click', function () {
+    inspBtn.disabled = true
+    fetch('/api/inspector', { method: 'POST', body: JSON.stringify({ enabled: !inspectorOn }) })
+      .then(function (r) {
+        return r.json().then(function (body) {
+          if (!r.ok) throw new Error(body.error || 'error ' + r.status)
+          return body
+        })
+      })
+      .then(function (body) {
+        setInspectorUi(body.inspector.enabled)
+      })
+      .catch(function (e) {
+        inspStateEl.textContent = 'ERR'
+        inspBtn.title = 'No se pudo cambiar el inspector: ' + e.message
+        setTimeout(function () {
+          setInspectorUi(inspectorOn)
+        }, 2500)
+      })
+      .finally(function () {
+        inspBtn.disabled = false
+      })
   })
 
   // --- Network inspector (tabla de requests en vivo, debajo de la red) ---

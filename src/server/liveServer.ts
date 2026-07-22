@@ -94,6 +94,10 @@ export class LiveServer {
   private device: DeviceInfo | null = null
   private sampler: Sampler | null = null
   private inspector: InspectorProxy | null = null
+  /** intención del usuario (toggle del dashboard o --inspect); el proxy real puede
+   *  no estar corriendo aún (modo espera sin device). */
+  private inspectorEnabled = false
+  private inspectorBusy = false
   private proxyPrev: string | null = null
   private proxyApplied = false
   private ticking = false
@@ -114,6 +118,7 @@ export class LiveServer {
   constructor(private readonly opts: LiveServerOptions) {
     this.serial = opts.serial ?? null
     this.intervalMs = opts.intervalMs ?? opts.appStore?.data.intervalMs ?? 1000
+    this.inspectorEnabled = opts.inspectHttp ?? false
   }
 
   private config(): AppStoreData {
@@ -166,10 +171,13 @@ export class LiveServer {
           return this.handleListSessions()
         }
         if (url.pathname === '/api/config' && req.method === 'GET') {
-          return Response.json({ config: this.config() })
+          return Response.json({ config: this.config(), inspector: this.inspectorStatus() })
         }
         if (url.pathname === '/api/config' && req.method === 'PUT') {
           return this.handlePutConfig(req)
+        }
+        if (url.pathname === '/api/inspector' && req.method === 'POST') {
+          return this.handleSetInspector(req)
         }
         const resolved = resolveStaticFile(uiRoot, url.pathname)
         if (!resolved) return new Response('Not found', { status: 404 })
@@ -196,7 +204,8 @@ export class LiveServer {
     })
 
     // Inspector HTTP opcional: proxy pass-through + proxy del device por adb reverse.
-    if (this.opts.inspectHttp && this.serial) {
+    // Arranca según --inspect; después el dashboard lo prende/apaga en caliente.
+    if (this.inspectorEnabled && this.serial) {
       await this.startInspector()
     }
 
@@ -306,7 +315,12 @@ export class LiveServer {
             `settings put global http_proxy ${this.proxyPrev}`,
           )
         } else {
-          await this.opts.transport.shell(serial, 'settings delete global http_proxy')
+          // `:0` = "sin proxy" explícito. Verificado en el SM-A155M (API 36): un
+          // `delete global http_proxy` solo NO alcanza — global_http_proxy_host/port
+          // sobreviven y dejan el device sin internet hasta limpiarlos a mano.
+          await this.opts.transport.shell(serial, 'settings put global http_proxy :0')
+          await this.opts.transport.shell(serial, 'settings delete global global_http_proxy_host')
+          await this.opts.transport.shell(serial, 'settings delete global global_http_proxy_port')
         }
         this.proxyApplied = false
       }
@@ -564,8 +578,8 @@ export class LiveServer {
     this.buffer.addEvent(ev)
     this.sessionLog?.appendEvent(ev)
     this.sessionLog?.appendDevice(this.device)
-    // en modo espera con --inspect el inspector nunca llegó a arrancar: acá se cablea
-    if (this.opts.inspectHttp) await this.startInspector()
+    // en modo espera con el inspector prendido nunca llegó a arrancar: acá se cablea
+    if (this.inspectorEnabled) await this.startInspector()
     const app = await this.switchApp(pkg, false)
     return { device: this.device, app }
   }
@@ -654,6 +668,65 @@ export class LiveServer {
     const dir = this.opts.sessionsDir
     const sessions = dir ? SessionLog.list(dir) : []
     return Response.json({ sessions, current: this.sessionLog?.id ?? null })
+  }
+
+  /** Estado del inspector para el dashboard (enabled = intención; running = proxy vivo). */
+  private inspectorStatus(): { enabled: boolean; running: boolean; port: number } {
+    return {
+      enabled: this.inspectorEnabled,
+      running: this.inspector !== null,
+      port: this.opts.proxyPort ?? 8899,
+    }
+  }
+
+  /**
+   * POST /api/inspector {"enabled": true|false} — prende/apaga el inspector HTTP en
+   * caliente: proxy pass-through + `adb reverse` + http_proxy del device al prender;
+   * al apagar restaura el proxy del device (el teléfono vuelve a navegar normal).
+   */
+  private async handleSetInspector(req: Request): Promise<Response> {
+    const origin = req.headers.get('origin')
+    if (origin !== null && !isLocalOrigin(origin)) {
+      return new Response('Forbidden origin', { status: 403 })
+    }
+    let enabled: unknown
+    try {
+      enabled = ((await req.json()) as { enabled?: unknown }).enabled
+    } catch {
+      return Response.json({ error: 'body inválido' }, { status: 400 })
+    }
+    if (typeof enabled !== 'boolean') {
+      return Response.json({ error: 'enabled debe ser boolean' }, { status: 400 })
+    }
+    if (this.switching || this.inspectorBusy) {
+      return Response.json({ error: 'operación en curso' }, { status: 409 })
+    }
+    if (enabled && !this.serial) {
+      return Response.json({ error: 'sin device conectado' }, { status: 409 })
+    }
+    this.inspectorBusy = true
+    try {
+      if (enabled) {
+        this.inspectorEnabled = true
+        if (!this.inspector) await this.startInspector()
+      } else {
+        this.inspectorEnabled = false
+        await this.stopInspector() // restaura el proxy del device; idempotente
+      }
+      return Response.json({ ok: true, inspector: this.inspectorStatus() })
+    } catch (err) {
+      // enable fallido a mitad (p.ej. adb reverse): limpiar lo aplicado para NO dejar
+      // el device con un proxy roto (la lección del SM-A155M sin internet).
+      this.inspectorEnabled = false
+      try {
+        await this.stopInspector()
+      } catch {
+        /* best-effort */
+      }
+      return Response.json({ error: String(err) }, { status: 500 })
+    } finally {
+      this.inspectorBusy = false
+    }
   }
 
   /** PUT /api/config — aplica configuración en caliente y la persiste. */

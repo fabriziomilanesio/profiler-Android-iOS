@@ -12,7 +12,7 @@ CPU % total del device · RAM de la app (PSS + composición; suma procesos hijos
 hay) · RAM usada total del device · FPS (Unity, vía SurfaceFlinger) · temperatura · GPU % ·
 batería (nivel/temp/mA) · red (KB/s) · inspector de requests HTTP.
 
-> **Convenciones de medición.** El CPU de la app es *share-of-device* (0–100% del teléfono
+> **Convenciones de medición.** El CPU de la app es _share-of-device_ (0–100% del teléfono
 > entero, ya normalizado por cores): un thread saturando 1 de 8 cores marca 12.5%, no 100% —
 > por eso el gauge muestra también la conversión a "% de un core". La RAM de la app es **PSS**
 > (`dumpsys meminfo`, memoria compartida prorrateada — la métrica que usa Android para decidir
@@ -107,7 +107,8 @@ bun install
 # Dashboard en vivo (default — abre el browser solo en http://localhost:4517):
 bun start
 
-# Con inspector de red (setea un proxy en el device; se limpia al cortar con Ctrl-C):
+# Con inspector de red ya prendido desde el arranque (opcional — también se puede
+# prender/apagar en caliente desde el dashboard, botón "🔎 Inspector" en la card de red):
 bun start --inspect
 
 # Solo el chequeo de entorno (adb + device + app), sin levantar la UI:
@@ -180,6 +181,12 @@ formato PE válido; falta validarlo corriendo en un Windows real.
 > El inspector muestra los **hosts** de cada request HTTPS y la **URL completa** del tráfico
 > HTTP en claro. Ver URLs/headers/payloads de HTTPS requiere instalar una CA en el device
 > (MITM) — es la próxima iteración (ver `docs/wayfinder/tickets/018-*`).
+>
+> **Toggle en caliente**: el botón "🔎 Inspector" (card de red del dashboard) prende y apaga
+> el proxy del device sin reiniciar nada — prendido, el tráfico del teléfono pasa por el
+> profiler; apagado, el device navega normal. Al apagar (o al cortar con Ctrl-C) el proxy se
+> restaura con `http_proxy :0` **y** se borran `global_http_proxy_host/port` — en API 36 un
+> `delete http_proxy` solo NO alcanza y deja el teléfono sin internet (verificado en el A15).
 
 ## Desarrollo
 

@@ -729,10 +729,36 @@
       /* ================= NETWORK FOOTER ================= */
       .net {
         display: grid;
-        grid-template-columns: auto auto minmax(0, 1fr);
+        grid-template-columns: auto auto auto minmax(0, 1fr);
         align-items: center;
         gap: 26px;
         padding: 12px 20px;
+      }
+      .insp-toggle {
+        justify-self: start;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        font: 600 12px var(--font-body);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .insp-toggle.on {
+        color: var(--primary);
+        border-color: var(--primary);
+      }
+      .insp-toggle:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+      .insp-toggle .insp-hint {
+        font-weight: 400;
+        color: var(--muted);
       }
       .net-stat {
         display: flex;
@@ -907,7 +933,8 @@
           gap: 12px 20px;
           padding: 12px 16px;
         }
-        #netSpark {
+        #netSpark,
+        .insp-toggle {
           grid-column: 1 / -1;
         }
       }
@@ -1116,6 +1143,14 @@
         <span class="val" id="txNow">— KB/s</span>
         <span class="tot" id="txTot">total —</span>
       </div>
+      <button
+        class="insp-toggle"
+        id="inspToggle"
+        type="button"
+        title="Al prender, el tráfico del teléfono pasa por el profiler (proxy + adb reverse) y ves los requests abajo. Al apagar, se restaura la navegación normal del device."
+      >
+        🔎 Inspector <b id="inspState">OFF</b>
+      </button>
       <div id="netSpark"></div>
       <div class="net-na" id="netNa" hidden>
         Network per-app: N/A on this device (netstats is bucketed, not realtime — deferred)
