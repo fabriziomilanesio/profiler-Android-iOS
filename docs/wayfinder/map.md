@@ -103,6 +103,11 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   contra el device real: `Sampler` 1 Hz best-effort sobre `AdbTransport`, `LiveServer`
   HTTP+WS sirviendo `src/ui/`, red device-wide por delta de `/proc/net/dev`, inspector
   HTTP pass-through opcional (`--inspect`) con proxy + `adb reverse`.
+- [Sampling en dos carriles](tickets/023-sampling-dos-carriles-overhead.md) — el profiler
+  exigía al device en gama baja (observer effect de `dumpsys meminfo` cada 1 s). Carril
+  rápido (cats + FPS + RSS vivo por VmRSS) cada tick; carril lento (meminfo 15 s,
+  thermal/battery/ps 10 s) con carry-forward; intervalo default auto por RAM (< 4 GB → 2 s,
+  opción "Auto" en el panel).
 
 ## Not yet specified
 

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   AppStore,
+  autoIntervalMs,
   defaultAppStoreData,
   parseAppStore,
   rankPackages,
@@ -125,5 +126,37 @@ describe('AppStore (persistencia)', () => {
 
     store.set({ intervalMs: 50 } as never) // fuera de rango ⇒ se ignora
     expect(store.data.intervalMs).toBe(2000)
+  })
+
+  test('intervalo auto (ticket 023): default true, set(intervalMs) lo apaga, set(intervalAuto) lo vuelve a prender', () => {
+    dir = mkdtempSync(join(tmpdir(), 'appstore-'))
+    const store = new AppStore(join(dir, 'config.json'), join(dir, 'apps.json'))
+    expect(store.data.intervalAuto).toBe(true)
+
+    store.set({ intervalMs: 2000 }) // elegir un intervalo concreto = manual
+    expect(store.data.intervalAuto).toBe(false)
+    expect(store.data.intervalMs).toBe(2000)
+
+    store.set({ intervalAuto: true })
+    expect(store.data.intervalAuto).toBe(true)
+    expect(store.data.intervalMs).toBe(2000) // el valor manual queda guardado igual
+  })
+
+  test('migración pre-023: config sin intervalAuto ⇒ auto solo si intervalMs es el default 1000', () => {
+    expect(parseAppStore(JSON.stringify({ intervalMs: 1000 })).intervalAuto).toBe(true)
+    expect(parseAppStore(JSON.stringify({ intervalMs: 2000 })).intervalAuto).toBe(false)
+    expect(parseAppStore('{}').intervalAuto).toBe(true)
+    // el flag explícito manda sobre la heurística
+    expect(
+      parseAppStore(JSON.stringify({ intervalMs: 2000, intervalAuto: true })).intervalAuto,
+    ).toBe(true)
+  })
+
+  test('autoIntervalMs: gama baja (<4 GB) ⇒ 2 s; resto (o sin device) ⇒ 1 s', () => {
+    expect(autoIntervalMs(3667)).toBe(2000) // SM-A155M
+    expect(autoIntervalMs(4095)).toBe(2000)
+    expect(autoIntervalMs(4096)).toBe(1000)
+    expect(autoIntervalMs(7972)).toBe(1000)
+    expect(autoIntervalMs(null)).toBe(1000) // modo espera: sin ficha todavía
   })
 })

@@ -48,6 +48,7 @@ export function parseMeminfo(raw: string): MemSample {
 
   return {
     pss: toMb(pssKb),
+    rss: null, // RSS no sale de dumpsys: lo aporta el sampler desde /proc/<pid>/status
     java: toMb(javaKb),
     native: toMb(nativeKb),
     graphics,
@@ -57,7 +58,21 @@ export function parseMeminfo(raw: string): MemSample {
   }
 }
 
-const MEM_KEYS = ['pss', 'java', 'native', 'graphics', 'code', 'stack', 'other'] as const
+const MEM_KEYS = ['pss', 'rss', 'java', 'native', 'graphics', 'code', 'stack', 'other'] as const
+
+/**
+ * Suma los VmRSS (kB → MB) de una salida que puede concatenar varios
+ * /proc/<pid>/status (main + hijos, del cat combinado del sampler).
+ * Sin ninguna línea VmRSS ⇒ null (proceso muerto o /proc ilegible).
+ */
+export function parseVmRssMb(raw: string): number | null {
+  let sumKb: number | null = null
+  const re = /^VmRSS:\s*(\d+)\s*kB/gim
+  for (const m of raw.matchAll(re)) {
+    sumKb = (sumKb ?? 0) + Number(m[1])
+  }
+  return sumKb === null ? null : sumKb * KB_TO_MB
+}
 
 /**
  * Agrega los MemSample de los procesos de un package (main + hijos `pkg:*`).

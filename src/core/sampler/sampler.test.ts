@@ -40,16 +40,28 @@ function happyRoutes(): Array<[RegExp, string]> {
     [/dumpsys battery/, read('oneshot/dumpsys-battery.txt')],
     [/pidof/, '18078\n'],
     [/ps -A/, 'PID NAME\n1 init\n18078 ' + PKG + '\n'],
-    // el comando real combina: `cat /proc/stat /proc/meminfo /proc/<pid>/stat`
+    // el comando real combina: `cat /proc/stat /proc/meminfo /proc/<pid>/stat /proc/<pid>/status`
     [
       /cat \/proc\/stat/,
       read('oneshot/proc-stat.txt') +
         '\n' +
         read('oneshot/proc-meminfo.txt') +
         '\n' +
-        read('oneshot/proc-pid-stat.txt'),
+        read('oneshot/proc-pid-stat.txt') +
+        '\nName:\tevermore.oda.qa\nVmRSS:\t  204800 kB\n',
     ],
   ]
+}
+
+/** Envuelve el shell del transport para loguear cada comando. */
+function logged(t: AdbTransport): { t: AdbTransport; calls: string[] } {
+  const calls: string[] = []
+  const orig = t.shell
+  t.shell = async (serial, command) => {
+    calls.push(command)
+    return orig(serial, command)
+  }
+  return { t, calls }
 }
 
 describe('Sampler', () => {
@@ -67,6 +79,8 @@ describe('Sampler', () => {
     expect(s.battery.tempC).toBeCloseTo(25.7, 1)
     expect(s.battery.charging).toBe(true)
     expect(typeof s.ts).toBe('number')
+    // RSS vivo del /proc/<pid>/status embebido en el cat combinado (204800 kB = 200 MB)
+    expect(s.mem.rss).toBeCloseTo(200, 0)
   })
 
   test('CPU sale null en la primera muestra (no hay snapshot previo) y número en la segunda', async () => {
@@ -162,5 +176,94 @@ describe('Sampler', () => {
   test('SHELL_COMMANDS expone los comandos (documentación viva de las fuentes)', () => {
     expect(SHELL_COMMANDS.gpu).toContain('/sys/kernel/gpu/gpu_busy')
     expect(SHELL_COMMANDS.fps).toContain('timestats')
+    expect(SHELL_COMMANDS.cpu([42])).toContain('/proc/42/status') // VmRSS en el cat combinado
+  })
+})
+
+describe('Sampler — carriles (ticket 023: el loop exigía al device)', () => {
+  const meminfoCalls = (calls: string[]) =>
+    calls.filter((c) => c.startsWith('dumpsys meminfo')).length
+  const psCalls = (calls: string[]) => calls.filter((c) => c.startsWith('ps -A')).length
+
+  test('meminfo/thermal/battery corren en el primer tick, carry-forward después, y de nuevo al vencer su ventana', async () => {
+    let clock = 1_000_000
+    const { t, calls } = logged(fixtureTransport(happyRoutes()))
+    const sampler = new Sampler(t, 'S', PKG, 18078, { now: () => clock })
+
+    const s1 = await sampler.sampleOnce()
+    expect(s1.mem.pss).toBeCloseTo(905, 0)
+    expect(meminfoCalls(calls)).toBe(1)
+    const slowCalls = calls.length
+
+    clock += 1000
+    const s2 = await sampler.sampleOnce()
+    expect(meminfoCalls(calls)).toBe(1) // dentro de la ventana: no re-corre
+    expect(calls.slice(slowCalls).some((c) => c.includes('thermalservice'))).toBe(false)
+    expect(calls.slice(slowCalls).some((c) => c.startsWith('dumpsys battery'))).toBe(false)
+    // carry-forward: el Sample sigue completo para UI/reporte
+    expect(s2.mem.pss).toBeCloseTo(905, 0)
+    expect(s2.tempC).toBeCloseTo(30.9, 1)
+    expect(s2.battery.levelPct).toBe(99)
+    // lo rápido sí es fresco cada tick
+    expect(s2.mem.rss).toBeCloseTo(200, 0)
+    expect(s2.fps).toBeCloseTo(33.94, 2)
+
+    clock += 15_000 // vence meminfoMs (15 s) y slowMs (10 s)
+    await sampler.sampleOnce()
+    expect(meminfoCalls(calls)).toBe(2)
+  })
+
+  test('la corrida lenta que falla vuelve a null (N/A honesto), no queda un valor viejo', async () => {
+    let clock = 1_000_000
+    let broken = false
+    const base = fixtureTransport(happyRoutes())
+    const orig = base.shell
+    base.shell = async (serial, command) => {
+      if (broken && command.startsWith('dumpsys meminfo')) {
+        return { stdout: '', stderr: 'No process found', exitCode: 1 }
+      }
+      return orig(serial, command)
+    }
+    const sampler = new Sampler(base, 'S', PKG, 18078, { now: () => clock })
+    expect((await sampler.sampleOnce()).mem.pss).toBeCloseTo(905, 0)
+    broken = true
+    clock += 16_000
+    expect((await sampler.sampleOnce()).mem.pss).toBeNull()
+  })
+
+  test('refreshPid: ps -A corre al vencer psMs; entre medio la vida la sostiene el cat combinado', async () => {
+    let clock = 1_000_000
+    const { t, calls } = logged(fixtureTransport(happyRoutes()))
+    const sampler = new Sampler(t, 'S', PKG, 18078, { now: () => clock })
+
+    expect(await sampler.refreshPid()).toBe(true)
+    expect(psCalls(calls)).toBe(1)
+    clock += 1000
+    expect(await sampler.refreshPid()).toBe(true) // gated: sin adb
+    expect(psCalls(calls)).toBe(1)
+    clock += 10_000
+    expect(await sampler.refreshPid()).toBe(true)
+    expect(psCalls(calls)).toBe(2)
+  })
+
+  test('muerte detectada por el carril rápido: el pid falta en el cat ⇒ el próximo refreshPid corre ps ya', async () => {
+    let clock = 1_000_000
+    const routes: Array<[RegExp, string]> = [
+      // cat combinado SIN la línea del pid (proceso muerto): /proc/<pid>/stat falló
+      [/cat \/proc\/stat/, read('oneshot/proc-stat.txt') + '\n' + read('oneshot/proc-meminfo.txt')],
+      [/ps -A/, 'PID NAME\n1 init\n'],
+      [/dumpsys meminfo/, ''],
+    ]
+    const { t, calls } = logged(fixtureTransport(routes))
+    const sampler = new Sampler(t, 'S', PKG, 18078, { now: () => clock })
+
+    // el sample ve que el pid no está en el cat; el refresh siguiente corre ps aunque
+    // esté dentro de la ventana de psMs
+    await sampler.sampleOnce()
+    const before = psCalls(calls)
+    clock += 1000
+    expect(await sampler.refreshPid()).toBe(false) // corrió ps pese a estar dentro de la ventana
+    expect(psCalls(calls)).toBe(before + 1)
+    expect(sampler.processId).toBe(0)
   })
 })

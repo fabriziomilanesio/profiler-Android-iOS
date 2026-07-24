@@ -316,8 +316,11 @@
   }
 
   function updateMemPie(mem, pssMb) {
+    // PSS/composición llegan por el carril lento (~15 s); RSS es el pulso por tick
+    var sub = 'PSS total'
+    if (mem.rss !== null && mem.rss !== undefined) sub += ' · RSS ' + fmtMb(mem.rss)
     memPie.setOption({
-      title: { text: pssMb === null ? 'N/A' : fmtMb(pssMb) },
+      title: { text: pssMb === null ? 'N/A' : fmtMb(pssMb), subtext: sub },
       series: [
         {
           data: memMeta().map(function (m) {

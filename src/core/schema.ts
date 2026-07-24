@@ -25,6 +25,13 @@ export interface MemBreakdown {
 export interface MemSample {
   /** TOTAL PSS del App Summary, en MB */
   pss: number | null
+  /**
+   * RSS en MB desde /proc/<pid>/status (VmRSS, main + hijos). A diferencia del
+   * resto (carril lento, dumpsys meminfo cada ~15 s), se refresca en cada tick:
+   * el cat combinado del sampler ya lee /proc, así que es gratis. RSS ≥ PSS
+   * (no prorratea memoria compartida) — es la señal "viva", no comparable 1:1.
+   */
+  rss: number | null
   java: number | null
   native: number | null
   graphics: number | null

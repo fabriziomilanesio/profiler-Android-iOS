@@ -45,7 +45,8 @@ export interface ReportSeriesPoint {
   ramMb: number | null
   deviceCpu: number | null
   deviceRamMb: number | null
-  mem: Omit<MemSample, 'pss'>
+  // el reporte grafica la composición PSS; ni el total (va en ramMb) ni el RSS vivo
+  mem: Omit<MemSample, 'pss' | 'rss'>
   battery: { level: number | null; tempC: number | null; mA: number | null }
   netRxKb: number | null
   netTxKb: number | null

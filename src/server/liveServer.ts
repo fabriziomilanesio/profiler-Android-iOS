@@ -13,6 +13,7 @@ import { parseDeviceInfo } from '../core/collectors/deviceInfo'
 import { listPackages } from '../core/adb/listPackages'
 import { isValidPackageName } from '../core/adb/packageName'
 import {
+  autoIntervalMs,
   defaultAppStoreData,
   rankPackages,
   type AppStoreData,
@@ -117,12 +118,32 @@ export class LiveServer {
 
   constructor(private readonly opts: LiveServerOptions) {
     this.serial = opts.serial ?? null
-    this.intervalMs = opts.intervalMs ?? opts.appStore?.data.intervalMs ?? 1000
+    this.intervalMs = this.resolveIntervalMs()
     this.inspectorEnabled = opts.inspectHttp ?? false
   }
 
   private config(): AppStoreData {
     return this.opts.appStore?.data ?? defaultAppStoreData()
+  }
+
+  /**
+   * Intervalo efectivo del carril rápido: flag del CLI (opts) > config manual del
+   * usuario > auto según la RAM del device (ticket 023: gama baja → 2 s). Se
+   * re-resuelve al capturar/cambiar device y en cada PUT /api/config.
+   */
+  private resolveIntervalMs(): number {
+    if (this.opts.intervalMs !== undefined) return this.opts.intervalMs
+    const cfg = this.config()
+    if (!cfg.intervalAuto) return cfg.intervalMs
+    return autoIntervalMs(this.device?.ramTotalMb ?? null)
+  }
+
+  /** Aplica el intervalo resuelto; reinicia el loop solo si cambió y ya corre. */
+  private applyInterval(): void {
+    const effective = this.resolveIntervalMs()
+    if (effective === this.intervalMs) return
+    this.intervalMs = effective
+    if (this.timer) this.startTimer()
   }
 
   /**
@@ -171,7 +192,11 @@ export class LiveServer {
           return this.handleListSessions()
         }
         if (url.pathname === '/api/config' && req.method === 'GET') {
-          return Response.json({ config: this.config(), inspector: this.inspectorStatus() })
+          return Response.json({
+            config: this.config(),
+            effectiveIntervalMs: this.intervalMs,
+            inspector: this.inspectorStatus(),
+          })
         }
         if (url.pathname === '/api/config' && req.method === 'PUT') {
           return this.handlePutConfig(req)
@@ -224,6 +249,8 @@ export class LiveServer {
       )
     }
 
+    // con la ficha del device ya capturada, el modo auto puede haber cambiado el intervalo
+    this.intervalMs = this.resolveIntervalMs()
     this.startTimer()
     // primer sample enseguida (así el dashboard no arranca vacío)
     void this.tick()
@@ -573,6 +600,7 @@ export class LiveServer {
 
     this.serial = serial
     this.device = await captureDeviceInfo(this.opts.transport, serial)
+    this.applyInterval() // la RAM del device nuevo puede cambiar el intervalo auto
     this.server?.broadcast(deviceMessage(this.device))
     const ev = { ts: Date.now(), kind: 'device' as const, pkg, serial }
     this.buffer.addEvent(ev)
@@ -743,12 +771,9 @@ export class LiveServer {
     }
     this.opts.appStore?.set?.(patch)
     const cfg = this.config()
-    // el intervalo aplica en caliente: reiniciar el loop solo si el patch lo cambió
-    if (typeof patch.intervalMs === 'number' && cfg.intervalMs !== this.intervalMs) {
-      this.intervalMs = cfg.intervalMs
-      this.startTimer()
-    }
-    return Response.json({ ok: true, config: cfg })
+    // el intervalo aplica en caliente (manual o auto): re-resolver y reiniciar si cambió
+    this.applyInterval()
+    return Response.json({ ok: true, config: cfg, effectiveIntervalMs: this.intervalMs })
   }
 
   /** Pollea el pid del package hasta timeout. null si no apareció. */

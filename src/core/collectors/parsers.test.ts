@@ -177,6 +177,7 @@ describe('parseDeviceMemUsedMb (/proc/meminfo → RAM usada del device)', () => 
 describe('mergeMemSamples (agregación multi-proceso)', () => {
   const base = {
     pss: null,
+    rss: null,
     java: null,
     native: null,
     graphics: null,

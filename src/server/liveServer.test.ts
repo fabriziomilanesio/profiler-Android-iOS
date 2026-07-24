@@ -371,6 +371,51 @@ describe('LiveServer export/config/sesiones', () => {
       await server.stop()
     }
   })
+
+  test('intervalo auto (ticket 023): device gama baja resuelve 2 s; manual lo pisa; auto lo restaura', async () => {
+    const { t } = fakeTransport(new Map([[PKG, 111]]), [])
+    // el device fake es gama baja: captureDeviceInfo lee este /proc/meminfo (3.6 GB)
+    const orig = t.shell
+    t.shell = async (serial, command) => {
+      if (command === 'cat /proc/meminfo') return ok('MemTotal:  3754184 kB\n')
+      return orig(serial, command)
+    }
+    const server = new LiveServer({
+      transport: t,
+      serial: 'FAKE-SERIAL',
+      packageName: PKG,
+      uiRoot: UI_ROOT,
+      port: 0,
+      // sin intervalMs explícito: se resuelve por config/device (el loop real corre
+      // a 2 s durante el test — inofensivo contra el fake)
+      appStore: memoryStore(),
+    })
+    const { url } = await server.start()
+    try {
+      type Cfg = { effectiveIntervalMs: number }
+      const auto = (await (await fetch(`${url}/api/config`)).json()) as Cfg
+      expect(auto.effectiveIntervalMs).toBe(2000) // < 4 GB ⇒ 2 s
+
+      // manual (el memoryStore asigna el patch tal cual; el flip real vive en AppStore.set)
+      const manual = (await (
+        await fetch(`${url}/api/config`, {
+          method: 'PUT',
+          body: JSON.stringify({ intervalMs: 500, intervalAuto: false }),
+        })
+      ).json()) as Cfg
+      expect(manual.effectiveIntervalMs).toBe(500)
+
+      const back = (await (
+        await fetch(`${url}/api/config`, {
+          method: 'PUT',
+          body: JSON.stringify({ intervalAuto: true }),
+        })
+      ).json()) as Cfg
+      expect(back.effectiveIntervalMs).toBe(2000)
+    } finally {
+      await server.stop()
+    }
+  })
 })
 
 describe('LiveServer /api/inspector (toggle en caliente)', () => {

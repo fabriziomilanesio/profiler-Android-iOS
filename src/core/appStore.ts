@@ -20,14 +20,32 @@ export interface AppStoreData {
   theme: 'light' | 'dark'
   /** intervalo de sampling en ms (aplica en caliente desde el panel de config). */
   intervalMs: number
+  /**
+   * true ⇒ el intervalo del carril rápido lo decide el device (ticket 023):
+   * gama baja (< 4 GB de RAM) → 2 s, resto → 1 s. Setear intervalMs a mano
+   * (panel o PUT /api/config) lo pasa a manual.
+   */
+  intervalAuto: boolean
   /** carpeta donde se guarda la copia de cada reporte exportado. */
   reportsDir: string
 }
 
 /** Campos que el panel de configuración puede escribir (PUT /api/config). */
 export type ConfigPatch = Partial<
-  Pick<AppStoreData, 'filterTerm' | 'theme' | 'intervalMs' | 'reportsDir'>
+  Pick<AppStoreData, 'filterTerm' | 'theme' | 'intervalMs' | 'intervalAuto' | 'reportsDir'>
 >
+
+/** Umbral de gama baja para el intervalo auto (MB de RAM del device). */
+export const LOW_RAM_MB = 4096
+
+/**
+ * Intervalo default del sampling según el device (modo auto). El SM-A155M (3.7 GB)
+ * cae en 2 s: a 1 s el loop de shells le robaba CPU al juego (ticket 023).
+ * Sin device todavía (modo espera) ⇒ 1 s.
+ */
+export function autoIntervalMs(ramTotalMb: number | null): number {
+  return ramTotalMb !== null && ramTotalMb < LOW_RAM_MB ? 2000 : 1000
+}
 
 export function defaultReportsDir(): string {
   return join(homedir(), '.config', 'evermore-profiler', 'reports')
@@ -40,6 +58,7 @@ export function defaultAppStoreData(): AppStoreData {
     filterTerm: 'evermore',
     theme: 'light',
     intervalMs: 1000,
+    intervalAuto: true,
     reportsDir: defaultReportsDir(),
   }
 }
@@ -71,6 +90,10 @@ export function parseAppStore(json: string): AppStoreData {
   if (typeof o['intervalMs'] === 'number' && o['intervalMs'] >= 250 && o['intervalMs'] <= 10000) {
     d.intervalMs = Math.round(o['intervalMs'])
   }
+  // Migración de configs pre-023 (sin el campo): un intervalMs distinto del default
+  // solo pudo salir del panel ⇒ manual; el default 1000 se asume nunca tocado ⇒ auto.
+  d.intervalAuto =
+    typeof o['intervalAuto'] === 'boolean' ? o['intervalAuto'] : d.intervalMs === 1000
   if (typeof o['reportsDir'] === 'string' && o['reportsDir'].trim()) {
     d.reportsDir = o['reportsDir'].trim()
   }
@@ -141,12 +164,14 @@ export class AppStore {
       d.filterTerm = patch.filterTerm.trim()
     }
     if (patch.theme === 'light' || patch.theme === 'dark') d.theme = patch.theme
+    if (patch.intervalAuto === true) d.intervalAuto = true
     if (
       typeof patch.intervalMs === 'number' &&
       patch.intervalMs >= 250 &&
       patch.intervalMs <= 10000
     ) {
       d.intervalMs = Math.round(patch.intervalMs)
+      d.intervalAuto = false // elegir un intervalo concreto apaga el modo auto
     }
     if (typeof patch.reportsDir === 'string' && patch.reportsDir.trim()) {
       d.reportsDir = patch.reportsDir.trim()

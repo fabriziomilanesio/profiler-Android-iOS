@@ -21,6 +21,15 @@ batería (nivel/temp/mA) · red (KB/s) · inspector de requests HTTP.
 > (MemTotal − MemAvailable). Si la app muere, el profiler sigue en vivo pero **pausa la
 > persistencia** (deja eventos `app-died`/`app-restarted` en el historial en vez de horas de
 > ticks vacíos) y re-engancha solo cuando el proceso reaparece.
+>
+> **Sampling en dos carriles (bajo overhead).** El profiler mide sin exigir al device: por
+> tick solo corren lecturas baratas de `/proc`/`/sys` + el dump de FPS (incluye el **RSS**
+> vivo de la app, VmRSS — se ve junto a la torta de memoria), mientras que los `dumpsys`
+> pesados van por un carril lento (meminfo/PSS cada ~15 s; térmica y batería cada ~10 s)
+> repitiendo el último valor entre corridas. `dumpsys meminfo` cada 1 s le robaba CPU al
+> juego en gama baja (contiende con el proceso vía mmap_lock) — observer effect que este
+> esquema elimina. El intervalo del carril rápido es **Auto** por default: 2 s en devices
+> con < 4 GB de RAM, 1 s en el resto; se puede fijar a mano en Configuración (☰).
 
 **Stack:** TypeScript + [Bun](https://bun.sh) · UI web local (WebSocket) · Apache ECharts.
 
@@ -155,7 +164,8 @@ Flags: `--package <pkg>` (fuerza una app, pisa el auto-resume) · `--port <n>` (
   `~/.config/evermore-profiler/sessions/<fecha>.jsonl`; el panel las lista (fecha, apps,
   duración) y permite exportar el reporte de **cualquier sesión pasada**.
 - **Configuración** — aplica en caliente y persiste: término del chip de filtro, intervalo de
-  sampling (0.5–5 s, reinicia el loop al vuelo), carpeta de reportes y **tema claro/oscuro**
+  sampling (**Auto** según el device — 2 s en gama baja, 1 s en el resto — o fijo 0.5–5 s;
+  reinicia el loop al vuelo), carpeta de reportes y **tema claro/oscuro**
   (el toggle del header también persiste). Todo vive en
   `~/.config/evermore-profiler/config.json` (absorbe al viejo `apps.json` con migración
   automática).
@@ -210,8 +220,9 @@ bun run scripts/capture-fixtures.ts   # guía la captura mientras jugás ~30 s
   adb real, tests = stub). Nada del resto conoce el binario adb.
 - `src/core/collectors/` — un parser puro por métrica (string crudo → dato), testeado contra
   fixtures reales en `fixtures/`.
-- `src/core/sampler/` — loop 1 Hz que corre los collectors y arma cada muestra (best-effort:
-  lo que falla queda N/A, no rompe).
+- `src/core/sampler/` — loop de sampling en dos carriles: rápido por tick (cats de
+  `/proc`/`/sys` + FPS + RSS) y lento amortizado (`dumpsys` pesados cada 10–15 s con
+  carry-forward). Best-effort: lo que falla queda N/A, no rompe.
 - `src/core/appStore.ts` — configuración persistente (selector de apps, tema, intervalo,
   carpeta de reportes) en `~/.config/evermore-profiler/config.json`.
 - `src/core/session/` — buffer de sesión en memoria (cap ~8 h), historial JSONL en disco y

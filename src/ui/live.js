@@ -360,9 +360,13 @@
       })
   }
 
-  function fillConfig(cfg) {
+  function fillConfig(cfg, effectiveIntervalMs) {
     menu.cfgFilter.value = cfg.filterTerm
-    menu.cfgInterval.value = String(cfg.intervalMs)
+    // auto (default): el server resuelve el intervalo según el device (gama baja → 2 s)
+    menu.cfgInterval.value = cfg.intervalAuto ? 'auto' : String(cfg.intervalMs)
+    if (typeof effectiveIntervalMs === 'number') {
+      menu.cfgInterval.options[0].textContent = 'Auto (' + effectiveIntervalMs / 1000 + ' s)'
+    }
     menu.cfgTheme.checked = cfg.theme === 'dark'
     menu.cfgReports.value = cfg.reportsDir
   }
@@ -373,7 +377,7 @@
         return r.json()
       })
       .then(function (data) {
-        fillConfig(data.config)
+        fillConfig(data.config, data.effectiveIntervalMs)
         if (applyTheme) ProfilerDashboard.setTheme(data.config.theme)
         // estado real del inspector (pudo arrancar prendido con --inspect)
         if (data.inspector) setInspectorUi(data.inspector.enabled)
@@ -384,10 +388,12 @@
   menu.cfgSave.addEventListener('click', function () {
     var patch = {
       filterTerm: menu.cfgFilter.value.trim(),
-      intervalMs: Number(menu.cfgInterval.value),
       theme: menu.cfgTheme.checked ? 'dark' : 'light',
       reportsDir: menu.cfgReports.value.trim(),
     }
+    // "auto" delega el intervalo al server (según device); un valor concreto = manual
+    if (menu.cfgInterval.value === 'auto') patch.intervalAuto = true
+    else patch.intervalMs = Number(menu.cfgInterval.value)
     setStatus(menu.cfgStatus, 'Guardando…')
     fetch('/api/config', { method: 'PUT', body: JSON.stringify(patch) })
       .then(function (r) {
@@ -395,7 +401,7 @@
         return r.json()
       })
       .then(function (data) {
-        fillConfig(data.config)
+        fillConfig(data.config, data.effectiveIntervalMs)
         ProfilerDashboard.setTheme(data.config.theme)
         // el chip del selector de apps refleja el término nuevo
         appSel.chip.textContent =
