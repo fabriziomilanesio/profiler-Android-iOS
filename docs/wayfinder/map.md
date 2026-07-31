@@ -45,6 +45,14 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   `systematic-debugging`; si el rol `dev` está activo, seguir `dev-workflow`.
 - Rol `dev` activado en el workspace (2026-07-16): aplican las hard rules del dev-workflow
   (context7 antes de libs externas, logs ocultos antes de cerrar, etc.).
+- **Iteración 2 (grilling 2026-07-31): perf → logger → rediseño.** Tickets 024–032.
+  Prioridad: frame-time/jank + veredicto de perf en el reporte (target FPS configurable,
+  default 30), después panel de logs (logcat de la app + crashes, filtro por
+  nivel/texto/fecha, export .txt/.jsonl aparte), rediseño visual al final con todas las
+  piezas existiendo (evolución de la identidad actual, no desde cero). **Restricción
+  dura transversal: cero overhead nuevo en el device** — perf se deriva de dumps que ya
+  se hacen; logcat se verifica en gama baja como en el 023. Ejecución dentro del mapa
+  (como en la iteración 1): los tickets entregan código, no solo decisiones.
 
 ## Decisions so far
 
@@ -111,8 +119,13 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
 
 ## Not yet specified
 
-- Umbrales de color (verde/amarillo/rojo) y valores de referencia por métrica — se calibran
-  con datos de sesiones reales de evermore, no a priori.
+- Umbrales de semáforo para métricas **no-FPS** (CPU/GPU/temp) — el esquema de FPS quedó
+  decidido en el ticket 025 (target configurable, verde/amarillo/rojo); el resto se
+  calibra con datos de sesiones reales de evermore, no a priori.
+- **SDK de logging dentro del juego Unity** (canal estructurado `source: 'game'` con
+  categorías y contexto de gameplay, montado sobre el esquema de log-entry del ticket
+  027) — decidido en el grilling 2026-07-31 que va *después* de esta iteración; requiere
+  tocar evermorearcade y build nuevo.
 - Escenario de juego estandarizado como "benchmark run" de evermore (misma escena/duración)
   para que las comparaciones entre builds sean justas.
 - Soporte de GPU% para SoCs no-Qualcomm (Mali/Xclipse/PowerVR) — depende de lo que arroje
