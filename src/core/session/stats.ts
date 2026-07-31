@@ -4,6 +4,14 @@
 // traen null en lo no disponible y acá se filtra (una métrica sin datos ⇒ null).
 import type { DeviceInfo, MemSample, Sample } from '../schema'
 import { buildPerfVerdict, type PerfVerdict } from '../perf/verdict'
+import type { LogEntry } from '../logs/logEntry'
+import {
+  buildLogMarks,
+  buildReportLogs,
+  filterLogsToWindow,
+  type ReportLogs,
+  type ReportMark,
+} from '../logs/reportLogs'
 
 export interface ScalarStats {
   avg: number
@@ -97,6 +105,10 @@ export interface ReportSession {
   summary: ReportSummary
   /** veredicto de perf de la ventana (ticket 026) — derivado de series + fpsTarget */
   verdict: PerfVerdict
+  /** marcas de crashes/ráfagas de errores sobre el timeline (ticket 030, hook del 026) */
+  marks: ReportMark[]
+  /** logs embebidos de la ventana (ticket 030); null = sesión sin logs capturados */
+  logs: ReportLogs | null
 }
 
 function percentile(sortedAsc: number[], p: number): number {
@@ -207,6 +219,9 @@ export interface BuildReportOptions {
   trimmed: boolean
   /** config.fpsTarget al momento de exportar; ausente ⇒ 30 (el default del AppStore) */
   fpsTarget?: number
+  /** logs de la sesión (ticket 030); acá se recortan a la ventana de los samples.
+   *  null/ausente/vacío ⇒ el reporte sale sin sección de logs ni marcas. */
+  logEntries?: LogEntry[] | null
 }
 
 /** Arma la sesión completa que consume el template del reporte. */
@@ -220,6 +235,16 @@ export function buildReportSession(opts: BuildReportOptions): ReportSession {
   const activeS = Math.round((samples.length * opts.intervalMs) / 1000)
   const durationS = samples.length ? Math.max(1, Math.min(spanS, activeS)) : 0
   const fpsTarget = opts.fpsTarget ?? 30
+  // Logs de la ventana (ticket 030): recorte EXACTO al rango de los samples
+  // (con gracia solo-crashes al final — ver reportLogs.ts). Sin logs ⇒ marks
+  // vacías y logs null: el reporte sale como antes del 030.
+  let marks: ReportMark[] = []
+  let logs: ReportLogs | null = null
+  if (opts.logEntries && opts.logEntries.length > 0 && first && last) {
+    const windowLogs = filterLogsToWindow(opts.logEntries, first.ts, last.ts)
+    logs = buildReportLogs(windowLogs)
+    marks = buildLogMarks(windowLogs, first.ts, last.ts)
+  }
   const series: ReportSeriesPoint[] = samples.map((s) => ({
     t: s.t,
     ts: s.ts,
@@ -271,5 +296,7 @@ export function buildReportSession(opts: BuildReportOptions): ReportSession {
     series,
     summary: summarize(samples),
     verdict: buildPerfVerdict(series, fpsTarget),
+    marks,
+    logs,
   }
 }

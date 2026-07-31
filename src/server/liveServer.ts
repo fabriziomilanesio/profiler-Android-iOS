@@ -895,6 +895,20 @@ export class LiveServer {
     if (samples.length === 0) {
       return Response.json({ error: 'sin muestras en la ventana pedida' }, { status: 409 })
     }
+    // Logs para marcas + sección del reporte (ticket 030): mismo camino que el
+    // export del 029 — NDJSON hermano de la sesión; la sesión en curso flushea lo
+    // pendiente primero y sin sessionsDir cae al ring en memoria. Sesión sin logs
+    // ⇒ null ⇒ el reporte sale sin sección (nunca rompe). El recorte a la ventana
+    // lo hace buildReportSession con los ts de los samples.
+    let logEntries: LogEntry[] | null = null
+    if (sessionParam) {
+      logEntries = this.opts.sessionsDir ? LogSink.read(this.opts.sessionsDir, sessionParam) : null
+    } else {
+      this.flushLogs()
+      const sid = this.sessionLog?.id ?? null
+      const read = this.opts.sessionsDir && sid ? LogSink.read(this.opts.sessionsDir, sid) : null
+      logEntries = read ?? this.logRing.last(DEFAULT_LOG_CAP)
+    }
     const session = buildReportSession({
       samples,
       packageName: pkg,
@@ -903,6 +917,7 @@ export class LiveServer {
       trimmed,
       // el veredicto del reporte usa el target configurado al momento de exportar
       fpsTarget: this.config().fpsTarget,
+      logEntries,
     })
     const html = generateReportHtml(session, this.config().theme, new Date())
     const filename = reportFilename(session, new Date())

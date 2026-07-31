@@ -147,6 +147,13 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   línea, jsonl tal cual), guarda copia en la carpeta de reportes y devuelve el archivo
   (doble destino como `/api/report`); sesiones pasadas vía `LogSink.read` con botones
   .txt/.jsonl en el ☰ (deshabilitados si `hasLogs: false`).
+- [Errores y crashes marcados sobre el timeline del reporte HTML](tickets/030-logs-en-reporte-timeline.md) —
+  `reportLogs.ts` puro arma `session.marks` (una marca por bloque de crash
+  "CRASH:/ANR: …"; errores sueltos no marcan, ráfagas de ≥5 en ≤10 s = una marca
+  "N errores"; máx 20) y la sección de logs embebida (solo W/E/F con cap 500
+  no-crash + crashes SIEMPRE completos colapsables + conteos por nivel del resto);
+  recorte exacto a la ventana con gracia de 10 s solo-crash al final; sesión sin
+  logs ⇒ reporte igual que antes, nunca rompe.
 - [Sampling en dos carriles](tickets/023-sampling-dos-carriles-overhead.md) — el profiler
   exigía al device en gama baja (observer effect de `dumpsys meminfo` cada 1 s). Carril
   rápido (cats + FPS + RSS vivo por VmRSS) cada tick; carril lento (meminfo 15 s,

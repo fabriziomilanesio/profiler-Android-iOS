@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Sample } from '../core/schema'
+import type { LogEntry, LogLevel } from '../core/logs/logEntry'
 import { buildReportSession } from '../core/session/stats'
 import { generateReportHtml, reportFilename } from './generateReport'
 
@@ -150,5 +151,108 @@ describe('generateReportHtml', () => {
     expect(reportFilename(SESSION, new Date('2026-07-20T18:05:30Z'))).toBe(
       'evermore-report-com.evermore.oda.qa-2026-07-20T18-05-30.html',
     )
+  })
+})
+
+// ---------- logs en el reporte (ticket 030) ----------
+const BASE_TS = 1_750_000_000_000
+
+function logAt(offsetMs: number, level: LogLevel, message: string, crash = false): LogEntry {
+  const e: LogEntry = {
+    ts: BASE_TS + offsetMs,
+    level,
+    tag: crash ? 'AndroidRuntime' : 'Unity',
+    message,
+    pid: 111,
+    source: 'logcat',
+  }
+  if (crash) e.isCrash = true
+  return e
+}
+
+describe('logs embebidos en el reporte (030)', () => {
+  const CRASH_LOGS = [
+    logAt(500, 'I', 'Loading scene'),
+    logAt(800, 'W', 'Texture atlas not preloaded'),
+    logAt(1200, 'E', 'FATAL EXCEPTION: main', true),
+    logAt(1210, 'E', 'java.lang.IllegalStateException: boom', true),
+    logAt(1220, 'E', '\tat com.evermore.oda.GameLoop.tick(GameLoop.java:87)', true),
+  ]
+
+  test('reporte con crashes: marks presentes y sección de logs embebida', () => {
+    const s = buildReportSession({
+      samples: [sample(0), sample(1), sample(2)],
+      packageName: 'com.evermore.oda.qa',
+      device: null,
+      intervalMs: 1000,
+      trimmed: false,
+      logEntries: CRASH_LOGS,
+    })
+    expect(s.marks).toHaveLength(1)
+    expect(s.marks[0]!.label).toBe('CRASH: FATAL EXCEPTION: main')
+    expect(s.logs).not.toBeNull()
+    // W + 3 líneas del crash embebidas; la I queda solo como conteo
+    expect(s.logs!.entries).toHaveLength(4)
+    expect(s.logs!.totalByLevel.I).toBe(1)
+    const html = generateReportHtml(s, 'dark', new Date('2026-07-31T18:00:00Z'))
+    expect(html).toContain('id="logsSection"')
+    expect(html).toContain('"marks":[{')
+    expect(html).toContain('CRASH: FATAL EXCEPTION: main')
+    expect(html).toContain('"logs":{')
+  })
+
+  test('sesión sin logs: marks vacías, logs null, el HTML degrada sin sección con datos', () => {
+    const s = buildReportSession({
+      samples: [sample(0), sample(1)],
+      packageName: 'com.evermore.oda.qa',
+      device: null,
+      intervalMs: 1000,
+      trimmed: false,
+    })
+    expect(s.marks).toEqual([])
+    expect(s.logs).toBeNull()
+    const html = generateReportHtml(s, 'light', new Date('2026-07-31T18:00:00Z'))
+    expect(html).toContain('"logs":null')
+    expect(html).toContain('"marks":[]')
+  })
+
+  test('cap respetado: crashes completos + no-crash truncadas con conteo', () => {
+    const many: LogEntry[] = []
+    for (let i = 0; i < 700; i++) many.push(logAt(i, 'W', `warn ${i}`))
+    many.push(...CRASH_LOGS.filter((e) => e.isCrash))
+    many.sort((a, b) => a.ts - b.ts)
+    const s = buildReportSession({
+      samples: [sample(0), sample(1), sample(2)],
+      packageName: 'com.evermore.oda.qa',
+      device: null,
+      intervalMs: 1000,
+      trimmed: false,
+      logEntries: many,
+    })
+    expect(s.logs!.entries.filter((e) => !e.isCrash)).toHaveLength(500)
+    expect(s.logs!.entries.filter((e) => e.isCrash)).toHaveLength(3)
+    expect(s.logs!.truncated).toBe(200)
+  })
+
+  test('rango respetado: solo los logs de la ventana de los samples entran', () => {
+    // samples en t=0..2 ⇒ ventana [BASE_TS, BASE_TS+2000]
+    const s = buildReportSession({
+      samples: [sample(0), sample(1), sample(2)],
+      packageName: 'com.evermore.oda.qa',
+      device: null,
+      intervalMs: 1000,
+      trimmed: false,
+      logEntries: [
+        logAt(-5000, 'E', 'de la app anterior'),
+        logAt(1000, 'E', 'dentro'),
+        logAt(60_000, 'E', 'de después'),
+        logAt(4000, 'E', 'FATAL EXCEPTION: main', true), // gracia solo-crash
+      ],
+    })
+    expect(s.logs!.entries.map((e) => e.message)).toEqual(['dentro', 'FATAL EXCEPTION: main'])
+    expect(s.logs!.totalByLevel.E).toBe(2)
+    // la marca del crash post-ventana queda clampeada al borde del chart
+    expect(s.marks).toHaveLength(1)
+    expect(s.marks[0]!.ts).toBe(BASE_TS + 2000)
   })
 })

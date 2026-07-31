@@ -426,6 +426,130 @@
       .join('')
   }
 
+  // ---------- logs de la ventana (ticket 030) ----------
+  // session.logs = { entries, totalByLevel, truncated } embebido por el server:
+  // W/E/F + crashes de la ventana exportada, con cap. Sin logs (null/ausente,
+  // reportes pre-030) la sección queda oculta y el reporte sale como siempre.
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+  }
+  function fmtLogTime(ts) {
+    var d = new Date(ts)
+    var pad = function (n, w) {
+      var s = String(n)
+      while (s.length < w) s = '0' + s
+      return s
+    }
+    return (
+      pad(d.getHours(), 2) +
+      ':' +
+      pad(d.getMinutes(), 2) +
+      ':' +
+      pad(d.getSeconds(), 2) +
+      '.' +
+      pad(d.getMilliseconds(), 3)
+    )
+  }
+  // mismo criterio que el core (reportLogs.ts): entradas isCrash con gap ≤ 2 s
+  // pertenecen al mismo bloque (stacktrace) y se muestran como UNA fila colapsable
+  var CRASH_BLOCK_GAP_MS = 2000
+
+  function renderLogs(sess) {
+    var L = sess.logs
+    if (!L) return // sesión sin logs capturados: el reporte sale como hoy
+    var entries = L.entries || []
+    var counts = L.totalByLevel || {}
+    document.getElementById('logsSection').hidden = false
+
+    var html = []
+    var crashBlocks = 0
+    var i = 0
+    while (i < entries.length) {
+      var e = entries[i]
+      if (e.isCrash) {
+        var j = i + 1
+        while (
+          j < entries.length &&
+          entries[j].isCrash &&
+          entries[j].ts - entries[j - 1].ts <= CRASH_BLOCK_GAP_MS
+        ) {
+          j++
+        }
+        var block = entries.slice(i, j)
+        crashBlocks++
+        var body = block
+          .map(function (b) {
+            return esc(b.message)
+          })
+          .join('\n')
+        html.push(
+          '<details class="log-crash"><summary>' +
+            '<span class="log-time">' +
+            fmtLogTime(block[0].ts) +
+            '</span>' +
+            '<span class="log-crash-badge">' +
+            (block[0].tag === 'am_anr' ? 'ANR' : 'CRASH') +
+            '</span>' +
+            '<span class="log-msg">' +
+            esc(block[0].message) +
+            '</span>' +
+            (block.length > 1
+              ? '<span class="log-more">+' + (block.length - 1) + ' líneas</span>'
+              : '') +
+            '</summary><pre class="log-crash-body">' +
+            body +
+            '</pre></details>',
+        )
+        i = j
+      } else {
+        html.push(
+          '<div class="log-row lv-' +
+            e.level +
+            '"><span class="log-time">' +
+            fmtLogTime(e.ts) +
+            '</span><span class="log-level">' +
+            e.level +
+            '</span><span class="log-tag">' +
+            esc(e.tag) +
+            '</span><span class="log-msg">' +
+            esc(e.message) +
+            '</span></div>',
+        )
+        i++
+      }
+    }
+    if (!entries.length) {
+      html.push(
+        '<div class="logs-empty">No warnings, errors or crashes in the exported window.</div>',
+      )
+    }
+    document.getElementById('logsList').innerHTML = html.join('')
+
+    var sub = []
+    if (counts.W) sub.push(counts.W + ' warn')
+    if ((counts.E || 0) + (counts.F || 0)) sub.push((counts.E || 0) + (counts.F || 0) + ' error')
+    if (crashBlocks) sub.push(crashBlocks + (crashBlocks === 1 ? ' crash/ANR' : ' crashes/ANR'))
+    document.getElementById('logsSub').textContent = sub.length
+      ? sub.join(' · ') + ' in the exported window'
+      : 'exported window'
+
+    var footer = []
+    if (L.truncated) {
+      footer.push(L.truncated + ' more warnings/errors not embedded (report size budget)')
+    }
+    var lowLevels = (counts.V || 0) + (counts.D || 0) + (counts.I || 0)
+    if (lowLevels) {
+      footer.push('plus ' + lowLevels + ' verbose/debug/info lines captured but not embedded')
+    }
+    var footEl = document.getElementById('logsFooter')
+    footEl.hidden = footer.length === 0
+    footEl.textContent = footer.join(' · ')
+  }
+
   // ---------- memory pie ----------
   var memPie, timeline, corr
 
@@ -569,9 +693,10 @@
       markArea: markRed(),
     }
 
-    // HOOK (ticket 030): marcas puntuales de crashes/errores sobre el timeline.
-    // Contrato: session.marks = [{ ts, label }] embebido en ReportData ⇒ acá se
-    // pintan como líneas verticales en el grid de FPS, sin tocar el resto del chart.
+    // Marcas de crashes/ráfagas de errores (ticket 030, hook definido en el 026):
+    // session.marks = [{ ts, label }] embebido en ReportData (las arma
+    // buildLogMarks en reportLogs.ts) ⇒ acá se pintan como líneas verticales en
+    // el grid de FPS, sin tocar el resto del chart.
     if (sess.marks && sess.marks.length) {
       fpsSeries.markLine.data = fpsSeries.markLine.data.concat(
         sess.marks.map(function (m) {
@@ -958,6 +1083,7 @@
   renderMeta(SESSION)
   renderVerdict(SESSION)
   renderCards(SESSION)
+  renderLogs(SESSION)
   buildAll()
   syncThemeButton()
   window.addEventListener('resize', function () {
