@@ -1,7 +1,11 @@
 // Protocolo del WebSocket entre el server y el dashboard (ticket 021).
 // Mensajes tipados serializados a JSON. Al conectar: {type:"device"} + {type:"app"};
-// por tick: {type:"sample"}; al cambiar de app desde el selector: {type:"app"}.
+// por tick: {type:"sample"}; al cambiar de app desde el selector: {type:"app"};
+// logs en batch (ticket 027): {type:"logs", entries} — nunca una entrada por
+// mensaje (un logcat a chorro no debe generar un mensaje WS por línea). El
+// bootstrap del panel (últimas N) va por GET /api/logs.
 import type { DeviceInfo, Sample } from '../core/schema'
+import type { LogEntry } from '../core/logs/logEntry'
 import type { InspectorFlow } from './inspectorProxy'
 
 /** Estado de la app profileada (selector de apps). */
@@ -18,6 +22,7 @@ export type ServerMessage =
   | { type: 'sample'; sample: Sample }
   | { type: 'flow'; flow: InspectorFlow }
   | { type: 'app'; app: AppStatus }
+  | { type: 'logs'; entries: LogEntry[] }
 
 export function deviceMessage(device: DeviceInfo): string {
   return JSON.stringify({ type: 'device', device } satisfies ServerMessage)
@@ -33,4 +38,8 @@ export function flowMessage(flow: InspectorFlow): string {
 
 export function appMessage(app: AppStatus): string {
   return JSON.stringify({ type: 'app', app } satisfies ServerMessage)
+}
+
+export function logsMessage(entries: LogEntry[]): string {
+  return JSON.stringify({ type: 'logs', entries } satisfies ServerMessage)
 }

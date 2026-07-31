@@ -31,6 +31,15 @@ export class RealAdbTransport implements AdbTransport {
     return run(this.adbPath, ['-s', serial, 'shell', command], { timeoutMs: DEFAULT_TIMEOUT_MS })
   }
 
+  streamShell(
+    serial: string,
+    command: string,
+    onLine: (line: string) => void,
+    onExit?: (err: Error | null) => void,
+  ): () => void {
+    return streamLines(this.adbPath, ['-s', serial, 'shell', command], onLine, onExit)
+  }
+
   trackDevices(onChange: (devices: AdbDevice[]) => void): () => void {
     // `adb track-devices` emite en cada cambio; ante cualquier evento re-listamos
     // con -l para tener también la descripción (model/product).

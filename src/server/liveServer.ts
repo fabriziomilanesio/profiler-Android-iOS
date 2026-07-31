@@ -21,6 +21,10 @@ import {
 } from '../core/appStore'
 import { SessionBuffer } from '../core/session/sessionBuffer'
 import { SessionLog, sessionId } from '../core/session/sessionLog'
+import { LogcatCapture } from '../core/logs/logcatCapture'
+import { LogRing, DEFAULT_LOG_CAP } from '../core/logs/logRing'
+import { LogSink } from '../core/logs/logSink'
+import type { LogEntry } from '../core/logs/logEntry'
 import { buildReportSession } from '../core/session/stats'
 import { generateReportHtml, reportFilename } from '../report/generateReport'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -33,7 +37,14 @@ import {
 } from '../runtime/httpServer'
 import { resolveStaticFile } from './staticFiles'
 import { EMBEDDED_UI } from './embeddedUi'
-import { deviceMessage, sampleMessage, flowMessage, appMessage, type AppStatus } from './messages'
+import {
+  deviceMessage,
+  sampleMessage,
+  flowMessage,
+  appMessage,
+  logsMessage,
+  type AppStatus,
+} from './messages'
 import { InspectorProxy } from './inspectorProxy'
 import { run } from '../runtime/spawn'
 
@@ -65,7 +76,12 @@ export interface LiveServerOptions {
   devicePollMs?: number
   /** directorio del historial de sesiones (JSONL). Sin él, no se persiste en disco. */
   sessionsDir?: string
+  /** cadencia del batch de logs al WS en ms (default 250; tests lo bajan). */
+  logFlushMs?: number
 }
+
+/** Si el batch pendiente supera esto, se flushea ya (no esperar el timer). */
+const LOG_BATCH_MAX = 500
 
 /** Captura la ficha del device una vez (getprop + /proc/meminfo + SurfaceFlinger GLES). */
 export async function captureDeviceInfo(
@@ -124,6 +140,14 @@ export class LiveServer {
   private readonly buffer = new SessionBuffer()
   private sessionLog: SessionLog | null = null
   private intervalMs: number
+  /** captura de logcat (ticket 027): app stream + crash stream, fuera del tick. */
+  private logCapture: LogcatCapture | null = null
+  private readonly logRing = new LogRing()
+  private logSink: LogSink | null = null
+  /** batches pendientes: WS (todo) y disco (pausado con la app muerta, salvo crashes). */
+  private pendingWsLogs: LogEntry[] = []
+  private pendingSinkLogs: LogEntry[] = []
+  private logFlushTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(private readonly opts: LiveServerOptions) {
     this.serial = opts.serial ?? null
@@ -206,6 +230,9 @@ export class LiveServer {
         if (url.pathname === '/api/sessions' && req.method === 'GET') {
           return this.handleListSessions()
         }
+        if (url.pathname === '/api/logs' && req.method === 'GET') {
+          return this.handleLogs(url)
+        }
         if (url.pathname === '/api/config' && req.method === 'GET') {
           return Response.json({
             config: this.config(),
@@ -262,7 +289,14 @@ export class LiveServer {
         this.opts.packageName,
         this.device,
       )
+      // logs hermanos de la sesión: <id>.logs.jsonl en el mismo directorio
+      this.logSink = new LogSink(this.opts.sessionsDir, this.sessionLog.id)
     }
+
+    // Captura de logcat (ticket 027): stream aparte del tick del sampler.
+    // Sin device no hay stream (el switchApp del enganche posterior lo arma).
+    if (this.serial) this.startLogCapture()
+    this.logFlushTimer = setInterval(() => this.flushLogs(), this.opts.logFlushMs ?? 250)
 
     // con la ficha del device ya capturada, el modo auto puede haber cambiado el intervalo
     this.intervalMs = this.resolveIntervalMs()
@@ -374,6 +408,59 @@ export class LiveServer {
     this.inspector = null
   }
 
+  /**
+   * (Re)arma la captura de logcat contra el serial/app/pid actuales. Se llama al
+   * arrancar con device y tras cada switch de app/device. Sin device ⇒ no-op
+   * (sin errores ruidosos, igual que el resto del modo espera).
+   */
+  private startLogCapture(): void {
+    this.logCapture?.stop()
+    this.logCapture = null
+    const serial = this.serial
+    if (!serial) return
+    const pkg = this.appStatus?.packageName ?? this.opts.packageName
+    const capture = new LogcatCapture(this.opts.transport, serial, pkg, (e) => this.onLogEntry(e))
+    this.logCapture = capture
+    const pid = this.appStatus?.pid ?? null
+    capture.start(pid)
+  }
+
+  /** Cada entrada capturada: al ring (memoria), al batch WS y — con la app viva
+   *  o si es crash — al batch de persistencia NDJSON. */
+  private onLogEntry(e: LogEntry): void {
+    this.logRing.push(e)
+    this.pendingWsLogs.push(e)
+    // la persistencia pausa con la app muerta (no inflar el archivo), pero los
+    // crashes/ANR se persisten siempre: son exactamente el evento que importa
+    if (!this.appDead || e.isCrash) this.pendingSinkLogs.push(e)
+    if (this.pendingWsLogs.length >= LOG_BATCH_MAX) this.flushLogs()
+  }
+
+  /** Batch por tick del flush timer: un mensaje WS con N entries + un append NDJSON. */
+  private flushLogs(): void {
+    if (this.pendingWsLogs.length > 0) {
+      this.server?.broadcast(logsMessage(this.pendingWsLogs))
+      this.pendingWsLogs = []
+    }
+    if (this.pendingSinkLogs.length > 0) {
+      this.logSink?.append(this.pendingSinkLogs)
+      this.pendingSinkLogs = []
+    }
+  }
+
+  /** GET /api/logs?n=500 — últimas N entradas del ring (bootstrap del panel 028). */
+  private handleLogs(url: URL): Response {
+    const nParam = url.searchParams.get('n')
+    let n = 500
+    if (nParam !== null) {
+      n = Number(nParam)
+      if (!Number.isInteger(n) || n <= 0 || n > DEFAULT_LOG_CAP) {
+        return Response.json({ error: 'n inválido' }, { status: 400 })
+      }
+    }
+    return Response.json({ entries: this.logRing.last(n) })
+  }
+
   private async tick(): Promise<void> {
     // Sin este guard, un device lento (shells adb con timeout de varios segundos)
     // encola ticks concurrentes que pisan prevCpu/prevNet → deltas corruptos.
@@ -391,6 +478,9 @@ export class LiveServer {
         this.appStatus = { ...this.appStatus, pid: sampler.processId }
         this.server?.broadcast(appMessage(this.appStatus))
       }
+      // logcat sigue al pid vivo (muerte/renacimiento incluidos): setPid es
+      // idempotente — solo re-arma el stream cuando el pid realmente cambió
+      if (sampler.processId > 0) this.logCapture?.setPid(sampler.processId)
       const sample = await sampler.sampleOnce()
       // Registrar en el buffer (export en vivo) y en el historial en disco — solo con
       // la app viva. Con el proceso muerto el dashboard sigue en vivo (broadcast),
@@ -441,6 +531,9 @@ export class LiveServer {
     this.deadTicks++
     if (this.appDead || this.deadTicks < 3) return
     this.appDead = true
+    // app muerta: cortar el stream por pid (ya no existe); el crash stream queda
+    // vivo para capturar el stacktrace/ANR de esta muerte
+    this.logCapture?.setPid(null)
     const wasAlive = this.appStatus?.pid != null
     if (this.appStatus) {
       this.appStatus = { ...this.appStatus, pid: null }
@@ -546,6 +639,8 @@ export class LiveServer {
     this.buffer.addEvent(ev)
     this.sessionLog?.appendEvent(ev)
     this.server?.broadcast(appMessage(this.appStatus))
+    // logcat de la app nueva (package cambió ⇒ captura nueva, streams re-armados)
+    this.startLogCapture()
     return this.appStatus
   }
 
@@ -611,6 +706,9 @@ export class LiveServer {
     const pkg = this.appStatus?.packageName ?? this.opts.packageName
     // el proxy del inspector quedó seteado en el device viejo: restaurar ANTES de soltarlo
     if (this.inspector) await this.stopInspector()
+    // los streams de logcat apuntan al device viejo: cortarlos (switchApp re-arma)
+    this.logCapture?.stop()
+    this.logCapture = null
     const old = this.sampler
     this.sampler = null
     await old?.dispose()
@@ -808,6 +906,11 @@ export class LiveServer {
     if (this.timer) clearInterval(this.timer)
     if (this.deviceWatch) clearInterval(this.deviceWatch)
     this.deviceWatch = null
+    if (this.logFlushTimer) clearInterval(this.logFlushTimer)
+    this.logFlushTimer = null
+    this.logCapture?.stop()
+    this.logCapture = null
+    this.flushLogs() // lo pendiente va a disco antes de cerrar
     if (this.inspector) await this.stopInspector() // restaura el proxy del device
     await this.sampler?.dispose() // sin await, el -disable de timestats muere a mitad de vuelo
     this.server?.stop()

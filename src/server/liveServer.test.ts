@@ -21,6 +21,13 @@ interface SelectBody {
   app: { packageName: string; pid: number | null; launched: boolean }
 }
 
+/** Stream long-running fake (logcat): el test le inyecta líneas a mano. */
+interface FakeStream {
+  command: string
+  onLine: (line: string) => void
+  stopped: boolean
+}
+
 /** Transport fake: apps "corriendo" por package, lista instalada, devices y log de comandos. */
 function fakeTransport(
   running: Map<string, number>,
@@ -29,13 +36,22 @@ function fakeTransport(
 ): {
   t: AdbTransport
   cmds: string[]
+  streams: FakeStream[]
 } {
   const cmds: string[] = []
+  const streams: FakeStream[] = []
   const t: AdbTransport = {
     isAvailable: async () => true,
     version: async () => '1.0.41',
     devices: async () => deviceList,
     trackDevices: () => () => {},
+    streamShell: (_serial, command, onLine) => {
+      const s: FakeStream = { command, onLine, stopped: false }
+      streams.push(s)
+      return () => {
+        s.stopped = true
+      }
+    },
     shell: async (_serial, command): Promise<ShellResult> => {
       cmds.push(command)
       if (command.startsWith('pidof ')) {
@@ -55,7 +71,7 @@ function fakeTransport(
       return ok('')
     },
   }
-  return { t, cmds }
+  return { t, cmds, streams }
 }
 
 function memoryStore(): {
@@ -85,7 +101,7 @@ async function startServer(
   serial: string | null = 'FAKE-SERIAL',
   extra: { sessionsDir?: string; reportsDir?: string } = {},
 ) {
-  const { t, cmds } = fakeTransport(running, installed, deviceList)
+  const { t, cmds, streams } = fakeTransport(running, installed, deviceList)
   const store = memoryStore()
   if (extra.reportsDir) store.data.reportsDir = extra.reportsDir
   const server = new LiveServer({
@@ -96,11 +112,12 @@ async function startServer(
     port: 0, // puerto libre: los tests no chocan con un live real
     intervalMs: 3_600_000, // sin ticks periódicos durante el test (el primero corre igual)
     devicePollMs: 25, // watcher rápido para el test de modo espera
+    logFlushMs: 20, // batches de logs rápidos para los tests
     appStore: store,
     sessionsDir: extra.sessionsDir,
   })
   const { url } = await server.start()
-  return { server, url, cmds, store }
+  return { server, url, cmds, streams, store }
 }
 
 describe('LiveServer /api/packages', () => {
@@ -504,6 +521,131 @@ describe('LiveServer /api/inspector (toggle en caliente)', () => {
         body: JSON.stringify({ enabled: true }),
       })
       expect(noDevice.status).toBe(409)
+    } finally {
+      await server.stop()
+    }
+  })
+})
+
+describe('LiveServer logs (ticket 027)', () => {
+  const UNITY_LINE = (msg: string, pid = 111, tid = 190) =>
+    `2026-07-31 10:15:02.087 ${pid} ${tid} I Unity   : ${msg}`
+
+  test('con app corriendo arma logcat --pid + crash stream vía AdbTransport', async () => {
+    const { server, streams } = await startServer(new Map([[PKG, 111]]), [])
+    try {
+      const cmds = streams.map((s) => s.command)
+      expect(cmds).toContain('logcat -b main,system --pid=111 -v threadtime -v year -T 1')
+      expect(cmds).toContain('logcat -b crash,events -v threadtime -v year -T 1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('GET /api/logs devuelve las últimas N del ring; n inválido ⇒ 400', async () => {
+    const { server, url, streams } = await startServer(new Map([[PKG, 111]]), [])
+    try {
+      const app = streams.find((s) => s.command.includes('--pid=111'))!
+      for (let i = 1; i <= 5; i++) app.onLine(UNITY_LINE(`msg ${i}`))
+      const body = (await (await fetch(`${url}/api/logs`)).json()) as {
+        entries: Array<{ message: string; tag: string; source: string }>
+      }
+      expect(body.entries).toHaveLength(5)
+      expect(body.entries[0]!).toMatchObject({ tag: 'Unity', message: 'msg 1', source: 'logcat' })
+      const last2 = (await (await fetch(`${url}/api/logs?n=2`)).json()) as {
+        entries: Array<{ message: string }>
+      }
+      expect(last2.entries.map((e) => e.message)).toEqual(['msg 4', 'msg 5'])
+      expect((await fetch(`${url}/api/logs?n=0`)).status).toBe(400)
+      expect((await fetch(`${url}/api/logs?n=abc`)).status).toBe(400)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('WS: las líneas viajan en UN batch {type:"logs"} por flush, no una por una', async () => {
+    const { server, url, streams } = await startServer(new Map([[PKG, 111]]), [])
+    try {
+      const ws = new WebSocket(`${url.replace('http', 'ws')}/ws`)
+      const batches: Array<{ entries: Array<{ message: string }> }> = []
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(String(ev.data)) as { type: string; entries?: [] }
+        if (msg.type === 'logs') batches.push(msg as never)
+      }
+      await new Promise<void>((resolve) => {
+        ws.onopen = () => resolve()
+      })
+      const app = streams.find((s) => s.command.includes('--pid=111'))!
+      for (let i = 1; i <= 3; i++) app.onLine(UNITY_LINE(`burst ${i}`))
+      await new Promise((r) => setTimeout(r, 100)) // logFlushMs=20: sobra un flush
+      expect(batches).toHaveLength(1)
+      expect(batches[0]!.entries.map((e) => e.message)).toEqual(['burst 1', 'burst 2', 'burst 3'])
+      ws.close()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('persistencia NDJSON: <id>.logs.jsonl hermano de la sesión en sessionsDir', async () => {
+    const { mkdtempSync, existsSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'sessions-'))
+    const { server, url, streams } = await startServer(
+      new Map([[PKG, 111]]),
+      [],
+      [],
+      'FAKE-SERIAL',
+      {
+        sessionsDir,
+      },
+    )
+    try {
+      const app = streams.find((s) => s.command.includes('--pid=111'))!
+      app.onLine(UNITY_LINE('persistime'))
+      await new Promise((r) => setTimeout(r, 60)) // flush del sink
+      const list = (await (await fetch(`${url}/api/sessions`)).json()) as {
+        current: string
+      }
+      const logsPath = join(sessionsDir, `${list.current}.logs.jsonl`)
+      expect(existsSync(logsPath)).toBe(true)
+      const { LogSink } = await import('../core/logs/logSink')
+      const back = LogSink.read(sessionsDir, list.current)!
+      expect(back).toHaveLength(1)
+      expect(back[0]!).toMatchObject({ tag: 'Unity', message: 'persistime', source: 'logcat' })
+    } finally {
+      await server.stop()
+      rmSync(sessionsDir, { recursive: true, force: true })
+    }
+  })
+
+  test('switch de app re-arma logcat contra el pid nuevo y corta los streams viejos', async () => {
+    const { server, url, streams } = await startServer(
+      new Map([
+        [PKG, 111],
+        ['com.evermore.arcade', 222],
+      ]),
+      [],
+    )
+    try {
+      const res = await fetch(`${url}/api/app`, {
+        method: 'POST',
+        body: JSON.stringify({ package: 'com.evermore.arcade' }),
+      })
+      expect(res.status).toBe(200)
+      const old = streams.find((s) => s.command.includes('--pid=111'))!
+      expect(old.stopped).toBe(true)
+      const nuevo = streams.find((s) => s.command.includes('--pid=222'))
+      expect(nuevo).toBeDefined()
+      expect(nuevo!.stopped).toBe(false)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('modo espera (sin device): cero streams de logcat, sin errores ruidosos', async () => {
+    const { server, streams } = await startServer(new Map(), [], [], null)
+    try {
+      expect(streams.filter((s) => s.command.startsWith('logcat'))).toHaveLength(0)
     } finally {
       await server.stop()
     }

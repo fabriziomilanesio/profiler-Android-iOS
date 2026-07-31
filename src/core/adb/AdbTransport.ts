@@ -22,6 +22,17 @@ export interface AdbTransport {
   version(): Promise<string>
   devices(): Promise<AdbDevice[]>
   shell(serial: string, command: string): Promise<ShellResult>
+  /**
+   * Comando shell long-running (logcat): entrega stdout línea a línea hasta que
+   * el proceso muera o se llame el stop() devuelto. onExit avisa cuando el
+   * proceso terminó solo (error de spawn o cierre) — el caller decide reintentar.
+   */
+  streamShell(
+    serial: string,
+    command: string,
+    onLine: (line: string) => void,
+    onExit?: (err: Error | null) => void,
+  ): () => void
   /** Notifica cambios de devices (conexión/desconexión). Devuelve un stop(). */
   trackDevices(onChange: (devices: AdbDevice[]) => void): () => void
 }

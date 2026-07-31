@@ -40,6 +40,7 @@ function transportWith(expectCmd: RegExp, stdout: string): { t: AdbTransport; cm
     version: async () => '1.0.41',
     devices: async () => [],
     trackDevices: () => () => {},
+    streamShell: () => () => {},
     shell: async (_serial, command): Promise<ShellResult> => {
       cmds.push(command)
       if (expectCmd.test(command)) return { stdout, stderr: '', exitCode: 0 }
@@ -70,6 +71,7 @@ describe('listPackages', () => {
       version: async () => '1.0.41',
       devices: async () => [],
       trackDevices: () => () => {},
+      streamShell: () => () => {},
       shell: async () => {
         throw new Error('device offline')
       },

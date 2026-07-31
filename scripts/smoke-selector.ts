@@ -32,6 +32,7 @@ const transport: AdbTransport = {
     { serial: 'FAKE-LOCKED', state: 'unauthorized', description: '' },
   ],
   trackDevices: () => () => {},
+  streamShell: () => () => {},
   shell: async (_serial, command) => {
     if (command.startsWith('pidof ')) {
       const pid = running.get(command.slice('pidof '.length).trim())

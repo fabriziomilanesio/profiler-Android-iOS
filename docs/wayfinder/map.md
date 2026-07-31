@@ -120,6 +120,12 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   `fpsStatus(fps, target)` pura en `src/core/perf/threshold.ts` (verde ≥ target ·
   amarillo ≥ 80% · rojo abajo, null-safe) reutilizable por el reporte del 026; el FPS
   del donut y el jank% del subtítulo toman el color del estado.
+- [Logger — captura logcat de la app + crashes/ANR vía AdbTransport](tickets/027-logcat-captura-crashes.md) —
+  `AdbTransport.streamShell()` (long-running) + `src/core/logs/`: esquema LogEntry genérico
+  (`source: 'logcat' | 'game'` — SDK futuro sin migración), parser threadtime+year, ring 50k,
+  NDJSON hermano `<id>.logs.jsonl` junto a la sesión; app stream `--pid` re-armado al cambiar
+  pid/app/device + crash stream (`-b crash,events`) adjudicado por pid/package con backoff;
+  WS `{type:'logs'}` en batch + GET /api/logs. Pendiente: overhead en gama baja con device real.
 - [Sampling en dos carriles](tickets/023-sampling-dos-carriles-overhead.md) — el profiler
   exigía al device en gama baja (observer effect de `dumpsys meminfo` cada 1 s). Carril
   rápido (cats + FPS + RSS vivo por VmRSS) cada tick; carril lento (meminfo 15 s,

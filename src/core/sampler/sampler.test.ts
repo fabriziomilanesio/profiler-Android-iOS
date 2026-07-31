@@ -18,6 +18,7 @@ function fixtureTransport(routes: Array<[RegExp, string | (() => ShellResult)]>)
     version: async () => '1.0.41',
     devices: async () => [],
     trackDevices: () => () => {},
+    streamShell: () => () => {},
     shell: async (_serial, command): Promise<ShellResult> => {
       for (const [re, out] of routes) {
         if (re.test(command)) {

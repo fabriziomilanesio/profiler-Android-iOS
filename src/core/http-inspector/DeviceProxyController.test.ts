@@ -36,6 +36,7 @@ function fakeAdb(
       return responder(serial, command)
     },
     trackDevices: () => () => {},
+    streamShell: () => () => {},
   }
 }
 

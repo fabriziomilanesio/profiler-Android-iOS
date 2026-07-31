@@ -15,6 +15,7 @@ function stubTransport(overrides: Partial<AdbTransport> = {}): AdbTransport {
     devices: async () => [],
     shell: async (): Promise<ShellResult> => ({ stdout: '', stderr: '', exitCode: 0 }),
     trackDevices: () => () => {},
+    streamShell: () => () => {},
     ...overrides,
   }
 }

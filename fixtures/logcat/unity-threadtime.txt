@@ -1,0 +1,20 @@
+--------- beginning of system
+--------- beginning of main
+2026-07-31 10:15:02.001 18743 18743 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10412; state: ENABLED
+2026-07-31 10:15:02.087 18743 18790 I Unity   : MemoryManager: Using 'Dynamic Heap' Allocator.
+2026-07-31 10:15:02.114 18743 18790 D Unity   : SystemInfo CPU = ARM64 FP ASIMD AES, Cores = 8, Memory = 3666mb
+2026-07-31 10:15:02.115 18743 18790 D Unity   : SystemInfo ARM big.LITTLE configuration: 2 big (mask: 0xc0), 6 little (mask: 0x3f)
+2026-07-31 10:15:02.320 18743 18790 I Unity   : Loading scene 'MainMenu'
+2026-07-31 10:15:02.321 18743 18790 I Unity   : GameManager.Awake()
+2026-07-31 10:15:02.322 18743 18790 I Unity   :
+2026-07-31 10:15:03.560 18743 18743 W ViewRootImpl[UnityPlayerActivity]: Dropping event due to no window focus: KeyEvent
+2026-07-31 10:15:04.010 18743 18790 V AudioManager: getStreamVolume streamType: 3
+2026-07-31 10:15:07.480 18743 18790 E Unity   : NullReferenceException: Object reference not set to an instance of an object
+2026-07-31 10:15:07.480 18743 18790 E Unity   :   at MusicPlayer.PlayTrack (System.Int32 index) [0x0001a] in <2b1c9807702e4d6db3ac2f0bc9d9b60a>:0
+2026-07-31 10:15:07.480 18743 18790 E Unity   :   at UIController.OnPlayPressed () [0x00003] in <2b1c9807702e4d6db3ac2f0bc9d9b60a>:0
+2026-07-31 10:15:07.480 18743 18790 E Unity   :   at UnityEngine.Events.InvokableCall.Invoke () [0x00011] in <e2f2a2a2f2c14e3db8ea2c051deed835>:0
+2026-07-31 10:15:07.481 18743 18790 E Unity   : UnityEngine.Debug:LogError (object)
+07-31 10:15:08.100 18743 18790 I Unity   : Legacy line without the year modifier
+2026-07-31 10:15:09.226 18743 18801 W Adreno-GSL: <gsl_ldd_control:553>: ioctl fd 89 code 0xc040094a failed: errno 22 Invalid argument
+esta linea no es logcat y el parser la ignora
+2026-07-31 10:15:10.000 18743 18790 I Unity   : FPS: 29.7 (frame 1234)
