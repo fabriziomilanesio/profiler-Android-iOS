@@ -915,6 +915,231 @@
         font-size: 13px;
       }
 
+      /* ================= LOGS PANEL (ticket 028) ================= */
+      .logs {
+        margin-top: 14px;
+        padding: 0;
+        overflow: hidden;
+      }
+      .logs-head {
+        width: 100%;
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 14px 18px;
+        background: none;
+        border: none;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        flex-wrap: wrap;
+      }
+      .logs-head:hover .insp-title {
+        color: var(--secondary-ink);
+      }
+      .logs-counts {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .logs-badge {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        border-radius: 999px;
+        padding: 1px 8px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        background: var(--chip-bg);
+      }
+      .logs-badge.badge-e.nonzero {
+        color: var(--bad);
+        border-color: var(--bad);
+        background: color-mix(in srgb, var(--bad) 10%, transparent);
+      }
+      .logs-badge.badge-w.nonzero {
+        color: var(--warn);
+        border-color: var(--warn);
+        background: color-mix(in srgb, var(--warn) 10%, transparent);
+      }
+      .logs-body {
+        border-top: 1px solid var(--line);
+      }
+      .logs-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .logs-controls input[type='search'] {
+        flex: 1 1 180px;
+        min-width: 140px;
+        font: 12.5px var(--font-body);
+        color: var(--text);
+        background: var(--bg-card2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 9px;
+        outline: none;
+      }
+      .logs-controls input[type='search']:focus {
+        border-color: var(--secondary-ink);
+      }
+      .logs-range {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .logs-range input {
+        font: 11.5px var(--font-body);
+        color: var(--text);
+        background: var(--bg-card2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 4px 6px;
+        outline: none;
+        color-scheme: light;
+      }
+      body[data-theme='dark'] .logs-range input {
+        color-scheme: dark;
+      }
+      .logs-range input:focus {
+        border-color: var(--secondary-ink);
+      }
+      .log-chip-e.active {
+        color: var(--bad);
+        border-color: var(--bad);
+        background: color-mix(in srgb, var(--bad) 10%, transparent);
+      }
+      .log-chip-w.active {
+        color: var(--warn);
+        border-color: var(--warn);
+        background: color-mix(in srgb, var(--warn) 10%, transparent);
+      }
+      .log-chip-i.active,
+      .log-chip-d.active {
+        color: var(--secondary-ink);
+        border-color: var(--secondary-ink);
+        background: color-mix(in srgb, var(--secondary) 10%, transparent);
+      }
+      .app-chip.on {
+        color: var(--primary);
+        border-color: var(--primary);
+      }
+      .logs-hidden {
+        padding: 6px 14px;
+        font-size: 11px;
+        color: var(--muted);
+        border-bottom: 1px dashed var(--line);
+        background: var(--bg-card2);
+      }
+      .logs-scroll-wrap {
+        position: relative;
+      }
+      .logs-scroll {
+        max-height: 340px;
+        overflow: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .log-row {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 1px 14px;
+        border-left: 3px solid transparent;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .log-row:hover {
+        background: color-mix(in srgb, var(--primary) 5%, transparent);
+      }
+      .log-time {
+        color: var(--muted);
+        flex: 0 0 auto;
+        font-variant-numeric: tabular-nums;
+      }
+      .log-lvl {
+        flex: 0 0 12px;
+        font-weight: 700;
+        color: var(--muted);
+        text-align: center;
+      }
+      .log-tag {
+        flex: 0 0 auto;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--secondary-ink);
+      }
+      .log-msg {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      /* colores por nivel: E/F rojo, W amarillo, resto neutro (ambos temas) */
+      .log-row.lvl-E .log-lvl,
+      .log-row.lvl-F .log-lvl,
+      .log-row.lvl-E .log-msg,
+      .log-row.lvl-F .log-msg {
+        color: var(--bad);
+      }
+      .log-row.lvl-W .log-lvl,
+      .log-row.lvl-W .log-msg {
+        color: var(--warn);
+      }
+      .log-row.lvl-V .log-msg,
+      .log-row.lvl-D .log-msg {
+        color: var(--muted);
+      }
+      /* crash/ANR resaltado: fondo + borde rojo (el badge marca el inicio del bloque) */
+      .log-row.crash {
+        background: color-mix(in srgb, var(--bad) 7%, transparent);
+        border-left-color: var(--bad);
+      }
+      .log-crash-badge {
+        flex: 0 0 auto;
+        font: 700 9px var(--font-body);
+        letter-spacing: 0.08em;
+        color: #fff;
+        background: var(--bad);
+        border-radius: 4px;
+        padding: 1px 6px;
+        align-self: center;
+      }
+      .logs-live {
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        font: 600 12px var(--font-body);
+        color: #fff;
+        background: var(--primary);
+        border: none;
+        border-radius: 999px;
+        padding: 6px 14px;
+        cursor: pointer;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        white-space: nowrap;
+      }
+      .logs-empty {
+        padding: 28px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+        font-family: var(--font-body);
+      }
+
       footer.credits {
         margin-top: 16px;
         text-align: center;
@@ -1210,12 +1435,67 @@
       </div>
     </section>
 
+    <!-- Logs de la app (ticket 028): sección colapsable debajo del inspector de red.
+         Filtros por nivel/texto/fecha + pausa de auto-scroll; crashes resaltados. -->
+    <section class="card logs" id="logsSection">
+      <button class="logs-head" id="logsToggle" type="button" title="Mostrar / ocultar logs">
+        <span class="insp-title">Logs</span>
+        <span class="insp-sub">logcat de la app · crashes/ANR resaltados</span>
+        <span class="logs-counts">
+          <span><b id="logsTotal">0</b> logs</span>
+          <span id="logsMatched" hidden></span>
+          <span class="logs-badge badge-e" id="logsBadgeE">E 0</span>
+          <span class="logs-badge badge-w" id="logsBadgeW">W 0</span>
+          <span class="caret" id="logsCaret">▼</span>
+        </span>
+      </button>
+      <div class="logs-body" id="logsBody" hidden>
+        <div class="logs-controls">
+          <span id="logsChips">
+            <button class="app-chip log-chip-e active" data-chip="E" type="button">Error</button>
+            <button class="app-chip log-chip-w active" data-chip="W" type="button">Warn</button>
+            <button class="app-chip log-chip-i active" data-chip="I" type="button">Info</button>
+            <button class="app-chip log-chip-d active" data-chip="D" type="button">
+              Debug+Verbose
+            </button>
+          </span>
+          <input
+            id="logsSearch"
+            type="search"
+            placeholder="Buscar en message y tag…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <span class="logs-range">
+            desde <input id="logsFrom" type="datetime-local" /> hasta
+            <input id="logsTo" type="datetime-local" />
+          </span>
+          <button class="app-chip" id="logsOrder" type="button" title="Orden temporal">
+            ↓ viejo→nuevo
+          </button>
+          <button class="app-chip" id="logsPause" type="button" title="Pausar el auto-scroll">
+            ⏸ Pausa
+          </button>
+        </div>
+        <div class="logs-hidden" id="logsHidden" hidden></div>
+        <div class="logs-scroll-wrap">
+          <div class="logs-scroll" id="logsScroll">
+            <div id="logsList"></div>
+            <div class="logs-empty" id="logsEmpty">Esperando logs de la app…</div>
+          </div>
+          <button class="logs-live" id="logsLive" type="button" hidden>▼ volver al vivo</button>
+        </div>
+      </div>
+    </section>
+
     <footer class="credits">
       Live data at 1 Hz from adb · <b>Evermore Android Profiler</b> · Odaclick Game Studio
     </footer>
 
     <script src="vendor/echarts.min.js"></script>
     <script src="render.js"></script>
+    <script src="logsCore.js"></script>
+    <script src="logsPanel.js"></script>
     <script src="live.js"></script>
   </body>
 </html>

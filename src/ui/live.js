@@ -1,8 +1,9 @@
 /**
  * live.js — WebSocket client for the LIVE dashboard (ticket 021).
- * Connects to /ws on the same origin, receives {type:"device"|"sample"|"app"|"flow"}
- * messages, and drives ProfilerDashboard (render.js). Auto-reconnects if the socket
- * drops. También maneja el selector de apps (dropdown del header + /api/packages).
+ * Connects to /ws on the same origin, receives {type:"device"|"sample"|"app"|"flow"|"logs"}
+ * messages, and drives ProfilerDashboard (render.js) + LogsPanel (logsPanel.js).
+ * Auto-reconnects if the socket drops. También maneja el selector de apps
+ * (dropdown del header + /api/packages).
  */
 ;(function () {
   'use strict'
@@ -30,8 +31,11 @@
   var appSwitching = false
 
   function onAppStatus(app) {
-    // cambio de app: las series del timeline son de la app anterior — resetear
-    if (pkg && pkg !== app.packageName) ProfilerDashboard.resetSeries()
+    // cambio de app: las series del timeline y los logs son de la app anterior — resetear
+    if (pkg && pkg !== app.packageName) {
+      ProfilerDashboard.resetSeries()
+      LogsPanel.clear()
+    }
     pkg = app.packageName
     appSel.pkgLabel.textContent = app.packageName
     if (app.pid === null) {
@@ -561,6 +565,9 @@
     ws.addEventListener('open', function () {
       reconnectDelay = 1000
       ProfilerDashboard.setConnected(true)
+      // bootstrap del panel de logs (últimas N del ring del server); el merge
+      // dedupea contra lo que llegue por WS mientras tanto (ticket 028)
+      LogsPanel.bootstrap()
     })
 
     ws.addEventListener('message', function (ev) {
@@ -571,8 +578,11 @@
         return
       }
       if (msg.type === 'device') {
-        // cambio de device: las series del timeline son del device anterior
-        if (device && device.serial !== msg.device.serial) ProfilerDashboard.resetSeries()
+        // cambio de device: las series del timeline y los logs son del device anterior
+        if (device && device.serial !== msg.device.serial) {
+          ProfilerDashboard.resetSeries()
+          LogsPanel.clear()
+        }
         device = msg.device
         // el package lo anuncia el server con {type:"app"} — acá solo la ficha
         ProfilerDashboard.setDevice(device, pkg)
@@ -582,6 +592,8 @@
         addFlow(msg.flow)
       } else if (msg.type === 'app') {
         onAppStatus(msg.app)
+      } else if (msg.type === 'logs') {
+        LogsPanel.onLogs(msg.entries)
       }
     })
 

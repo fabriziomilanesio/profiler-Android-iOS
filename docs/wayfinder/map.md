@@ -133,6 +133,13 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   ≥ 15 % de FPS/GPU vs base fría, sin base no acusa); chart de correlación en dos grids
   con dataZoom compartido y tramos rojos sombreados; target declarado, todo puro en
   `src/core/perf/verdict.ts`; hook `session.marks` listo para el 030.
+- [Panel de logs en el dashboard — filtro por nivel, texto y fecha](tickets/028-panel-logs-dashboard.md) —
+  sección colapsable bajo el Network Inspector: chips E/W/I/D+V, búsqueda de texto,
+  rango desde/hasta, orden asc/desc, pausa de auto-scroll (botón + scroll, "volver al
+  vivo"), crashes resaltados con badge por bloque; lógica pura en `src/ui/logsCore.js`
+  (UMD: browser y bun:test comparten el archivo), render por cap de 1000 filas con
+  indicador (no virtualización), dedup bootstrap↔WS por `ts|pid|tid|level|tag|message`;
+  `LogsPanel.getFilteredEntries()` listo para el export del 029.
 - [Sampling en dos carriles](tickets/023-sampling-dos-carriles-overhead.md) — el profiler
   exigía al device en gama baja (observer effect de `dumpsys meminfo` cada 1 s). Carril
   rápido (cats + FPS + RSS vivo por VmRSS) cada tick; carril lento (meminfo 15 s,
