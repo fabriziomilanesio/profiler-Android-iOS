@@ -96,7 +96,8 @@ describe('LogcatCapture crashes/ANR', () => {
     cap.setPid(19102) // la app renació con otro pid: ambos son "nuestros"
     const crash = crashStream(streams)[0]!
     for (const line of CRASH_FIXTURE) crash.onLine(line)
-    // 7 líneas AndroidRuntime (pid viejo 18743) + 5 nativas (pid nuevo 19102) + 1 am_anr
+    // 7 AndroidRuntime (pid viejo 18743) + F libc (pid nuevo 19102) +
+    // 4 F DEBUG (pid de crash_dump 19178, adjudicadas por contenido) + 1 am_anr
     expect(entries).toHaveLength(13)
     expect(entries.every((e) => e.isCrash === true)).toBe(true)
     // el crash de com.other.app (pid 4444) y am_proc_died quedan afuera
@@ -106,6 +107,30 @@ describe('LogcatCapture crashes/ANR', () => {
     const java = entries.filter((e) => e.tag === 'AndroidRuntime')
     expect(java[0]!.message).toBe('FATAL EXCEPTION: UnityMain')
     expect(java[3]!.message).toStartWith('\tat com.unity3d.player')
+  })
+
+  test('tombstone nativo real: las F DEBUG salen del pid de crash_dump y se capturan enteras', () => {
+    const { cap, streams, entries } = capture()
+    cap.setPid(19102)
+    const crash = crashStream(streams)[0]!
+    for (const line of CRASH_FIXTURE) crash.onLine(line)
+    // en Android real crash_dump64 emite el tombstone con SU pid (19178 en el
+    // fixture), no el de la app: la adjudicación va por `>>> pkg <<<` + memoria
+    // del pid emisor para los frames siguientes
+    const tomb = entries.filter((e) => e.tag === 'DEBUG')
+    expect(tomb).toHaveLength(4)
+    expect(tomb.every((e) => e.pid === 19178)).toBe(true)
+    // completo: incluye el banner PREVIO a la línea `>>> pkg <<<` (retro-adjudicado)…
+    expect(tomb[0]!.message).toStartWith('*** ***')
+    expect(tomb[1]!.message).toStartWith('Build fingerprint:')
+    expect(tomb[2]!.message).toContain('>>> com.evermore.oda.qa <<<')
+    // …y el frame nativo posterior, que ya no menciona el package
+    expect(tomb[3]!.message).toContain('#00 pc')
+    expect(tomb[3]!.message).toEndWith('libil2cpp.so')
+    // la línea `F libc: Fatal signal` sí llega con el pid de la app (19102)
+    const libc = entries.filter((e) => e.tag === 'libc')
+    expect(libc).toHaveLength(1)
+    expect(libc[0]!.pid).toBe(19102)
   })
 })
 
@@ -145,6 +170,51 @@ describe('LogcatCapture ciclo de vida', () => {
     const rearmed = appStream(streams)
     expect(rearmed).toHaveLength(2)
     expect(rearmed[1]!.command).toBe(LOGCAT_COMMANDS.app(18743))
+  })
+
+  test('una línea NO parseable no resetea el backoff (logcat que solo escupe separadores)', async () => {
+    // backoff más ancho para que los sleeps distingan 1er delay (30) de 2do (60)
+    const { t, streams } = stubTransport()
+    new LogcatCapture(t, 'SERIAL', PKG, () => {}, { retryBaseMs: 30, retryMaxMs: 500 }).start(18743)
+    appStream(streams)[0]!.onExit?.(null) // attempts 0→1, retry en 30 ms
+    await new Promise((r) => setTimeout(r, 45))
+    const rearmed = appStream(streams)[1]!
+    rearmed.onLine('--------- beginning of main') // separador: el stream NO está sano
+    rearmed.onExit?.(null) // sin reset ⇒ attempts 1→2, retry en 60 ms
+    await new Promise((r) => setTimeout(r, 35))
+    expect(appStream(streams)).toHaveLength(2) // con reset habría re-armado ya (30 ms)
+    await new Promise((r) => setTimeout(r, 45))
+    expect(appStream(streams)).toHaveLength(3) // el backoff siguió su curso
+  })
+
+  test("doble onExit del mismo proceso ('error' + 'close') programa UN solo retry", async () => {
+    const { t, streams } = stubTransport()
+    new LogcatCapture(t, 'SERIAL', PKG, () => {}, { retryBaseMs: 30, retryMaxMs: 500 }).start(18743)
+    const app = appStream(streams)[0]!
+    app.onExit?.(null) // 'error': attempts 0→1, retry en 30 ms
+    app.onExit?.(null) // 'close' del MISMO proceso: ignorado (retry ya programado)
+    await new Promise((r) => setTimeout(r, 45))
+    expect(appStream(streams)).toHaveLength(2) // un solo re-arme, sin timer fantasma
+    // la progresión del backoff no se infló: el próximo retry es 60 ms (no 120)
+    appStream(streams)[1]!.onExit?.(null)
+    await new Promise((r) => setTimeout(r, 80))
+    expect(appStream(streams)).toHaveLength(3)
+  })
+
+  test('el re-arme no duplica la línea histórica que -T 1 re-entrega', async () => {
+    const { streams, entries } = capture()
+    const crash = crashStream(streams)[0]!
+    const fatal =
+      '2026-07-31 10:22:30.500 18743 18790 F libc    : Fatal signal 11 (SIGSEGV), code 1'
+    crash.onLine(fatal)
+    expect(entries).toHaveLength(1)
+    crash.onExit?.(null) // el crash stream murió: re-arme con backoff
+    await new Promise((r) => setTimeout(r, 30))
+    const rearmed = crashStream(streams)[1]!
+    rearmed.onLine(fatal) // histórico de -T 1: la MISMA línea ⇒ dedupeada
+    expect(entries).toHaveLength(1)
+    rearmed.onLine(fatal) // una repetición posterior real sí entra
+    expect(entries).toHaveLength(2)
   })
 
   test('stop() corta los streams vivos y cancela reintentos pendientes', async () => {

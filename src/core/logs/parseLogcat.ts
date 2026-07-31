@@ -38,6 +38,9 @@ export function parseLogcatLine(
   line: string,
   opts: { fallbackYear?: number } = {},
 ): ParsedLogcatLine | null {
+  // adb shell v1 (pre-API 24 / algunos OEM) entrega CRLF: sin recortar el \r
+  // final, el message arrastra un caracter invisible que rompe comparaciones
+  if (line.endsWith('\r')) line = line.slice(0, -1)
   if (!line || line.startsWith('---------')) return null
   const m = LINE_RE.exec(line)
   if (!m) return null

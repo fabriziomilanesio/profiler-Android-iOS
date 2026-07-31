@@ -522,9 +522,15 @@
     var fpsAxisMax = Math.ceil(Math.max(target * 1.2, maxFps * 1.05, 1) / 5) * 5
 
     var redFill = theme === 'dark' ? 'rgba(255,77,109,0.14)' : 'rgba(225,29,72,0.09)'
+    // ± medio tick REAL para que un tramo de un solo tick tenga ancho visible.
+    // El intervalo sale del samplingHz embebido en la sesión (gama baja samplea
+    // a 0.5 Hz ⇒ tick de 2 s ⇒ ±1000 ms); 500 ms hardcodeado asumía tick de 1 s.
+    var halfTickMs =
+      sess.samplingHz && isFinite(sess.samplingHz) && sess.samplingHz > 0
+        ? 500 / sess.samplingHz
+        : 500
     var redAreas = (V.redSpans || []).map(function (sp) {
-      // ± medio tick para que un tramo de un solo tick tenga ancho visible
-      return [{ xAxis: sp.startTs - 500 }, { xAxis: sp.endTs + 500 }]
+      return [{ xAxis: sp.startTs - halfTickMs }, { xAxis: sp.endTs + halfTickMs }]
     })
     function markRed(extra) {
       var m = { silent: true, itemStyle: { color: redFill }, data: redAreas }

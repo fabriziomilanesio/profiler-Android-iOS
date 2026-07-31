@@ -19,6 +19,10 @@ export function run(command: string, args: string[], options: RunOptions = {}): 
     let stdout = ''
     let stderr = ''
     let settled = false
+    // TextDecoder en modo stream: chunk.toString() por chunk mutila un carácter
+    // multi-byte partido entre dos chunks (U+FFFD en medio del output)
+    const outDec = new TextDecoder()
+    const errDec = new TextDecoder()
 
     const timeout = options.timeoutMs
       ? setTimeout(() => {
@@ -28,14 +32,16 @@ export function run(command: string, args: string[], options: RunOptions = {}): 
         }, options.timeoutMs)
       : undefined
 
-    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
-    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+    child.stdout.on('data', (chunk: Buffer) => (stdout += outDec.decode(chunk, { stream: true })))
+    child.stderr.on('data', (chunk: Buffer) => (stderr += errDec.decode(chunk, { stream: true })))
     child.on('error', (err) => {
       if (timeout) clearTimeout(timeout)
       if (!settled) reject(err)
     })
     child.on('close', (code) => {
       if (timeout) clearTimeout(timeout)
+      stdout += outDec.decode() // flush de un eventual multi-byte colgado al final
+      stderr += errDec.decode()
       if (!settled) resolve({ stdout, stderr, exitCode: code ?? -1 })
     })
   })
@@ -50,8 +56,11 @@ export function streamLines(
 ): () => void {
   const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
   let buffer = ''
+  // ídem run(): logcat a chorro corta chunks en cualquier byte; decodificar en
+  // modo stream evita partir un carácter UTF-8 multi-byte entre dos chunks
+  const decoder = new TextDecoder()
   child.stdout.on('data', (chunk: Buffer) => {
-    buffer += chunk.toString()
+    buffer += decoder.decode(chunk, { stream: true })
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
     for (const line of lines) onLine(line)

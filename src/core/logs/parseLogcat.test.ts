@@ -43,6 +43,13 @@ describe('parseLogcatLine (threadtime,year)', () => {
     expect(parseLogcatLine('esta linea no es logcat y el parser la ignora')).toBeNull()
   })
 
+  test('CRLF de adb shell v1: el \\r final se recorta (no queda en el message)', () => {
+    const p = parseLogcatLine('2026-07-31 10:15:02.087 18743 18790 I Unity   : hola\r')
+    expect(p?.message).toBe('hola')
+    // separador con \r también se reconoce como separador
+    expect(parseLogcatLine('--------- beginning of main\r')).toBeNull()
+  })
+
   test('mensaje vacío es válido (Debug.Log(""))', () => {
     const p = parseLogcatLine('2026-07-31 10:15:02.322 18743 18790 I Unity   :')
     expect(p?.message).toBe('')

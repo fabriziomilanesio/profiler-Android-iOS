@@ -83,8 +83,8 @@ describe('Sampler', () => {
     // RSS vivo del /proc/<pid>/status embebido en el cat combinado (204800 kB = 200 MB)
     expect(s.mem.rss).toBeCloseTo(200, 0)
     // frame-times del MISMO dump de timestats (ticket 024): sin comandos extra
-    expect(s.frame.p50Ms).toBe(33)
-    expect(s.frame.totalFrames).toBe(1178)
+    expect(s.frame!.p50Ms).toBe(33)
+    expect(s.frame!.totalFrames).toBe(1178)
   })
 
   test('frame-times/jank usan el refreshHz del device (90 Hz ⇒ cadencia de 3 vsyncs)', async () => {
@@ -92,11 +92,11 @@ describe('Sampler', () => {
     const sampler = new Sampler(t, 'REDACTED-SERIAL', PKG, 18078, { refreshHz: 90 })
     const s = await sampler.sampleOnce()
     // layer real: 1178 frames, 11 por encima de la cadencia (44 ms ×10 + 58 ms ×1)
-    expect(s.frame.p50Ms).toBe(33)
-    expect(s.frame.p90Ms).toBe(33)
-    expect(s.frame.p99Ms).toBe(33)
-    expect(s.frame.jankFrames).toBe(11)
-    expect(s.frame.jankPct).toBeCloseTo((11 / 1178) * 100, 3)
+    expect(s.frame!.p50Ms).toBe(33)
+    expect(s.frame!.p90Ms).toBe(33)
+    expect(s.frame!.p99Ms).toBe(33)
+    expect(s.frame!.jankFrames).toBe(11)
+    expect(s.frame!.jankPct).toBeCloseTo((11 / 1178) * 100, 3)
   })
 
   test('timestats que falla ⇒ frame todo null (best-effort, sin romper el tick)', async () => {
@@ -105,8 +105,8 @@ describe('Sampler', () => {
     const sampler = new Sampler(t, 'REDACTED-SERIAL', PKG, 18078, { refreshHz: 90 })
     const s = await sampler.sampleOnce()
     expect(s.fps).toBeNull()
-    expect(s.frame.p50Ms).toBeNull()
-    expect(s.frame.jankPct).toBeNull()
+    expect(s.frame!.p50Ms).toBeNull()
+    expect(s.frame!.jankPct).toBeNull()
     expect(s.mem.pss).toBeCloseTo(905, 0) // el resto intacto
   })
 

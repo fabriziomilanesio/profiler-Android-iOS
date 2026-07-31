@@ -41,4 +41,12 @@ describe('LogRing', () => {
     ring.push(entry(1))
     expect(ring.last(0)).toEqual([])
   })
+
+  test('cap 0 no degenera: push es no-op, sin NaN en el índice', () => {
+    const ring = new LogRing(0)
+    ring.push(entry(1))
+    ring.push(entry(2))
+    expect(ring.size).toBe(0)
+    expect(ring.last(5)).toEqual([])
+  })
 })

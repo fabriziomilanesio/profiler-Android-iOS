@@ -89,6 +89,8 @@
   // bundler): verde ≥ target · amarillo ≥ 80% del target · rojo abajo. Sin FPS o
   // target inválido ⇒ null (sin color, no rojo). live.js actualiza fpsTarget desde
   // /api/config (default 30) y el cambio re-pinta en caliente.
+  // GUARDIA: src/ui/mirrors.test.ts extrae esta función del archivo y la compara
+  // contra el core — si cambiás un lado y no el otro, ese test rompe.
   var fpsTarget = 30
 
   function fpsStatusOf(fps, target) {

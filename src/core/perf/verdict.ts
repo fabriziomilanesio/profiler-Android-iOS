@@ -64,6 +64,12 @@ export interface WorstWindow {
   score: number
   avgFps: number | null
   minFps: number | null
+  /**
+   * Promedio SIMPLE de los jankPct por tick de la ventana — semántica distinta
+   * al jank de sesión (FrameSummary.jankPct, ponderado por frames del tick).
+   * Acá alcanza: describe el tramo a golpe de vista y los ticks de una misma
+   * ventana de 30 s traen conteos de frames parecidos.
+   */
   avgJankPct: number | null
   avgGpu: number | null
   avgCpu: number | null
@@ -243,6 +249,12 @@ const NULL_THROTTLING: ThrottlingReport = {
  * ≥ sustainS Y caída ≥ dropRatio del FPS y/o GPU% promedio en el tramo caliente
  * contra la línea de base fría ANTERIOR al tramo. Sin línea de base (la sesión
  * arranca ya caliente, o sin datos) ⇒ NO se acusa.
+ *
+ * Nota (decisión consciente del ticket 026, no "corregir" sin datos de campo):
+ * se usa la CAÍDA de GPU% como confirmación, aunque bajo throttling real la
+ * utilización suele SUBIR (el clock baja y el mismo trabajo ocupa más del
+ * budget) — en ese caso esta señal no dispara y solo cuenta la caída de FPS.
+ * Es coherente con el sesgo del veredicto: mejor sub-acusar que acusar mal.
  */
 export function detectThrottling(
   points: VerdictPoint[],

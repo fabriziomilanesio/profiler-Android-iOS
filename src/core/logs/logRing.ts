@@ -19,6 +19,7 @@ export class LogRing {
   }
 
   push(entry: LogEntry): void {
+    if (this.cap <= 0) return // cap 0/negativo: ring degenerado, no guardar nada
     if (this.buf.length < this.cap) {
       this.buf.push(entry)
       return

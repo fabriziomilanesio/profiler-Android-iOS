@@ -92,8 +92,13 @@ export interface Sample {
   gpu: number | null
   /** FPS promedio (averageFPS de SurfaceFlinger timestats) */
   fps: number | null
-  /** frame-times/jank del tick (mismo dump que fps). Sesiones viejas: undefined. */
-  frame: FrameSample
+  /**
+   * frame-times/jank del tick (mismo dump que fps). Opcional porque las sesiones
+   * pre-024 del historial no lo traen: el `?` obliga al compilador a vigilar el
+   * acceso (antes era disciplina de `?? null` a mano sobre un campo requerido).
+   * El sampler SIEMPRE lo emite en sesiones nuevas.
+   */
+  frame?: FrameSample
   /** temperatura principal (CPU/AP) en °C */
   tempC: number | null
   /** memoria PSS + breakdown */
