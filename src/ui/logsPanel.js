@@ -140,7 +140,7 @@
     els.badgeW.classList.toggle('nonzero', counts.W > 0)
     if (open) {
       els.matched.hidden = false
-      els.matched.textContent = matchedTotal + ' en filtro'
+      els.matched.textContent = matchedTotal + ' in filter'
     } else {
       els.matched.hidden = true
     }
@@ -151,11 +151,11 @@
     if (hidden > 0) {
       els.hidden.hidden = false
       els.hidden.textContent =
-        'Mostrando las ' +
+        'Showing the ' +
         renderedCount +
-        ' más recientes · ' +
+        ' most recent · ' +
         hidden +
-        ' más antiguas pasan el filtro (refiná texto/fecha para verlas)'
+        ' older lines match the filter (refine text/date to see them)'
     } else {
       els.hidden.hidden = true
     }
@@ -166,13 +166,13 @@
       els.live.hidden = false
       els.live.textContent =
         (filter.order === 'desc' ? '▲' : '▼') +
-        ' volver al vivo' +
-        (newSincePause > 0 ? ' (' + newSincePause + ' nuevas)' : '')
+        ' back to live' +
+        (newSincePause > 0 ? ' (' + newSincePause + ' new)' : '')
     } else {
       els.live.hidden = true
     }
     els.pause.classList.toggle('on', pausedManual)
-    els.pause.textContent = pausedManual ? '▶ Reanudar' : '⏸ Pausa'
+    els.pause.textContent = pausedManual ? '▶ Resume' : '⏸ Pause'
   }
 
   function atLiveEdge() {
@@ -331,7 +331,7 @@
    * evita que el click burbujee a document y lo cierre (patrón de live.js).
    */
   function downloadExport(payload, container, onStatus) {
-    onStatus('Exportando logs…', '')
+    onStatus('Exporting logs…', '')
     fetch('/api/logs/export', { method: 'POST', body: JSON.stringify(payload) })
       .then(function (r) {
         if (!r.ok) {
@@ -351,11 +351,11 @@
           setTimeout(function () {
             URL.revokeObjectURL(a.href)
           }, 10000)
-          onStatus('Logs exportados (copia en la carpeta de reportes).', 'ok')
+          onStatus('Logs exported (copy in the reports folder).', 'ok')
         })
       })
       .catch(function (e) {
-        onStatus('No se pudo exportar: ' + e.message, 'err')
+        onStatus('Export failed: ' + e.message, 'err')
       })
   }
 
@@ -368,7 +368,7 @@
       // el export de "lo visible" serializa lo que el cliente ya sabe que se ve
       payload.entries = getFilteredEntries()
       if (payload.entries.length === 0) {
-        setExportStatus('Sin líneas con el filtro actual.', 'err')
+        setExportStatus('No lines match the current filter.', 'err')
         return
       }
     }
@@ -421,7 +421,7 @@
 
   els.order.addEventListener('click', function () {
     filter.order = filter.order === 'asc' ? 'desc' : 'asc'
-    els.order.textContent = filter.order === 'asc' ? '↓ viejo→nuevo' : '↑ nuevo→viejo'
+    els.order.textContent = filter.order === 'asc' ? '↓ old→new' : '↑ new→old'
     rebuild()
   })
 

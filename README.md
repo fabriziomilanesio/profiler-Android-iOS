@@ -14,7 +14,7 @@ batería (nivel/temp/mA) · red (KB/s) · inspector de requests HTTP.
 
 > **Convenciones de medición.** El CPU de la app es _share-of-device_ (0–100% del teléfono
 > entero, ya normalizado por cores): un thread saturando 1 de 8 cores marca 12.5%, no 100% —
-> por eso el gauge muestra también la conversión a "% de un core". La RAM de la app es **PSS**
+> por eso el tile de CPU muestra también la conversión a "% de un core". La RAM de la app es **PSS**
 > (`dumpsys meminfo`, memoria compartida prorrateada — la métrica que usa Android para decidir
 > kills). Apps multi-proceso (p.ej. Chrome y sus pestañas `:sandboxed_process`) se agregan
 > sumando main + hijos; el uso total del device sale de `/proc/stat` y `/proc/meminfo`
@@ -30,6 +30,19 @@ batería (nivel/temp/mA) · red (KB/s) · inspector de requests HTTP.
 > juego en gama baja (contiende con el proceso vía mmap_lock) — observer effect que este
 > esquema elimina. El intervalo del carril rápido es **Auto** por default: 2 s en devices
 > con < 4 GB de RAM, 1 s en el resto; se puede fijar a mano en Configuración (☰).
+
+**El dashboard** (rediseño 2026-07 — tickets 031/032) se organiza por temas, legible de un
+vistazo y **dark por default** (light a un toggle, ☀️ en el header o en ☰ Configuración;
+persiste): **Performance** protagonista — FPS como número grande coloreado por el semáforo
+del target (pill en palabras + chip `target N` + jank%/p90/p99 de frame-time) junto a una
+timeline de dos carriles con unidades reales (FPS arriba con markline del target, bandas
+rojas en los tramos bajo target y marcas CRASH; GPU%/CPU% abajo, crosshair compartido) —,
+**Memory & System** (donut de PSS + KPIs PSS/RSS + barras app/device, trend de PSS con
+puntos ámbar de GC; tiles de CPU/Temp/Battery con barras por umbral), **Network**
+(RX/TX + sparkline + inspector) y **App logs**. En el header vive un **mini-veredicto en
+vivo** (`PERF GOOD / WATCH / POOR`, mismo semáforo que el reporte, sobre el FPS promedio de
+los últimos 60 s + % de ticks en verde; los crashes de la sesión suman un chip rojo;
+`WARMING UP` mientras junta datos).
 
 **Stack:** TypeScript + [Bun](https://bun.sh) · UI web local (WebSocket) · Apache ECharts.
 
@@ -171,8 +184,10 @@ Flags: `--package <pkg>` (fuerza una app, pisa el auto-resume) · `--port <n>` (
   automática).
 
 **Demo sin adb**: `bun scripts/smoke-selector.ts` levanta el dashboard con un device fake
-(apps, devices y pids en memoria) en `http://localhost:4599` — sirve para ver el UI, los
-selectores y el export sin teléfono ni adb.
+(apps, devices, pids, logs y **métricas sintéticas guionadas** en memoria) en
+`http://localhost:4599` — sirve para ver el UI completo sin teléfono ni adb: FPS ~32 sobre
+target 30 con una caída a ~11 FPS cada ciclo (semáforo rojo + bandas rojas + `PERF POOR`),
+crash sintético en logcat (marca CRASH + chip del veredicto), GC, memoria, batería y red.
 
 ## Builds (ejecutables standalone)
 

@@ -73,7 +73,8 @@ export function defaultAppStoreData(): AppStoreData {
     last: null,
     usage: {},
     filterTerm: 'evermore',
-    theme: 'light',
+    // dark protagonista desde el rediseño del dashboard (tickets 031/032)
+    theme: 'dark',
     intervalMs: 1000,
     intervalAuto: true,
     reportsDir: defaultReportsDir(),

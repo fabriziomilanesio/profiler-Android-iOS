@@ -1,88 +1,113 @@
 /**
- * render.js — ECharts wiring + render for the LIVE dashboard (ticket 021).
- * Adapted from prototypes/dashboard/app.js: same look, but data-source-agnostic.
- * live.js feeds it real Samples over WebSocket; this file only renders.
+ * render.js — render del LIVE dashboard (tickets 021 → rediseño 032).
+ * Implementa el contrato visual del prototipo del 031 (prototypes/redesign/app.js)
+ * sobre datos REALES: live.js alimenta render() con Samples del WebSocket; acá
+ * solo hay ECharts + DOM, data-source-agnostic.
  *
- * Differences vs the prototype:
- *  - Fed by real Samples ({cpu, gpu, fps, frame:{...}, tempC, mem:{...}, battery:{...},
- *    netRxKb, netTxKb}); every field may be null → drawn as N/A (never 0).
- *  - frame (ticket 024): p90/p99 frame-time + jank% as a subtitle under the GPU·FPS donut.
- *  - 5th gauge: Battery (level %). A "CHARGING" chip shows when plugged.
- *  - Network shows N/A note when netRxKb/netTxKb are null (bucketed, not realtime).
+ * Piezas (031/032):
+ *  - FPS hero: número 84 px coloreado por el semáforo del 025, pill de estado en
+ *    palabras, chip del target y jank%/p90/p99 (024) como sub-stats.
+ *  - Timeline de perf: 2 carriles apilados (FPS arriba con markline del target,
+ *    bandas rojas y marcas CRASH; GPU%/CPU% abajo), eje X + crosshair compartidos,
+ *    unidades reales por carril. Ventana 180 s. Serie "CPU device %" off default.
+ *  - Memory: donut PSS + KPIs (PSS/RSS) + barras app/device + trend de PSS con
+ *    puntos ámbar de GC (live.js los detecta en logcat → noteGc).
+ *  - System: tiles CPU/Temp/Battery con número grande + barra por umbral.
+ *  - Mini-veredicto vivo del header: fpsStatus(avg FPS 60 s) + % de ticks en
+ *    verde (espejo del esquema del reporte 026); crashes → chip rojo (noteCrash);
+ *    < 5 ticks con dato ⇒ WARMING UP.
+ *  - Todo campo del Sample puede ser null → se dibuja como N/A (nunca 0).
  */
 ;(function (global) {
   'use strict'
 
+  // ---- paletas de charts (espejo de los tokens CSS; validadas con dataviz) ----
   var PALETTES = {
-    light: {
-      bg: '#F4F4F9',
-      card: '#FFFFFF',
-      card2: '#FBFBFE',
-      primary: '#EB008B',
-      secondary: '#009E96',
-      text: '#1C1C28',
-      muted: '#66667A',
-      line: '#E2E2EC',
-      ok: '#0FA968',
-      warn: '#E08A00',
-      bad: '#E11D48',
-      violet: '#7C5CE0',
-      amber: '#D98A00',
-      track: '#ECECF4',
-      split: 'rgba(28,28,40,.09)',
-      legendOff: '#C4C4D2',
-      rxArea: 'rgba(0,158,150,.12)',
-      txArea: 'rgba(235,0,139,.10)',
-    },
     dark: {
-      bg: '#0B0B10',
-      card: '#15151D',
-      card2: '#1B1B25',
-      primary: '#EB008B',
-      secondary: '#00E6DA',
       text: '#F2F2F6',
       muted: '#9B9BAB',
       line: '#2A2A38',
+      card: '#15151D',
+      card2: '#1B1B25',
+      split: 'rgba(42,42,56,.55)',
+      legendOff: '#44444F',
       ok: '#2EE59D',
       warn: '#FFC24B',
       bad: '#FF4D6D',
-      violet: '#B18CFF',
-      amber: '#FFB03A',
-      track: '#22222e',
-      split: 'rgba(42,42,56,.55)',
-      legendOff: '#44444f',
-      rxArea: 'rgba(0,230,218,.12)',
+      fps: '#00A89E',
+      gpu: '#EB008B',
+      cpu: '#8B6BE8',
+      temp: '#C77F00',
+      memJava: '#EB008B',
+      memGraphics: '#8B6BE8',
+      memNative: '#00A89E',
+      memCode: '#C77F00',
+      memStack: '#7A7A90',
+      memOther: '#4E4E62',
+      redBand: 'rgba(255,77,109,.09)',
+      fpsArea: 'rgba(0,168,158,.10)',
+      memArea: 'rgba(139,107,232,.14)',
+      rxArea: 'rgba(0,168,158,.14)',
       txArea: 'rgba(235,0,139,.12)',
+      track: '#22222E',
+    },
+    light: {
+      text: '#1C1C28',
+      muted: '#66667A',
+      line: '#E2E2EC',
+      card: '#FFFFFF',
+      card2: '#FBFBFE',
+      split: 'rgba(28,28,40,.09)',
+      legendOff: '#C4C4D2',
+      ok: '#0FA968',
+      warn: '#E08A00',
+      bad: '#E11D48',
+      fps: '#009E96',
+      gpu: '#EB008B',
+      cpu: '#7C5CE0',
+      temp: '#B8860B',
+      memJava: '#EB008B',
+      memGraphics: '#7C5CE0',
+      memNative: '#009E96',
+      memCode: '#B8860B',
+      memStack: '#9A9AB0',
+      memOther: '#C6C6D4',
+      redBand: 'rgba(225,29,72,.07)',
+      fpsArea: 'rgba(0,158,150,.09)',
+      memArea: 'rgba(124,92,224,.12)',
+      rxArea: 'rgba(0,158,150,.12)',
+      txArea: 'rgba(235,0,139,.10)',
+      track: '#ECECF4',
     },
   }
-  var theme = 'light'
+  var theme = 'dark'
   var C = PALETTES[theme]
 
-  var FONT_TITLE = "'Baloo 2', ui-rounded, system-ui, sans-serif"
   var FONT_BODY = "'Inter', system-ui, sans-serif"
 
-  var deviceRamMb = 8192 // updated from DeviceInfo.ramTotalMb when it arrives
-  var deviceCores = null // DeviceInfo.cores → "≈ X% core" under the CPU gauge
-  var WINDOW_S = 120
+  var WINDOW_S = 180 // ventana visible de la timeline (contrato 031)
+  var VERDICT_S = 60 // ventana del mini-veredicto (espejo del reporte 026)
+  var VERDICT_MIN_TICKS = 5 // menos ticks con dato ⇒ WARMING UP
 
-  // Adaptive RAM unit: apps live in MB (a 118 MB app frozen at "0.12 GB" hides
-  // every real change); switch to GB only past 1 GiB.
+  var deviceRamMb = 8192 // actualizado desde DeviceInfo.ramTotalMb
+  var deviceCores = null // DeviceInfo.cores → "≈ X% of one core"
+
+  function $(id) {
+    return document.getElementById(id)
+  }
+  // RAM adaptativa: las apps viven en MB; GB recién pasado 1 GiB
   function fmtMb(mb) {
     return mb >= 1024 ? (mb / 1024).toFixed(2) + ' GB' : Math.round(mb) + ' MB'
   }
-
-  function bands(warn, bad) {
-    return function (v) {
-      return v < warn ? C.ok : v < bad ? C.warn : C.bad
-    }
+  function fmtKb(kb) {
+    return kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB/s' : Math.round(kb) + ' KB/s'
   }
-  // battery: inverse thresholds (low = bad)
-  function battBands(v) {
-    return v < 15 ? C.bad : v < 30 ? C.warn : C.ok
+  function fmtTotal(kb) {
+    return kb >= 1024 * 1024 ? (kb / 1048576).toFixed(2) + ' GB' : (kb / 1024).toFixed(1) + ' MB'
   }
-
-  var latestFps = null
-  var NA = '{na|N/A}'
+  function bandColor(v, warn, bad) {
+    return v < warn ? C.ok : v < bad ? C.warn : C.bad
+  }
 
   // ---------- semáforo de FPS (ticket 025) ----------
   // Espejo de src/core/perf/threshold.ts (la UI es JS plano servido estático, sin
@@ -101,213 +126,285 @@
     return 'red'
   }
 
-  function setFpsTarget(n) {
-    if (typeof n !== 'number' || !isFinite(n) || n <= 0) return
-    if (n === fpsTarget) return
-    fpsTarget = n
-    if (lastSample) render(lastSample) // re-pinta el semáforo sin esperar otro tick
-  }
+  // =====================================================================
+  // Perf timeline — 2 carriles apilados, eje X compartido, unidades reales
+  // =====================================================================
+  var tlPerf = null
+  var fpsData = [] // [ts, fps|null]
+  var gpuData = []
+  var cpuData = []
+  var cpuDevData = []
+  var tickStatus = [] // [ts, 'green'|'yellow'|'red'|null] → bandas rojas + veredicto
+  var crashMarks = [] // ts de cada crash (live.js → noteCrash)
+  var legendSelected = { FPS: true, 'GPU %': true, 'CPU %': true, 'CPU device %': false }
+  var fpsAxisMax = 40
 
-  function gaugeDefs() {
-    return {
-      cpu: {
-        el: 'gCpu',
-        min: 0,
-        max: 100,
-        color: bands(55, 75),
-        device: true, // anillo secundario: CPU total del device
-        fmt: function (v) {
-          if (v === null) return NA
-          // share-of-device esconde un main thread clavado (6% device = 49% de un
-          // core en 8 cores): mostrar la conversión al lado
-          var core = deviceCores ? '\n{fps|≈ ' + Math.round(v * deviceCores) + '% core}' : ''
-          return Math.round(v) + '{u|%}' + core
-        },
-      },
-      gpu: {
-        el: 'gGpu',
-        min: 0,
-        max: 100,
-        color: bands(65, 85),
-        fmt: function (v) {
-          var fpsLine = ''
-          if (latestFps !== null) {
-            // el valor de FPS toma el color del semáforo (ticket 025); sin estado
-            // (target inválido) queda en el gris muted de siempre
-            var st = fpsStatusOf(latestFps, fpsTarget)
-            var tok = st === null ? 'fps' : 'fps' + st
-            fpsLine = '\n{' + tok + '|' + Math.round(latestFps) + ' FPS}'
-          }
-          return (v === null ? NA : Math.round(v) + '{u|%}') + fpsLine
-        },
-      },
-      temp: {
-        el: 'gTemp',
-        min: 25,
-        max: 50,
-        color: bands(38, 42),
-        fmt: function (v) {
-          return v === null ? NA : v.toFixed(1) + '{u|°C}'
-        },
-      },
-      ram: {
-        el: 'gRam',
-        min: 0,
-        max: deviceRamMb,
-        color: bands(deviceRamMb * 0.45, deviceRamMb * 0.7),
-        device: true, // anillo secundario: RAM usada total del device
-        fmt: function (v) {
-          if (v === null) return NA
-          return v >= 1024 ? (v / 1024).toFixed(2) + '{u|GB}' : Math.round(v) + '{u|MB}'
-        },
-      },
-      bat: {
-        el: 'gBat',
-        min: 0,
-        max: 100,
-        color: battBands,
-        fmt: function (v) {
-          return v === null ? NA : Math.round(v) + '{u|%}'
-        },
-      },
+  // techo del carril de FPS: el target con headroom, o el máximo observado
+  function computeFpsAxisMax() {
+    var top = Math.ceil((fpsTarget * 7) / 6 / 10) * 10
+    for (var i = 0; i < fpsData.length; i++) {
+      var v = fpsData[i][1]
+      if (v !== null && v > top) top = Math.ceil(v / 10) * 10
     }
+    return Math.max(top, 10)
   }
 
-  function makeGauge(cfg) {
-    var chart = echarts.init(document.getElementById(cfg.el), null, { renderer: 'canvas' })
-    var series = [
-      {
-        type: 'gauge',
-        startAngle: 90,
-        endAngle: -270,
-        min: cfg.min,
-        max: cfg.max,
-        pointer: { show: false },
-        progress: {
-          show: true,
-          width: 13,
-          roundCap: true,
-          itemStyle: { color: C.ok, shadowColor: 'rgba(0,0,0,.25)', shadowBlur: 5 },
+  function makeTlPerf() {
+    var chart = echarts.init($('tlPerf'))
+    fpsAxisMax = computeFpsAxisMax()
+    chart.setOption({
+      animation: false,
+      backgroundColor: 'transparent',
+      axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: C.muted } },
+      legend: {
+        top: 0,
+        right: 4,
+        icon: 'roundRect',
+        itemWidth: 14,
+        itemHeight: 5,
+        textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 11.5 },
+        inactiveColor: C.legendOff,
+        selected: legendSelected,
+        data: ['FPS', 'GPU %', 'CPU %', 'CPU device %'],
+      },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: C.card2,
+        borderColor: C.line,
+        textStyle: { color: C.text, fontFamily: FONT_BODY, fontSize: 12 },
+        valueFormatter: function (v) {
+          return v === null || v === undefined ? 'N/A' : Math.round(v)
         },
-        axisLine: { lineStyle: { width: 13, color: [[1, C.track]] } },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        axisLabel: { show: false },
-        anchor: { show: false },
-        title: { show: false },
-        detail: {
-          valueAnimation: true,
-          offsetCenter: [0, 0],
-          formatter: cfg.fmt,
-          color: C.text,
-          fontFamily: FONT_TITLE,
-          fontWeight: 800,
-          fontSize: 30,
-          lineHeight: 34,
-          rich: {
-            u: {
-              color: C.muted,
-              fontSize: 13,
-              fontFamily: FONT_BODY,
-              fontWeight: 500,
-              padding: [8, 0, 0, 2],
-            },
-            fps: {
-              color: C.muted,
-              fontSize: 14,
-              fontFamily: FONT_BODY,
-              fontWeight: 600,
-              padding: [4, 0, 0, 0],
-            },
-            // variantes con el color del semáforo (ticket 025) para la línea de FPS
-            fpsgreen: {
-              color: C.ok,
-              fontSize: 14,
-              fontFamily: FONT_BODY,
-              fontWeight: 700,
-              padding: [4, 0, 0, 0],
-            },
-            fpsyellow: {
-              color: C.warn,
-              fontSize: 14,
-              fontFamily: FONT_BODY,
-              fontWeight: 700,
-              padding: [4, 0, 0, 0],
-            },
-            fpsred: {
-              color: C.bad,
-              fontSize: 14,
-              fontFamily: FONT_BODY,
-              fontWeight: 700,
-              padding: [4, 0, 0, 0],
-            },
-            na: { color: C.muted, fontSize: 20, fontFamily: FONT_BODY, fontWeight: 600 },
+      },
+      grid: [
+        { left: 46, right: 16, top: 26, height: '46%' },
+        { left: 46, right: 16, top: '62%', bottom: 24 },
+      ],
+      xAxis: [
+        {
+          type: 'time',
+          gridIndex: 0,
+          axisLine: { lineStyle: { color: C.line } },
+          axisLabel: { show: false },
+          splitLine: { show: false },
+        },
+        {
+          type: 'time',
+          gridIndex: 1,
+          axisLine: { lineStyle: { color: C.line } },
+          axisLabel: {
+            color: C.muted,
+            fontFamily: FONT_BODY,
+            fontSize: 10,
+            formatter: '{HH}:{mm}:{ss}',
           },
+          splitLine: { show: false },
         },
-        data: [{ value: cfg.min }],
+      ],
+      yAxis: [
+        {
+          type: 'value',
+          gridIndex: 0,
+          min: 0,
+          max: fpsAxisMax,
+          name: 'fps',
+          nameTextStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10, align: 'right' },
+          axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          splitLine: { lineStyle: { color: C.split } },
+        },
+        {
+          type: 'value',
+          gridIndex: 1,
+          min: 0,
+          max: 100,
+          name: '%',
+          nameTextStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10, align: 'right' },
+          axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          splitLine: { lineStyle: { color: C.split } },
+        },
+      ],
+      series: [
+        {
+          name: 'FPS',
+          type: 'line',
+          xAxisIndex: 0,
+          yAxisIndex: 0,
+          showSymbol: false,
+          smooth: 0.25,
+          connectNulls: false,
+          lineStyle: { width: 2, color: C.fps },
+          itemStyle: { color: C.fps },
+          areaStyle: { color: C.fpsArea },
+          emphasis: { disabled: true },
+          markLine: { silent: true, symbol: 'none', data: [] },
+          markArea: { silent: true, itemStyle: { color: C.redBand }, data: [] },
+          data: [],
+        },
+        {
+          name: 'GPU %',
+          type: 'line',
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          showSymbol: false,
+          smooth: 0.25,
+          connectNulls: false,
+          lineStyle: { width: 2, color: C.gpu },
+          itemStyle: { color: C.gpu },
+          emphasis: { disabled: true },
+          markArea: { silent: true, itemStyle: { color: C.redBand }, data: [] },
+          data: [],
+        },
+        {
+          name: 'CPU %',
+          type: 'line',
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          showSymbol: false,
+          smooth: 0.25,
+          connectNulls: false,
+          lineStyle: { width: 2, color: C.cpu },
+          itemStyle: { color: C.cpu },
+          emphasis: { disabled: true },
+          data: [],
+        },
+        {
+          name: 'CPU device %',
+          type: 'line',
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          showSymbol: false,
+          smooth: 0.25,
+          connectNulls: false,
+          lineStyle: { width: 1.5, color: C.cpu, type: 'dashed', opacity: 0.45 },
+          itemStyle: { color: C.cpu, opacity: 0.45 },
+          emphasis: { disabled: true },
+          data: [],
+        },
+      ],
+    })
+    chart.on('legendselectchanged', function (e) {
+      legendSelected = e.selected
+    })
+    return chart
+  }
+
+  // bandas rojas: tramos consecutivos con status 'red' (mismo criterio del 026)
+  function redSpans() {
+    var spans = []
+    var start = null
+    for (var i = 0; i < tickStatus.length; i++) {
+      var st = tickStatus[i][1]
+      if (st === 'red' && start === null) start = tickStatus[i][0]
+      if (st !== 'red' && start !== null) {
+        spans.push([start, tickStatus[i][0]])
+        start = null
+      }
+    }
+    if (start !== null) spans.push([start, tickStatus[tickStatus.length - 1][0]])
+    return spans
+  }
+
+  function tlMarks() {
+    var areas = redSpans().map(function (s) {
+      return [{ xAxis: s[0] }, { xAxis: s[1] }]
+    })
+    var lines = [
+      {
+        yAxis: fpsTarget,
+        lineStyle: { color: C.muted, type: 'dashed', width: 1 },
+        label: {
+          formatter: 'target ' + fpsTarget,
+          color: C.muted,
+          fontFamily: FONT_BODY,
+          fontSize: 10,
+          position: 'insideEndTop',
+        },
       },
     ]
-    // anillo interior tenue: total del DEVICE en la misma escala que la app
-    if (cfg.device) {
-      series.push({
-        type: 'gauge',
-        startAngle: 90,
-        endAngle: -270,
-        min: cfg.min,
-        max: cfg.max,
-        radius: '68%',
-        pointer: { show: false },
-        progress: { show: true, width: 5, roundCap: true, itemStyle: { color: C.legendOff } },
-        axisLine: { lineStyle: { width: 5, color: [[1, 'transparent']] } },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        axisLabel: { show: false },
-        anchor: { show: false },
-        title: { show: false },
-        detail: { show: false },
-        data: [{ value: cfg.min }],
+    crashMarks.forEach(function (ts) {
+      lines.push({
+        xAxis: ts,
+        lineStyle: { color: C.bad, width: 1.5 },
+        label: {
+          formatter: 'CRASH',
+          color: C.bad,
+          fontFamily: FONT_BODY,
+          fontSize: 9,
+          fontWeight: 700,
+          position: 'insideEndTop',
+        },
       })
-    }
-    chart.setOption({ series: series })
-    cfg.chart = chart
-    return cfg
+    })
+    return { areas: areas, lines: lines }
   }
 
-  function updateGauge(cfg, value, deviceValue) {
-    // null → keep ring at min (grey) and show N/A text
-    var ringVal = value === null ? cfg.min : value
-    var series = [
-      {
-        data: [{ value: ringVal }],
-        progress: { itemStyle: { color: value === null ? C.track : cfg.color(value) } },
-        detail: {
-          formatter: function () {
-            return cfg.fmt(value)
-          },
+  function trimByTime(arr, cutoff) {
+    while (arr.length > 0 && arr[0][0] < cutoff) arr.shift()
+  }
+
+  function repaintTl() {
+    if (!tlPerf) return
+    var marks = tlMarks()
+    var newMax = computeFpsAxisMax()
+    var opt = {
+      series: [
+        {
+          data: fpsData,
+          markArea: { data: marks.areas },
+          markLine: { silent: true, symbol: 'none', data: marks.lines },
         },
-      },
-    ]
-    if (cfg.device) {
-      var dv = deviceValue === null || deviceValue === undefined ? cfg.min : deviceValue
-      series.push({ data: [{ value: dv }] })
+        { data: gpuData, markArea: { data: marks.areas } },
+        { data: cpuData },
+        { data: cpuDevData },
+      ],
     }
-    cfg.chart.setOption({ series: series })
+    if (newMax !== fpsAxisMax) {
+      fpsAxisMax = newMax
+      opt.yAxis = [{ max: fpsAxisMax }, {}]
+    }
+    tlPerf.setOption(opt)
   }
 
-  // ---------- memory pie ----------
+  function pushTl(s) {
+    var ts = s.ts || Date.now()
+    fpsData.push([ts, s.fps])
+    gpuData.push([ts, s.gpu])
+    cpuData.push([ts, s.cpu])
+    cpuDevData.push([ts, s.deviceCpu === undefined ? null : s.deviceCpu])
+    tickStatus.push([ts, fpsStatusOf(s.fps, fpsTarget)])
+    var cutoff = ts - WINDOW_S * 1000
+    ;[fpsData, gpuData, cpuData, cpuDevData, tickStatus].forEach(function (arr) {
+      trimByTime(arr, cutoff)
+    })
+    crashMarks = crashMarks.filter(function (t) {
+      return t >= cutoff
+    })
+    repaintTl()
+  }
+
+  // =====================================================================
+  // Memory: donut + KPIs + trend con puntos de GC
+  // =====================================================================
+  var memPie = null
+  var memTrend = null
+  var memTrendData = [] // [ts, pss|null]
+  var gcDots = [] // [ts, pss]
+  var lastPss = null
+
   function memMeta() {
+    // orden cromático validado (magenta·violeta·teal·ámbar) + neutrales al final
     return [
-      { key: 'java', name: 'Java heap', color: C.primary },
-      { key: 'native', name: 'Native', color: C.secondary },
-      { key: 'graphics', name: 'Graphics', color: C.violet },
-      { key: 'code', name: 'Code', color: C.amber },
-      { key: 'stack', name: 'Stack', color: theme === 'light' ? '#1E90D6' : '#5AD1FF' },
-      { key: 'other', name: 'Other', color: theme === 'light' ? '#8E8EA6' : '#6E6E82' },
+      { key: 'java', name: 'Java heap', color: C.memJava },
+      { key: 'graphics', name: 'Graphics', color: C.memGraphics },
+      { key: 'native', name: 'Native', color: C.memNative },
+      { key: 'code', name: 'Code', color: C.memCode },
+      { key: 'stack', name: 'Stack', color: C.memStack },
+      { key: 'other', name: 'Other', color: C.memOther },
     ]
   }
 
   function makeMemPie() {
-    var chart = echarts.init(document.getElementById('memPie'))
+    var chart = echarts.init($('memPie'))
     chart.setOption({
       animationDurationUpdate: 800,
       animationEasingUpdate: 'cubicOut',
@@ -320,41 +417,33 @@
           return p.name + ': <b>' + Math.round(p.value) + ' MB</b> (' + p.percent + '%)'
         },
       },
-      title: {
-        text: '',
-        left: 'center',
-        top: '40%',
-        textStyle: { color: C.text, fontFamily: FONT_TITLE, fontWeight: 800, fontSize: 22 },
-        subtext: 'PSS total',
-        subtextStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 11 },
-      },
       legend: {
         bottom: 0,
         left: 'center',
         type: 'scroll',
         icon: 'circle',
-        itemWidth: 9,
-        itemHeight: 9,
-        itemGap: 10,
-        textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 11 },
+        itemWidth: 8,
+        itemHeight: 8,
+        itemGap: 8,
+        textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10.5 },
         pageIconColor: C.muted,
         pageTextStyle: { color: C.muted },
       },
       series: [
         {
           type: 'pie',
-          radius: ['48%', '72%'],
-          center: ['50%', '46%'],
+          radius: ['52%', '76%'],
+          center: ['50%', '44%'],
           avoidLabelOverlap: true,
           minShowLabelAngle: 18,
-          itemStyle: { borderColor: C.card, borderWidth: 2, borderRadius: 5 },
+          itemStyle: { borderColor: C.card, borderWidth: 2, borderRadius: 4 },
           label: {
             show: true,
             position: 'inside',
             formatter: '{d}%',
             color: '#fff',
             fontFamily: FONT_BODY,
-            fontSize: 10,
+            fontSize: 9.5,
             fontWeight: 600,
             textShadowColor: 'rgba(0,0,0,0.45)',
             textShadowBlur: 2,
@@ -369,200 +458,126 @@
     return chart
   }
 
-  function updateMemPie(mem, pssMb) {
-    // PSS/composición llegan por el carril lento (~15 s); RSS es el pulso por tick
-    var sub = 'PSS total'
-    if (mem.rss !== null && mem.rss !== undefined) sub += ' · RSS ' + fmtMb(mem.rss)
-    memPie.setOption({
-      title: { text: pssMb === null ? 'N/A' : fmtMb(pssMb), subtext: sub },
-      series: [
-        {
-          data: memMeta().map(function (m) {
-            return { name: m.name, value: mem[m.key] || 0, itemStyle: { color: m.color } }
-          }),
-        },
-      ],
-    })
-  }
-
-  // ---------- multi-series timeline ----------
-  function seriesMeta() {
-    return [
-      {
-        name: 'CPU %',
-        color: C.primary,
-        plot: function (s) {
-          return s.cpu
-        },
-        real: function (s) {
-          return s.cpu.toFixed(0) + ' %'
-        },
-      },
-      {
-        name: 'RAM',
-        color: C.violet,
-        // placeholder: la serie RAM se re-normaliza al rango visible en render()
-        // (auto-escala; % del device aplastaba una app de 118 MB contra el piso)
-        plot: function (s) {
-          return (s.mem.pss / deviceRamMb) * 100
-        },
-        real: function (s) {
-          return fmtMb(s.mem.pss)
-        },
-      },
-      {
-        name: 'FPS',
-        color: C.secondary,
-        plot: function (s) {
-          return (s.fps / 60) * 100
-        },
-        real: function (s) {
-          return s.fps.toFixed(0) + ' fps'
-        },
-      },
-      {
-        name: 'Temp',
-        color: C.amber,
-        plot: function (s) {
-          return ((s.tempC - 25) / (50 - 25)) * 100
-        },
-        real: function (s) {
-          return s.tempC.toFixed(1) + ' °C'
-        },
-      },
-      {
-        name: 'Batt',
-        color: C.ok,
-        plot: function (s) {
-          return s.battery.levelPct
-        },
-        real: function (s) {
-          return s.battery.levelPct.toFixed(0) + ' %'
-        },
-      },
-      // Totales del DEVICE: punteados y translúcidos, misma escala 0-100 (% de la
-      // capacidad del teléfono) — responde "¿el cuello es mi app o el teléfono?"
-      {
-        name: 'CPU dev',
-        color: C.primary,
-        dim: true,
-        plot: function (s) {
-          return s.deviceCpu
-        },
-        real: function (s) {
-          return s.deviceCpu.toFixed(0) + ' %'
-        },
-      },
-      {
-        name: 'RAM dev',
-        color: C.violet,
-        dim: true,
-        plot: function (s) {
-          return (s.deviceRamUsedMb / deviceRamMb) * 100
-        },
-        real: function (s) {
-          return fmtMb(s.deviceRamUsedMb)
-        },
-      },
-    ]
-  }
-  // which sample field each series needs (null → skip point)
-  var SERIES_VAL = [
-    function (s) {
-      return s.cpu
-    },
-    function (s) {
-      return s.mem.pss
-    },
-    function (s) {
-      return s.fps
-    },
-    function (s) {
-      return s.tempC
-    },
-    function (s) {
-      return s.battery.levelPct
-    },
-    function (s) {
-      return s.deviceCpu === undefined ? null : s.deviceCpu
-    },
-    function (s) {
-      return s.deviceRamUsedMb === undefined ? null : s.deviceRamUsedMb
-    },
-  ]
-  var RAM_SERIES_IDX = 1
-  var SERIES = seriesMeta()
-
-  function makeTimeline() {
-    var chart = echarts.init(document.getElementById('timeline'))
+  function makeMemTrend() {
+    var chart = echarts.init($('memTrend'))
     chart.setOption({
       animation: false,
-      backgroundColor: 'transparent',
-      grid: { left: 42, right: 16, top: 38, bottom: 28 },
-      legend: {
-        top: 2,
-        left: 4,
-        icon: 'roundRect',
-        itemWidth: 14,
-        itemHeight: 5,
-        textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 12 },
-        inactiveColor: C.legendOff,
-        data: SERIES.map(function (s) {
-          return s.name
-        }),
+      grid: { left: 46, right: 16, top: 6, bottom: 4 },
+      xAxis: { type: 'time', show: false },
+      yAxis: {
+        type: 'value',
+        scale: true,
+        axisLabel: {
+          color: C.muted,
+          fontFamily: FONT_BODY,
+          fontSize: 9,
+          formatter: function (v) {
+            return Math.round(v)
+          },
+        },
+        splitLine: { lineStyle: { color: C.split } },
+        splitNumber: 2,
       },
       tooltip: {
         trigger: 'axis',
         backgroundColor: C.card2,
         borderColor: C.line,
-        textStyle: { color: C.text, fontFamily: FONT_BODY, fontSize: 12 },
-        axisPointer: { type: 'line', lineStyle: { color: C.line } },
-        formatter: function (params) {
-          if (!params.length) return ''
-          var lines = [echarts.time.format(params[0].value[0], '{HH}:{mm}:{ss}', false)]
-          params.forEach(function (p) {
-            lines.push(p.marker + ' ' + p.seriesName + ': <b>' + p.value[2] + '</b>')
-          })
-          return lines.join('<br/>')
+        textStyle: { color: C.text, fontSize: 11, fontFamily: FONT_BODY },
+        valueFormatter: function (v) {
+          return v === null || v === undefined ? 'N/A' : fmtMb(v)
         },
       },
-      xAxis: {
-        type: 'time',
-        axisLine: { lineStyle: { color: C.line } },
-        axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10, formatter: '{mm}:{ss}' },
-        splitLine: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        min: 0,
-        max: 100,
-        axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10, formatter: '{value}' },
-        splitLine: { lineStyle: { color: C.split } },
-      },
-      series: SERIES.map(function (s) {
-        return {
-          name: s.name,
+      series: [
+        {
+          name: 'PSS',
           type: 'line',
           showSymbol: false,
-          smooth: 0.25,
+          smooth: 0.3,
           connectNulls: false,
-          lineStyle: {
-            width: s.dim ? 1.5 : 2,
-            color: s.color,
-            type: s.dim ? 'dashed' : 'solid',
-            opacity: s.dim ? 0.45 : 1,
-          },
-          itemStyle: { color: s.color, opacity: s.dim ? 0.45 : 1 },
+          lineStyle: { width: 1.5, color: C.cpu },
+          itemStyle: { color: C.cpu },
+          areaStyle: { color: C.memArea },
           emphasis: { disabled: true },
           data: [],
-        }
-      }),
+        },
+        {
+          name: 'GC',
+          type: 'scatter',
+          symbolSize: 6,
+          itemStyle: { color: C.temp },
+          tooltip: {
+            valueFormatter: function (v) {
+              return 'GC · ' + fmtMb(v)
+            },
+          },
+          data: [],
+        },
+      ],
     })
     return chart
   }
 
+  function repaintMemTrend() {
+    if (memTrend) memTrend.setOption({ series: [{ data: memTrendData }, { data: gcDots }] })
+  }
+
+  function renderMem(s) {
+    var ts = s.ts || Date.now()
+    var pss = s.mem ? s.mem.pss : null
+    if (pss !== null && pss !== undefined) lastPss = pss
+    // KPIs
+    $('pssNum').textContent = pss === null || pss === undefined ? '—' : fmtMb(pss)
+    var rss = s.mem ? s.mem.rss : null
+    $('rssNum').textContent = rss === null || rss === undefined ? '—' : fmtMb(rss)
+    // barras app / device
+    if (pss !== null && pss !== undefined) {
+      $('ramAppBar').style.width = Math.min(100, (pss / deviceRamMb) * 100) + '%'
+      $('ramAppSub').textContent = fmtMb(pss) + ' · ' + ((pss / deviceRamMb) * 100).toFixed(1) + '%'
+    } else {
+      $('ramAppBar').style.width = '0%'
+      $('ramAppSub').textContent = '—'
+    }
+    var devUsed = s.deviceRamUsedMb
+    if (devUsed !== null && devUsed !== undefined) {
+      $('ramDevBar').style.width = Math.min(100, (devUsed / deviceRamMb) * 100) + '%'
+      $('ramDevSub').textContent = fmtMb(devUsed) + ' of ' + fmtMb(deviceRamMb)
+    } else {
+      $('ramDevBar').style.width = '0%'
+      $('ramDevSub').textContent = '—'
+    }
+    // donut (solo con dato; con la app muerta el pie conserva la última foto)
+    if (memPie && s.mem && pss !== null && pss !== undefined) {
+      memPie.setOption({
+        series: [
+          {
+            data: memMeta().map(function (m) {
+              return { name: m.name, value: s.mem[m.key] || 0, itemStyle: { color: m.color } }
+            }),
+          },
+        ],
+      })
+    }
+    // trend (gap real con null)
+    memTrendData.push([ts, pss === undefined ? null : pss])
+    var cutoff = ts - WINDOW_S * 1000
+    trimByTime(memTrendData, cutoff)
+    gcDots = gcDots.filter(function (p) {
+      return p[0] >= cutoff
+    })
+    repaintMemTrend()
+  }
+
+  // =====================================================================
+  // Network spark
+  // =====================================================================
+  var netSpark = null
+  var netData = [[], []]
+  var netTotalRx = 0
+  var netTotalTx = 0
+  var netEverSeen = false
+
   function makeNetSpark() {
-    var chart = echarts.init(document.getElementById('netSpark'))
+    var chart = echarts.init($('netSpark'))
     chart.setOption({
       animation: false,
       grid: { left: 4, right: 4, top: 4, bottom: 4 },
@@ -587,52 +602,241 @@
           type: 'line',
           showSymbol: false,
           smooth: 0.3,
-          data: [],
-          lineStyle: { width: 1.5, color: C.secondary },
-          itemStyle: { color: C.secondary },
+          lineStyle: { width: 1.5, color: C.fps },
+          itemStyle: { color: C.fps },
           areaStyle: { color: C.rxArea },
+          data: [],
         },
         {
           name: '↑ tx',
           type: 'line',
           showSymbol: false,
           smooth: 0.3,
-          data: [],
-          lineStyle: { width: 1.5, color: C.primary },
-          itemStyle: { color: C.primary },
+          lineStyle: { width: 1.5, color: C.gpu },
+          itemStyle: { color: C.gpu },
           areaStyle: { color: C.txArea },
+          data: [],
         },
       ],
     })
     return chart
   }
 
-  // ---------- build / rebuild ----------
-  var gauges, memPie, timeline, netSpark
-
-  function allCharts() {
-    var list = [memPie, timeline, netSpark]
-    Object.keys(gauges || {}).forEach(function (k) {
-      list.push(gauges[k].chart)
+  function renderNet(s) {
+    var ts = s.ts || Date.now()
+    if (s.netRxKb === null && s.netTxKb === null) {
+      var na = $('netNa')
+      if (na && !netEverSeen) na.hidden = false
+      $('rxNow').textContent = 'N/A'
+      $('txNow').textContent = 'N/A'
+      $('rxTot').textContent = ''
+      $('txTot').textContent = ''
+      return
+    }
+    netEverSeen = true
+    $('netNa').hidden = true
+    netTotalRx += s.netRxKb || 0
+    netTotalTx += s.netTxKb || 0
+    netData[0].push([ts, s.netRxKb || 0])
+    netData[1].push([ts, s.netTxKb || 0])
+    var cutoff = ts - WINDOW_S * 1000
+    netData.forEach(function (arr) {
+      trimByTime(arr, cutoff)
     })
-    return list.filter(Boolean)
+    if (netSpark) netSpark.setOption({ series: [{ data: netData[0] }, { data: netData[1] }] })
+    $('rxNow').textContent = '↓ ' + fmtKb(s.netRxKb || 0)
+    $('txNow').textContent = '↑ ' + fmtKb(s.netTxKb || 0)
+    $('rxTot').textContent = 'total ' + fmtTotal(netTotalRx)
+    $('txTot').textContent = 'total ' + fmtTotal(netTotalTx)
+  }
+
+  // =====================================================================
+  // Tiles (DOM)
+  // =====================================================================
+  var STATUS_WORD = { green: 'on target', yellow: 'below target', red: 'way below target' }
+  var appRunning = null // live.js → setAppRunning (pid null = app no corre)
+
+  function setSem(el, st) {
+    el.classList.remove('sem-green', 'sem-yellow', 'sem-red')
+    if (st) el.classList.add('sem-' + st)
+  }
+
+  function renderTiles(s) {
+    // ---- FPS hero ----
+    var fpsNum = $('fpsNum')
+    var st = fpsStatusOf(s.fps, fpsTarget)
+    fpsNum.innerHTML = (s.fps === null ? '—' : Math.round(s.fps)) + '<span class="unit">fps</span>'
+    setSem(fpsNum, st)
+    var stEl = $('fpsStatus')
+    setSem(stEl, st)
+    $('fpsStatusWord').textContent =
+      s.fps === null
+        ? appRunning === false
+          ? 'app not running'
+          : 'no data'
+        : st
+          ? STATUS_WORD[st]
+          : 'no target'
+    var fr = s.frame || {}
+    var jankEl = $('jankV')
+    if (fr.jankPct === null || fr.jankPct === undefined) {
+      jankEl.textContent = '—'
+      setSem(jankEl, null)
+    } else {
+      jankEl.innerHTML =
+        (fr.jankPct < 10 ? fr.jankPct.toFixed(1) : Math.round(fr.jankPct)) +
+        '<span class="u">%</span>'
+      setSem(jankEl, st)
+    }
+    $('p90V').innerHTML =
+      fr.p90Ms === null || fr.p90Ms === undefined
+        ? '—'
+        : Math.round(fr.p90Ms) + '<span class="u">ms</span>'
+    $('p99V').innerHTML =
+      fr.p99Ms === null || fr.p99Ms === undefined
+        ? '—'
+        : Math.round(fr.p99Ms) + '<span class="u">ms</span>'
+
+    // ---- GPU ----
+    $('gpuNum').innerHTML =
+      (s.gpu === null ? '—' : Math.round(s.gpu)) + '<span class="unit">%</span>'
+    var gpuBar = $('gpuBar')
+    gpuBar.style.width = (s.gpu === null ? 0 : s.gpu) + '%'
+    gpuBar.style.background = s.gpu === null ? 'var(--track)' : bandColor(s.gpu, 65, 85)
+    $('gpuSub').textContent = s.gpu === null ? 'N/A' : ''
+
+    // ---- CPU ----
+    $('cpuNum').innerHTML =
+      (s.cpu === null ? '—' : Math.round(s.cpu)) + '<span class="unit">%</span>'
+    // share-of-device esconde un main thread clavado: mostrar la conversión al lado
+    $('coreSub').textContent =
+      s.cpu === null || !deviceCores ? '' : '≈ ' + Math.round(s.cpu * deviceCores) + '% of one core'
+    var cpuBar = $('cpuBar')
+    cpuBar.style.width = (s.cpu === null ? 0 : s.cpu) + '%'
+    cpuBar.style.background = s.cpu === null ? 'var(--track)' : bandColor(s.cpu, 55, 75)
+    var devCpu = s.deviceCpu === undefined ? null : s.deviceCpu
+    $('cpuDevBar').style.width = (devCpu === null ? 0 : devCpu) + '%'
+    $('cpuDevSub').textContent = devCpu === null ? '—' : Math.round(devCpu) + '%'
+
+    // ---- Temp ----
+    $('tempNum').innerHTML =
+      (s.tempC === null ? '—' : s.tempC.toFixed(1)) + '<span class="unit">°C</span>'
+    var tempBar = $('tempBar')
+    var tPct = s.tempC === null ? 0 : Math.max(0, Math.min(100, ((s.tempC - 25) / 25) * 100))
+    tempBar.style.width = tPct + '%'
+    tempBar.style.background = s.tempC === null ? 'var(--track)' : bandColor(s.tempC, 38, 42)
+    var batT = s.battery ? s.battery.tempC : null
+    $('tempTrendSub').textContent =
+      batT === null || batT === undefined ? '' : 'battery ' + batT.toFixed(1) + ' °C'
+
+    // ---- Battery ----
+    var b = s.battery || {}
+    $('batNum').innerHTML =
+      (b.levelPct === null || b.levelPct === undefined ? '—' : Math.round(b.levelPct)) +
+      '<span class="unit">%</span>'
+    var batBar = $('batBar')
+    batBar.style.width = (b.levelPct || 0) + '%'
+    batBar.style.background =
+      b.levelPct === null || b.levelPct === undefined
+        ? 'var(--track)'
+        : b.levelPct < 15
+          ? C.bad
+          : b.levelPct < 30
+            ? C.warn
+            : C.ok
+    $('chipCharging').classList.toggle('show', b.charging === true)
+    $('batSub').textContent =
+      b.charging === true ? 'plugged in' : b.charging === false ? 'on battery' : ''
+  }
+
+  // =====================================================================
+  // Mini-veredicto vivo (header) — espejo del esquema del reporte (026):
+  // estado = fpsStatus(FPS promedio de la ventana de 60 s); el sub muestra
+  // el % de ticks en verde. Crashes de la sesión suman un chip rojo.
+  // =====================================================================
+  var crashCount = 0
+
+  function renderVerdict() {
+    var el = $('verdict')
+    var word = $('verdictWord')
+    var sub = $('verdictSub')
+    var lastTs = tickStatus.length ? tickStatus[tickStatus.length - 1][0] : Date.now()
+    var cutoff = lastTs - VERDICT_S * 1000
+    var withData = tickStatus.filter(function (t) {
+      return t[0] >= cutoff && t[1] !== null
+    })
+    el.classList.remove('v-green', 'v-yellow', 'v-red')
+    if (withData.length < VERDICT_MIN_TICKS) {
+      word.textContent = 'WARMING UP'
+      sub.textContent = '— in target · 60 s'
+    } else {
+      var lastFps = fpsData.filter(function (p) {
+        return p[0] >= cutoff && p[1] !== null
+      })
+      var avg =
+        lastFps.reduce(function (a, p) {
+          return a + p[1]
+        }, 0) / lastFps.length
+      var st = fpsStatusOf(avg, fpsTarget)
+      var green = withData.filter(function (t) {
+        return t[1] === 'green'
+      }).length
+      var pct = Math.round((green / withData.length) * 100)
+      if (st === 'green') {
+        el.classList.add('v-green')
+        word.textContent = 'PERF GOOD'
+      } else if (st === 'yellow') {
+        el.classList.add('v-yellow')
+        word.textContent = 'PERF WATCH'
+      } else if (st === 'red') {
+        el.classList.add('v-red')
+        word.textContent = 'PERF POOR'
+      } else {
+        word.textContent = 'WARMING UP'
+      }
+      sub.textContent = pct + '% in target · 60 s'
+    }
+    var vc = $('verdictCrash')
+    if (crashCount > 0) {
+      vc.hidden = false
+      vc.textContent = crashCount + ' crash' + (crashCount > 1 ? 'es' : '')
+    } else {
+      vc.hidden = true
+    }
+  }
+
+  // live.js detecta el comienzo de un bloque de crash en el stream de logs
+  // (ticket 027) y lo marca acá: chip rojo del veredicto + marca CRASH en la
+  // timeline (patrón session.marks del 030).
+  function noteCrash(ts) {
+    crashCount++
+    crashMarks.push(ts || Date.now())
+    repaintTl()
+    renderVerdict()
+  }
+
+  // live.js detecta líneas de GC del ART en logcat → punto ámbar sobre el trend
+  function noteGc(ts) {
+    if (lastPss === null) return
+    gcDots.push([ts || Date.now(), lastPss])
+    repaintMemTrend()
+  }
+
+  // =====================================================================
+  // Build / dispose / render
+  // =====================================================================
+  function allCharts() {
+    return [tlPerf, memPie, memTrend, netSpark].filter(Boolean)
   }
 
   function buildCharts() {
-    gauges = {}
-    var defs = gaugeDefs()
-    Object.keys(defs).forEach(function (k) {
-      gauges[k] = makeGauge(defs[k])
-    })
+    tlPerf = makeTlPerf()
     memPie = makeMemPie()
-    timeline = makeTimeline()
+    memTrend = makeMemTrend()
     netSpark = makeNetSpark()
-    // re-feed buffered data
-    timeline.setOption({
-      series: tlData.map(function (d) {
-        return { data: d }
-      }),
-    })
+    // re-inyectar buffers (cambio de tema)
+    repaintTl()
+    repaintMemTrend()
     netSpark.setOption({ series: [{ data: netData[0] }, { data: netData[1] }] })
   }
 
@@ -640,134 +844,39 @@
     allCharts().forEach(function (c) {
       c.dispose()
     })
-    gauges = null
-    memPie = null
-    timeline = null
-    netSpark = null
+    tlPerf = memPie = memTrend = netSpark = null
   }
 
-  // ---------- state ----------
-  var tlData = SERIES.map(function () {
-    return []
-  })
-  var netData = [[], []]
   var lastSample = null
-  var netTotalRx = 0,
-    netTotalTx = 0
-  var netEverSeen = false
-
-  function fmtKb(kb) {
-    return kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB/s' : Math.round(kb) + ' KB/s'
-  }
-  function fmtTotal(kb) {
-    return kb >= 1024 * 1024
-      ? (kb / 1024 / 1024).toFixed(2) + ' GB'
-      : (kb / 1024).toFixed(1) + ' MB'
-  }
 
   function render(s) {
     lastSample = s
-    latestFps = s.fps
-    updateGauge(gauges.cpu, s.cpu, s.deviceCpu === undefined ? null : s.deviceCpu)
-    updateGauge(gauges.gpu, s.gpu)
-    updateGauge(gauges.temp, s.tempC)
-    updateGauge(gauges.ram, s.mem.pss, s.deviceRamUsedMb === undefined ? null : s.deviceRamUsedMb)
-    updateGauge(gauges.bat, s.battery.levelPct)
-
-    // charging chip
-    var chip = document.getElementById('chipCharging')
-    if (chip) chip.classList.toggle('show', s.battery.charging === true)
-
-    // frame-time/jank under the GPU·FPS donut (ticket 024; fine redesign: 031/032)
-    var fsub = document.getElementById('fpsSub')
-    if (fsub) {
-      var fr = s.frame
-      if (fr && fr.p90Ms !== null) {
-        var sub = 'p90 ' + Math.round(fr.p90Ms) + ' ms'
-        if (fr.p99Ms !== null) sub += ' · p99 ' + Math.round(fr.p99Ms) + ' ms'
-        if (fr.jankPct !== null) {
-          // el jank% hereda el estado del semáforo de FPS del tick (ticket 025);
-          // sin estado queda en muted como el resto del subtítulo
-          fsub.textContent = sub + ' · '
-          var jankEl = document.createElement('span')
-          var jst = fpsStatusOf(s.fps, fpsTarget)
-          if (jst !== null) jankEl.className = 'sem-' + jst
-          jankEl.textContent =
-            'jank ' + (fr.jankPct < 10 ? fr.jankPct.toFixed(1) : Math.round(fr.jankPct)) + '%'
-          fsub.appendChild(jankEl)
-        } else {
-          fsub.textContent = sub
-        }
-      } else {
-        fsub.textContent = 'frame-time N/A'
-      }
-    }
-
-    updateMemPie(s.mem, s.mem.pss)
-
-    var now = s.ts || Date.now()
-    SERIES.forEach(function (meta, i) {
-      var raw = SERIES_VAL[i](s)
-      if (raw === null || raw === undefined) return // gap for N/A
-      // value[3] = valor crudo (la serie RAM se re-normaliza abajo con él)
-      tlData[i].push({ value: [now, meta.plot(s), meta.real(s), raw] })
-      while (tlData[i].length > WINDOW_S) tlData[i].shift()
-    })
-    // Auto-escala de la RAM de la app: re-normalizar el buffer visible a su propio
-    // rango (con padding). En % del device, una app de 118 MB era una línea plana
-    // pegada al piso; así, un leak de 5 MB/min se VE.
-    var ramArr = tlData[RAM_SERIES_IDX]
-    if (ramArr.length) {
-      var lo = Infinity
-      var hi = -Infinity
-      ramArr.forEach(function (p) {
-        var mb = p.value[3]
-        if (mb < lo) lo = mb
-        if (mb > hi) hi = mb
-      })
-      var pad = Math.max((hi - lo) * 0.15, hi * 0.02, 1)
-      var floor = Math.max(0, lo - pad)
-      var span = hi + pad - floor
-      ramArr.forEach(function (p) {
-        p.value[1] = ((p.value[3] - floor) / span) * 100
-      })
-    }
-    timeline.setOption({
-      series: SERIES.map(function (_, i) {
-        return { data: tlData[i] }
-      }),
-    })
-
-    // network (null → N/A note, no spark points)
-    if (s.netRxKb === null && s.netTxKb === null) {
-      var na = document.getElementById('netNa')
-      if (na && !netEverSeen) na.hidden = false
-      document.getElementById('rxNow').textContent = 'N/A'
-      document.getElementById('txNow').textContent = 'N/A'
-      document.getElementById('rxTot').textContent = ''
-      document.getElementById('txTot').textContent = ''
-    } else {
-      netEverSeen = true
-      document.getElementById('netNa').hidden = true
-      netTotalRx += s.netRxKb || 0
-      netTotalTx += s.netTxKb || 0
-      netData[0].push([now, s.netRxKb || 0])
-      netData[1].push([now, s.netTxKb || 0])
-      netData.forEach(function (arr) {
-        while (arr.length > WINDOW_S) arr.shift()
-      })
-      netSpark.setOption({ series: [{ data: netData[0] }, { data: netData[1] }] })
-      document.getElementById('rxNow').textContent = '↓ ' + fmtKb(s.netRxKb || 0)
-      document.getElementById('txNow').textContent = '↑ ' + fmtKb(s.netTxKb || 0)
-      document.getElementById('rxTot').textContent = 'total ' + fmtTotal(netTotalRx)
-      document.getElementById('txTot').textContent = 'total ' + fmtTotal(netTotalTx)
-    }
+    renderTiles(s)
+    pushTl(s)
+    renderMem(s)
+    renderNet(s)
+    renderVerdict()
   }
 
-  // ---------- device ficha ----------
+  // ---------- target FPS (aplica en caliente, ticket 025) ----------
+  function setFpsTarget(n) {
+    if (typeof n !== 'number' || !isFinite(n) || n <= 0) return
+    if (n === fpsTarget) return
+    fpsTarget = n
+    $('targetChip').textContent = 'target ' + n
+    // re-evaluar el status de todos los ticks buffereados con el target nuevo
+    tickStatus = fpsData.map(function (p) {
+      return [p[0], fpsStatusOf(p[1], fpsTarget)]
+    })
+    if (lastSample) renderTiles(lastSample)
+    repaintTl()
+    renderVerdict()
+  }
+
+  // ---------- ficha del device ----------
   function setDevice(info, pkg) {
     var name = [info.manufacturer, info.model].filter(Boolean).join(' ') || info.serial
-    document.getElementById('devName').textContent = name
+    $('devName').textContent = name
     var specs = []
     if (info.androidRelease)
       specs.push(
@@ -785,51 +894,80 @@
     }
     if (info.refreshHz) specs.push(info.refreshHz + ' Hz')
     specs.push(info.serial)
-    var el = document.getElementById('devSpecs')
+    var el = $('devSpecs')
     el.innerHTML = ''
     specs.forEach(function (t) {
       var span = document.createElement('span')
-      span.className = 'spec'
+      span.className = 'spec' + (/Hz$/.test(t) ? ' hz' : '')
       span.textContent = t
       el.appendChild(span)
     })
-    if (pkg) document.getElementById('appPkg').textContent = pkg
-    // rebuild RAM gauge to pick up the real max (ambos anillos: app y device)
-    if (gauges && gauges.ram) {
-      gauges.ram.chart.setOption({ series: [{ max: deviceRamMb }, { max: deviceRamMb }] })
-      gauges.ram.color = bands(deviceRamMb * 0.45, deviceRamMb * 0.7)
-    }
+    if (pkg) $('appPkg').textContent = pkg
+    $('ramAppLbl').textContent = 'app of ' + fmtMb(deviceRamMb)
+    if (lastSample) renderMem(lastSample)
   }
 
-  // ---------- reset al cambiar de app (selector) ----------
-  // Mezclar series de dos apps en el mismo timeline sería engañoso: se vacían
-  // los buffers y los totales; los gauges son instantáneos y se pisan solos.
+  // ---------- estado de la app (badge del selector → palabra del hero) ----------
+  function setAppRunning(running) {
+    appRunning = running
+    if (lastSample) renderTiles(lastSample)
+  }
+
+  // ---------- reset al cambiar de app/device (selector) ----------
+  // Mezclar series de dos apps en la misma timeline sería engañoso: se vacían
+  // los buffers, los totales, el veredicto y las marcas de crash.
   function resetSeries() {
-    tlData.forEach(function (arr) {
-      arr.length = 0
-    })
+    fpsData.length = 0
+    gpuData.length = 0
+    cpuData.length = 0
+    cpuDevData.length = 0
+    tickStatus.length = 0
+    crashMarks.length = 0
+    memTrendData.length = 0
+    gcDots = []
+    lastPss = null
     netData[0].length = 0
     netData[1].length = 0
     netTotalRx = 0
     netTotalTx = 0
     netEverSeen = false
+    crashCount = 0
     lastSample = null
-    var fsub = document.getElementById('fpsSub')
-    if (fsub) fsub.textContent = ''
-    if (timeline)
-      timeline.setOption({
-        series: SERIES.map(function (_, i) {
-          return { data: tlData[i] }
-        }),
+    appRunning = null
+    repaintTl()
+    repaintMemTrend()
+    if (netSpark) netSpark.setOption({ series: [{ data: [] }, { data: [] }] })
+    if (memPie)
+      memPie.setOption({
+        series: [
+          {
+            data: memMeta().map(function (m) {
+              return { name: m.name, value: 0, itemStyle: { color: m.color } }
+            }),
+          },
+        ],
       })
-    if (netSpark) netSpark.setOption({ series: [{ data: netData[0] }, { data: netData[1] }] })
+    ;['pssNum', 'rssNum'].forEach(function (id) {
+      $(id).textContent = '—'
+    })
+    $('ramAppBar').style.width = '0%'
+    $('ramAppSub').textContent = '—'
+    $('fpsNum').innerHTML = '—<span class="unit">fps</span>'
+    setSem($('fpsNum'), null)
+    setSem($('fpsStatus'), null)
+    $('fpsStatusWord').textContent = 'waiting…'
+    $('jankV').textContent = '—'
+    setSem($('jankV'), null)
+    $('p90V').textContent = '—'
+    $('p99V').textContent = '—'
+    renderVerdict()
   }
 
   // ---------- connection status ----------
   var startTs = null
   function setConnected(connected) {
-    var badge = document.getElementById('recBadge')
-    var label = document.getElementById('recLabel')
+    var badge = $('recBadge')
+    var label = $('recLabel')
     badge.classList.toggle('offline', !connected)
     label.textContent = connected ? 'LIVE' : 'OFFLINE'
     if (connected && startTs === null) startTs = Date.now()
@@ -839,24 +977,29 @@
     var s = Math.floor((Date.now() - startTs) / 1000)
     var m = Math.floor(s / 60),
       ss = s % 60
-    document.getElementById('recTime').textContent =
-      (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss
+    $('recTime').textContent = (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss
   }, 1000)
 
-  // ---------- theme (se controla desde Configuración del menú ☰) ----------
+  // ---------- theme (toggle del header + Configuración del ☰; persiste) ----------
   function applyTheme(next) {
     if (next !== 'light' && next !== 'dark') return
+    $('themeToggle').textContent = next === 'dark' ? '☀️' : '🌙'
+    var cfgTheme = $('cfgTheme')
+    if (cfgTheme) cfgTheme.checked = next === 'dark'
     if (next === theme) return
     theme = next
     C = PALETTES[theme]
     document.body.setAttribute('data-theme', theme)
     disposeCharts()
-    SERIES = seriesMeta()
     buildCharts()
-    if (lastSample) render(lastSample)
+    if (lastSample) {
+      renderTiles(lastSample)
+      renderMem(lastSample)
+    }
   }
 
   function init() {
+    $('targetChip').textContent = 'target ' + fpsTarget
     buildCharts()
     window.addEventListener('resize', function () {
       allCharts().forEach(function (c) {
@@ -870,9 +1013,12 @@
     render: render,
     setDevice: setDevice,
     setConnected: setConnected,
+    setAppRunning: setAppRunning,
     resetSeries: resetSeries,
     setTheme: applyTheme,
     setFpsTarget: setFpsTarget,
+    noteCrash: noteCrash,
+    noteGc: noteGc,
     getTheme: function () {
       return theme
     },

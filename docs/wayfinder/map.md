@@ -168,6 +168,15 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   GC/JANK flasheantes descartados, paleta de series validada (dataviz) sobre dark
   default + light. Feedback HITL diferido a la mañana por pedido del usuario; itera
   antes/durante el 032.
+- [Implementar el rediseño en src/ui](tickets/032-implementar-redisenio.md) — migración
+  EN UN PASO del contrato del 031 al dashboard real: `index.html`/`render.js` reescritos
+  (secciones por tema, FPS hero con semáforo, timeline 2 carriles con unidades reales,
+  mini-veredicto vivo en el header, dark default — `appStore` cambia el default de tema),
+  crash/GC detectados del stream de logs (marcas CRASH + puntos ámbar), `logsCore` UMD
+  intacto y espejo de `fpsStatusOf` guardado (mirrors.test.ts sin cambios). El
+  smoke-selector ahora emite métricas sintéticas guionadas (antes todo N/A). 342 tests +
+  typecheck + fmt verdes; eyes PASS en dark/light/mobile
+  (`.logs/evidence/2026-07-31/032-redesign/`). HITL de la mañana itera sobre esto.
 
 ## Not yet specified
 

@@ -107,7 +107,7 @@ describe('AppStore (persistencia)', () => {
     )
     const store = new AppStore(cfg, legacy)
     expect(store.data.last).toBe('com.evermore.oda.qa')
-    expect(store.data.theme).toBe('light') // defaults nuevos completados
+    expect(store.data.theme).toBe('dark') // defaults nuevos completados (dark desde el 032)
     store.select('com.evermore.oda.qa')
     // tras el primer save, config.json existe y manda sobre el legacy
     const reloaded = new AppStore(cfg, legacy)

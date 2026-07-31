@@ -38,8 +38,10 @@
     }
     pkg = app.packageName
     appSel.pkgLabel.textContent = app.packageName
+    // el hero de FPS usa este estado para distinguir "app not running" de "no data"
+    ProfilerDashboard.setAppRunning(app.pid !== null)
     if (app.pid === null) {
-      appSel.launched.textContent = device ? 'esperando proceso…' : 'esperando device…'
+      appSel.launched.textContent = device ? 'waiting for process…' : 'waiting for device…'
       appSel.launched.className = 'app-launched waiting'
       appSel.launched.hidden = false
     } else if (app.launched) {
@@ -54,7 +56,7 @@
   function loadPackages() {
     var url = '/api/packages' + (appSel.sys.checked ? '?system=1' : '')
     appSel.empty.hidden = false
-    appSel.empty.textContent = 'Cargando apps del device…'
+    appSel.empty.textContent = 'Loading device apps…'
     fetch(url)
       .then(function (r) {
         return r.json()
@@ -66,7 +68,7 @@
         renderAppList()
       })
       .catch(function () {
-        appSel.empty.textContent = 'No se pudo listar las apps.'
+        appSel.empty.textContent = 'Could not list the apps.'
       })
   }
 
@@ -79,7 +81,7 @@
     })
     appSel.list.innerHTML = ''
     appSel.empty.hidden = shown.length > 0
-    appSel.empty.textContent = 'Sin resultados.'
+    appSel.empty.textContent = 'No results.'
     shown.forEach(function (p) {
       var li = document.createElement('li')
       var b = document.createElement('button')
@@ -109,7 +111,7 @@
       return
     }
     appSwitching = true
-    appSel.pkgLabel.textContent = p + ' — cambiando…'
+    appSel.pkgLabel.textContent = p + ' — switching…'
     closeAppPop()
     fetch('/api/app', { method: 'POST', body: JSON.stringify({ package: p }) })
       .then(function (r) {
@@ -165,7 +167,7 @@
 
   function loadDevices() {
     devSel.empty.hidden = false
-    devSel.empty.textContent = 'Buscando devices…'
+    devSel.empty.textContent = 'Looking for devices…'
     devSel.list.innerHTML = ''
     fetch('/api/devices')
       .then(function (r) {
@@ -175,14 +177,14 @@
         renderDeviceList(data)
       })
       .catch(function () {
-        devSel.empty.textContent = 'No se pudo listar los devices.'
+        devSel.empty.textContent = 'Could not list the devices.'
       })
   }
 
   function renderDeviceList(data) {
     devSel.list.innerHTML = ''
     devSel.empty.hidden = data.devices.length > 0
-    devSel.empty.textContent = 'Sin devices. Conectá por USB y tocá Refrescar.'
+    devSel.empty.textContent = 'No devices. Plug in via USB and hit Refresh.'
     data.devices.forEach(function (d) {
       var li = document.createElement('li')
       var b = document.createElement('button')
@@ -221,7 +223,7 @@
     if (devSwitching) return
     devSwitching = true
     closeDevPop()
-    document.getElementById('devName').textContent = 'Cambiando de device…'
+    document.getElementById('devName').textContent = 'Switching device…'
     fetch('/api/device', { method: 'POST', body: JSON.stringify({ serial: serial }) })
       .then(function (r) {
         if (!r.ok) throw new Error('switch failed')
@@ -277,7 +279,7 @@
 
   // Descarga vía blob (no navegación): un error del server se muestra, no rompe la página.
   function downloadReport(query, statusEl) {
-    setStatus(statusEl, 'Generando reporte…')
+    setStatus(statusEl, 'Generating report…')
     fetch('/api/report?' + query)
       .then(function (r) {
         if (!r.ok) {
@@ -298,11 +300,11 @@
           setTimeout(function () {
             URL.revokeObjectURL(a.href)
           }, 10000)
-          setStatus(statusEl, 'Reporte descargado (copia en la carpeta de reportes).', 'ok')
+          setStatus(statusEl, 'Report downloaded (copy in the reports folder).', 'ok')
         })
       })
       .catch(function (e) {
-        setStatus(statusEl, 'No se pudo exportar: ' + e.message, 'err')
+        setStatus(statusEl, 'Export failed: ' + e.message, 'err')
       })
   }
 
@@ -319,7 +321,7 @@
 
   function loadSessions() {
     menu.sessEmpty.hidden = false
-    menu.sessEmpty.textContent = 'Cargando…'
+    menu.sessEmpty.textContent = 'Loading…'
     menu.sessList.innerHTML = ''
     fetch('/api/sessions')
       .then(function (r) {
@@ -327,7 +329,7 @@
       })
       .then(function (data) {
         menu.sessEmpty.hidden = data.sessions.length > 0
-        menu.sessEmpty.textContent = 'Sin sesiones guardadas.'
+        menu.sessEmpty.textContent = 'No saved sessions.'
         data.sessions.forEach(function (s) {
           var li = document.createElement('li')
           li.className = 'sess-item'
@@ -342,7 +344,7 @@
             d.toLocaleDateString() +
             ' ' +
             d.toLocaleTimeString().slice(0, 5) +
-            (s.id === data.current ? ' · en curso' : '')
+            (s.id === data.current ? ' · in progress' : '')
           if (s.id === data.current) b.className = 'current'
           var sub = document.createElement('span')
           sub.className = 'sess-sub'
@@ -351,7 +353,7 @@
           metaBox.appendChild(sub)
           var dl = document.createElement('span')
           dl.className = 'app-use'
-          dl.textContent = '⬇ reporte'
+          dl.textContent = '⬇ report'
           b.appendChild(metaBox)
           b.appendChild(dl)
           b.addEventListener('click', function () {
@@ -366,7 +368,7 @@
             lb.className = 'app-chip'
             lb.textContent = '⬇ .' + fmt
             if (s.hasLogs) {
-              lb.title = 'Exportar los logs de la sesión (.' + fmt + ')'
+              lb.title = 'Export the session logs (.' + fmt + ')'
               lb.addEventListener('click', function (e) {
                 e.stopPropagation()
                 LogsPanel.downloadExport(
@@ -379,7 +381,7 @@
               })
             } else {
               lb.disabled = true
-              lb.title = 'Sesión sin logs guardados'
+              lb.title = 'Session without saved logs'
             }
             li.appendChild(lb)
           })
@@ -387,7 +389,7 @@
         })
       })
       .catch(function () {
-        menu.sessEmpty.textContent = 'No se pudo cargar el historial.'
+        menu.sessEmpty.textContent = 'Could not load the history.'
       })
   }
 
@@ -431,7 +433,7 @@
     // "auto" delega el intervalo al server (según device); un valor concreto = manual
     if (menu.cfgInterval.value === 'auto') patch.intervalAuto = true
     else patch.intervalMs = Number(menu.cfgInterval.value)
-    setStatus(menu.cfgStatus, 'Guardando…')
+    setStatus(menu.cfgStatus, 'Saving…')
     fetch('/api/config', { method: 'PUT', body: JSON.stringify(patch) })
       .then(function (r) {
         if (!r.ok) throw new Error('error ' + r.status)
@@ -444,10 +446,10 @@
         appSel.chip.textContent =
           data.config.filterTerm.charAt(0).toUpperCase() + data.config.filterTerm.slice(1)
         appData = null // el próximo open re-fetchea con el filtro nuevo
-        setStatus(menu.cfgStatus, 'Guardado ✓', 'ok')
+        setStatus(menu.cfgStatus, 'Saved ✓', 'ok')
       })
       .catch(function (e) {
-        setStatus(menu.cfgStatus, 'No se pudo guardar: ' + e.message, 'err')
+        setStatus(menu.cfgStatus, 'Could not save: ' + e.message, 'err')
       })
   })
 
@@ -472,15 +474,21 @@
     e.stopPropagation()
   })
 
-  // Tema persistido: aplicar el guardado al cargar. El toggle de Configuración
-  // es el único control: aplica y persiste al instante (no requiere Guardar).
+  // Tema persistido: aplicar el guardado al cargar. Dos controles equivalentes
+  // (rediseño 031/032): el toggle ☀️/🌙 del header y el switch de Configuración.
+  // Ambos aplican y persisten al instante (no requieren Guardar).
   void loadConfig(true)
-  menu.cfgTheme.addEventListener('change', function () {
-    var theme = menu.cfgTheme.checked ? 'dark' : 'light'
+  function persistTheme(theme) {
     ProfilerDashboard.setTheme(theme)
     fetch('/api/config', { method: 'PUT', body: JSON.stringify({ theme: theme }) }).catch(
       function () {},
     )
+  }
+  menu.cfgTheme.addEventListener('change', function () {
+    persistTheme(menu.cfgTheme.checked ? 'dark' : 'light')
+  })
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    persistTheme(ProfilerDashboard.getTheme() === 'dark' ? 'light' : 'dark')
   })
 
   function closePops() {
@@ -584,6 +592,29 @@
     while (rows.children.length > 500) rows.removeChild(rows.lastChild)
   }
 
+  // --- Señales de perf derivadas del stream de logs (rediseño 031/032) ---
+  // Crash: el comienzo de un bloque isCrash (líneas consecutivas del mismo pid
+  // comparten un solo evento) marca CRASH en la timeline y suma al chip del
+  // veredicto. GC: las líneas del ART ("GC freed…") ponen el punto ámbar sobre
+  // el trend de PSS. Ambas son best-effort — solo miran lo que ya llega por WS.
+  var lastLogWasCrash = false
+  var lastCrashPid = null
+  var GC_RE = /\bGC freed\b|concurrent copying GC|concurrent mark compact GC/
+
+  function scanLogSignals(entries) {
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i]
+      if (e.isCrash) {
+        if (!lastLogWasCrash || lastCrashPid !== e.pid) ProfilerDashboard.noteCrash(e.ts)
+        lastLogWasCrash = true
+        lastCrashPid = e.pid
+      } else {
+        lastLogWasCrash = false
+        if (GC_RE.test(e.message)) ProfilerDashboard.noteGc(e.ts)
+      }
+    }
+  }
+
   function connect() {
     var proto = location.protocol === 'https:' ? 'wss' : 'ws'
     var ws = new WebSocket(proto + '://' + location.host + '/ws')
@@ -619,6 +650,7 @@
       } else if (msg.type === 'app') {
         onAppStatus(msg.app)
       } else if (msg.type === 'logs') {
+        scanLogSignals(msg.entries)
         LogsPanel.onLogs(msg.entries)
       }
     })

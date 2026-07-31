@@ -1,9 +1,12 @@
 <!doctype html>
 <!--
-  Evermore Android Profiler — LIVE dashboard (wayfinder ticket 021).
-  Reusa el layout del prototipo (prototypes/dashboard) pero la fuente de datos es
-  REAL: un cliente WebSocket (live.js) recibe Samples del server y los pasa a la
-  misma lógica de render (render.js). Sin build step.
+  Evermore Android Profiler — LIVE dashboard (wayfinder tickets 021 → 032).
+  Layout del rediseño aprobado en el prototipo del 031 (prototypes/redesign):
+  secciones por tema con rails (Performance → Memory & System → Network → App logs),
+  tiles con números grandes (FPS hero con semáforo del 025 + jank/p90/p99 del 024),
+  timeline de dos carriles con unidades reales y mini-veredicto vivo en el header.
+  La fuente de datos es REAL: live.js (WebSocket) alimenta render.js; logs vía
+  logsCore.js + logsPanel.js. Sin build step.
 -->
 <html lang="en">
   <head>
@@ -12,92 +15,119 @@
     <title>Evermore Android Profiler — live</title>
     <link rel="icon" type="image/png" href="assets/evermore-appicon.png" />
     <style>
-      /* ---- Vendored fonts (offline) with system fallback ---- */
+      /* ---- Vendored fonts (offline, system fallback) ---- */
       @font-face {
         font-family: 'Baloo 2';
         font-weight: 600;
-        font-style: normal;
-        font-display: swap;
         src: url('vendor/fonts/baloo-2-latin-600-normal.woff2') format('woff2');
+        font-display: swap;
       }
       @font-face {
         font-family: 'Baloo 2';
         font-weight: 700;
-        font-style: normal;
-        font-display: swap;
         src: url('vendor/fonts/baloo-2-latin-700-normal.woff2') format('woff2');
+        font-display: swap;
       }
       @font-face {
         font-family: 'Baloo 2';
         font-weight: 800;
-        font-style: normal;
-        font-display: swap;
         src: url('vendor/fonts/baloo-2-latin-800-normal.woff2') format('woff2');
+        font-display: swap;
       }
       @font-face {
         font-family: 'Inter';
         font-weight: 400;
-        font-style: normal;
-        font-display: swap;
         src: url('vendor/fonts/inter-latin-400-normal.woff2') format('woff2');
+        font-display: swap;
       }
       @font-face {
         font-family: 'Inter';
         font-weight: 500;
-        font-style: normal;
-        font-display: swap;
         src: url('vendor/fonts/inter-latin-500-normal.woff2') format('woff2');
+        font-display: swap;
       }
       @font-face {
         font-family: 'Inter';
         font-weight: 600;
-        font-style: normal;
-        font-display: swap;
         src: url('vendor/fonts/inter-latin-600-normal.woff2') format('woff2');
+        font-display: swap;
       }
       @font-face {
         font-family: 'Inter';
         font-weight: 700;
-        font-style: normal;
-        font-display: swap;
         src: url('vendor/fonts/inter-latin-700-normal.woff2') format('woff2');
+        font-display: swap;
       }
 
-      /* ---- Theme tokens: LIGHT is the default, dark via body[data-theme="dark"] ----
-     Brand accents (assets/brand/README.md): #EB008B primary, #00E6DA secondary. */
-      :root {
-        --bg: #f4f4f9;
-        --bg-card: #ffffff;
-        --bg-card2: #fbfbfe;
-        --primary: #eb008b;
-        --secondary: #00e6da;
-        --secondary-ink: #009e96; /* teal readable on light backgrounds */
-        --text: #1c1c28;
-        --muted: #66667a;
-        --line: #e2e2ec;
-        --chip-bg: rgba(28, 28, 40, 0.04);
-        --ok: #0fa968;
-        --warn: #e08a00;
-        --bad: #e11d48;
-        --glow-1: rgba(235, 0, 139, 0.06);
-        --glow-2: rgba(0, 230, 218, 0.07);
-        --font-title: 'Baloo 2', ui-rounded, system-ui, sans-serif;
-        --font-body: 'Inter', system-ui, -apple-system, sans-serif;
-      }
+      /* =====================================================================
+         THEME TOKENS — DARK is the protagonist (default); light via data-theme.
+         Brand accents (#EB008B / #00E6DA) stay as UI chrome. CHART SERIES use
+         deeper validated steps (dataviz six checks) — pro, not gamer-neon.
+         ===================================================================== */
+      :root,
       body[data-theme='dark'] {
         --bg: #0b0b10;
-        --bg-card: #15151d;
-        --bg-card2: #1b1b25;
-        --secondary-ink: #00e6da;
+        --card: #15151d;
+        --card2: #1b1b25;
+        --line: #2a2a38;
         --text: #f2f2f6;
         --muted: #9b9bab;
-        --line: #2a2a38;
         --chip-bg: rgba(255, 255, 255, 0.04);
+        --accent: #eb008b; /* brand magenta — UI chrome only */
+        --accent2: #00e6da; /* brand teal   — UI chrome only */
+        --accent2-ink: #00e6da;
+        /* status (reserved — never used as series colors) */
         --ok: #2ee59d;
         --warn: #ffc24b;
         --bad: #ff4d6d;
-        --glow-1: rgba(235, 0, 139, 0.1);
-        --glow-2: rgba(0, 230, 218, 0.07);
+        /* categorical series (validated, dark surface #15151D) */
+        --s-fps: #00a89e;
+        --s-gpu: #eb008b;
+        --s-cpu: #8b6be8;
+        --s-temp: #c77f00;
+        /* memory donut (chromatic order validated; stack/other = neutrals) */
+        --mem-java: #eb008b;
+        --mem-graphics: #8b6be8;
+        --mem-native: #00a89e;
+        --mem-code: #c77f00;
+        --mem-stack: #7a7a90;
+        --mem-other: #4e4e62;
+        --glow-1: rgba(235, 0, 139, 0.08);
+        --glow-2: rgba(0, 230, 218, 0.055);
+        --dot-grid: rgba(255, 255, 255, 0.024);
+        --track: #22222e;
+        --shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+        --font-title: 'Baloo 2', ui-rounded, system-ui, sans-serif;
+        --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      body[data-theme='light'] {
+        --bg: #f4f4f9;
+        --card: #ffffff;
+        --card2: #fbfbfe;
+        --line: #e2e2ec;
+        --text: #1c1c28;
+        --muted: #66667a;
+        --chip-bg: rgba(28, 28, 40, 0.04);
+        --accent2-ink: #009e96;
+        --ok: #0fa968;
+        --warn: #e08a00;
+        --bad: #e11d48;
+        --s-fps: #009e96;
+        --s-gpu: #eb008b;
+        --s-cpu: #7c5ce0;
+        --s-temp: #b8860b;
+        --mem-java: #eb008b;
+        --mem-graphics: #7c5ce0;
+        --mem-native: #009e96;
+        --mem-code: #b8860b;
+        --mem-stack: #9a9ab0;
+        --mem-other: #c6c6d4;
+        --glow-1: rgba(235, 0, 139, 0.05);
+        --glow-2: rgba(0, 230, 218, 0.06);
+        --dot-grid: rgba(28, 28, 40, 0.03);
+        --track: #ececf4;
+        --shadow: 0 14px 36px rgba(28, 28, 40, 0.12);
       }
 
       * {
@@ -110,74 +140,92 @@
       }
       body {
         background:
-          radial-gradient(1200px 500px at 15% -10%, var(--glow-1), transparent 60%),
-          radial-gradient(1000px 500px at 90% -10%, var(--glow-2), transparent 60%), var(--bg);
+          radial-gradient(1100px 460px at 12% -8%, var(--glow-1), transparent 60%),
+          radial-gradient(950px 460px at 92% -8%, var(--glow-2), transparent 60%),
+          radial-gradient(var(--dot-grid) 1px, transparent 1px) 0 0 / 26px 26px,
+          var(--bg);
         color: var(--text);
         font-family: var(--font-body);
         min-height: 100vh;
-        padding: 18px 22px 26px;
+        padding: 14px 20px 26px;
       }
 
       .card {
-        background: linear-gradient(180deg, var(--bg-card2), var(--bg-card));
+        background: linear-gradient(180deg, var(--card2), var(--card));
         border: 1px solid var(--line);
-        border-radius: 14px;
+        border-radius: 12px;
         min-width: 0;
       }
-      .card-title {
+
+      /* Section rails: uppercase label + brand tick + hairline (grafana-row style) */
+      .section-label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 18px 2px 8px;
         font-family: var(--font-title);
         font-weight: 700;
-        font-size: 13px;
-        letter-spacing: 0.12em;
+        font-size: 11.5px;
+        letter-spacing: 0.18em;
         text-transform: uppercase;
         color: var(--muted);
+      }
+      .section-label::before {
+        content: '';
+        width: 14px;
+        height: 4px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--accent), var(--accent2));
+        flex: 0 0 auto;
+      }
+      .section-label::after {
+        content: '';
+        flex: 1 1 auto;
+        height: 1px;
+        background: var(--line);
       }
 
       /* ================= HEADER ================= */
       header {
         display: flex;
         align-items: center;
-        gap: 20px;
-        padding: 10px 4px 18px;
+        gap: 16px;
+        padding: 4px 2px 10px;
         flex-wrap: nowrap;
       }
-      .brand-evermore {
+      .brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
         flex: 0 0 auto;
       }
-      .brand-evermore img {
-        height: 84px;
+      .brand img {
+        height: 48px;
         display: block;
-        filter: drop-shadow(0 4px 18px rgba(235, 0, 139, 0.25));
+        filter: drop-shadow(0 3px 12px rgba(235, 0, 139, 0.28));
       }
       .brand-sub {
         font-family: var(--font-title);
         font-weight: 800;
-        font-size: 15px;
-        letter-spacing: 0.22em;
+        font-size: 10px;
+        letter-spacing: 0.26em;
         text-transform: uppercase;
-        color: var(--secondary-ink);
-        margin-top: -6px;
-        text-align: center;
+        color: var(--accent2-ink);
+        margin-top: -2px;
       }
 
       .device-card {
         display: flex;
         align-items: center;
-        gap: 16px;
-        padding: 12px 18px;
         min-width: 0;
         flex: 1 1 auto;
         position: relative;
+        padding: 7px 12px;
       }
-      .device-card > div {
-        min-width: 0;
-      }
-
-      /* --- Selector de device (la ficha es clickeable; popover con refresh) --- */
       .dev-btn {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 12px;
         min-width: 0;
         flex: 1 1 auto;
         background: none;
@@ -191,22 +239,38 @@
       .dev-btn > div {
         min-width: 0;
       }
+      .device-icon {
+        font-size: 20px;
+      }
+      .device-name {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 14.5px;
+        white-space: nowrap;
+      }
+      .device-specs {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+      .spec {
+        font-size: 10px;
+        color: var(--muted);
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 1px 7px;
+        white-space: nowrap;
+      }
+      .spec.hz {
+        color: var(--accent2-ink);
+        border-color: var(--accent2-ink);
+      }
       .dev-btn .caret {
         margin-left: auto;
         color: var(--muted);
-        font-size: 10px;
-      }
-      .dev-pop {
-        left: 0;
-        right: auto;
-        width: 400px;
-      }
-      .dev-title {
-        flex: 1;
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
+        font-size: 9px;
       }
       .dev-item-name {
         overflow: hidden;
@@ -220,83 +284,123 @@
       .dev-state {
         font-size: 10px;
         font-weight: 700;
-        letter-spacing: 0.06em;
         color: var(--warn);
         border: 1px solid var(--warn);
         border-radius: 999px;
         padding: 1px 7px;
         white-space: nowrap;
       }
-      .app-list button:disabled {
-        opacity: 0.55;
-        cursor: not-allowed;
-      }
-      .device-icon {
-        font-size: 26px;
-      }
-      .device-name {
-        font-family: var(--font-title);
-        font-weight: 700;
-        font-size: 17px;
-      }
-      .device-specs {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-top: 4px;
-      }
-      .spec {
-        font-size: 11px;
-        color: var(--muted);
-        background: var(--chip-bg);
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        padding: 2px 9px;
-        white-space: nowrap;
-      }
 
       .header-right {
         margin-left: auto;
         display: flex;
-        align-items: flex-end;
-        gap: 14px;
-        flex-wrap: nowrap;
+        align-items: center;
+        gap: 8px 10px;
+        flex: 0 1 auto;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      /* Mini-verdict pill: live overall state, same semaphore as the report (026) */
+      .verdict {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 38px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--chip-bg);
+        white-space: nowrap;
+        cursor: default;
+      }
+      .verdict-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--muted);
         flex: 0 0 auto;
       }
+      .verdict-word {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 12.5px;
+        letter-spacing: 0.08em;
+      }
+      .verdict-sub {
+        font-size: 10.5px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .verdict.v-green {
+        border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+        background: color-mix(in srgb, var(--ok) 9%, transparent);
+      }
+      .verdict.v-green .verdict-dot {
+        background: var(--ok);
+      }
+      .verdict.v-green .verdict-word {
+        color: var(--ok);
+      }
+      .verdict.v-yellow {
+        border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+        background: color-mix(in srgb, var(--warn) 10%, transparent);
+      }
+      .verdict.v-yellow .verdict-dot {
+        background: var(--warn);
+      }
+      .verdict.v-yellow .verdict-word {
+        color: var(--warn);
+      }
+      .verdict.v-red {
+        border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+        background: color-mix(in srgb, var(--bad) 10%, transparent);
+      }
+      .verdict.v-red .verdict-dot {
+        background: var(--bad);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .verdict.v-red .verdict-word {
+        color: var(--bad);
+      }
+      .verdict .v-crash {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--bad);
+        border: 1px solid var(--bad);
+        border-radius: 999px;
+        padding: 1px 7px;
+      }
+
       .app-name {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 3px;
+        position: relative;
       }
       .app-name label {
-        font-size: 10px;
-        letter-spacing: 0.1em;
+        font-size: 9px;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
         color: var(--muted);
-      }
-      .app-name .pkg {
-        font-family: var(--font-body);
-        font-size: 13px;
-        color: var(--text);
-        background: var(--bg-card2);
-        border: 1px solid var(--line);
-        border-radius: 9px;
-        padding: 8px 10px;
-      }
-
-      /* --- Selector de apps (dropdown buscable sobre el header) --- */
-      .app-select {
-        position: relative;
       }
       button.pkg {
         display: flex;
         align-items: center;
         gap: 8px;
         cursor: pointer;
-        max-width: 260px;
+        max-width: 250px;
+        font-family: var(--font-body);
+        font-size: 12.5px;
+        color: var(--text);
+        background: var(--card2);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 6px 10px;
       }
       button.pkg:hover {
-        border-color: var(--secondary-ink);
+        border-color: var(--accent2-ink);
       }
       button.pkg #appPkg {
         overflow: hidden;
@@ -305,55 +409,146 @@
       }
       button.pkg .caret {
         color: var(--muted);
-        font-size: 10px;
+        font-size: 9px;
       }
       .app-launched {
-        font-size: 10px;
+        font-size: 9.5px;
         font-weight: 700;
-        letter-spacing: 0.06em;
-        color: var(--secondary-ink);
-        border: 1px solid var(--secondary-ink);
+        letter-spacing: 0.05em;
+        color: var(--accent2-ink);
+        border: 1px solid var(--accent2-ink);
         border-radius: 999px;
-        padding: 1px 8px;
+        padding: 1px 7px;
         white-space: nowrap;
       }
       .app-launched.waiting {
         color: var(--warn);
         border-color: var(--warn);
       }
-      .app-pop {
+
+      .rec-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 38px;
+        background: rgba(225, 29, 72, 0.08);
+        border: 1px solid rgba(225, 29, 72, 0.45);
+        border-radius: 999px;
+        padding: 0 14px;
+        user-select: none;
+      }
+      .rec-badge.offline {
+        background: var(--chip-bg);
+        border-color: var(--line);
+      }
+      .rec-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--bad);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .rec-badge.offline .rec-dot {
+        animation: none;
+        background: var(--muted);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.25;
+        }
+      }
+      .rec-label {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+      }
+      .rec-time {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .icon-btn {
+        height: 38px;
+        min-width: 38px;
+        padding: 0 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        background: var(--card2);
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-family: var(--font-body);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+      }
+      .icon-btn:hover {
+        border-color: var(--accent2-ink);
+        color: var(--text);
+      }
+      .brand-odaclick img {
+        height: 36px;
+        display: block;
+      }
+
+      /* Popovers (device / app / menu) */
+      .pop {
         position: absolute;
         top: calc(100% + 6px);
         right: 0;
         z-index: 60;
         width: 360px;
         max-width: calc(100vw - 32px);
-        background: var(--bg-card);
+        background: var(--card);
         border: 1px solid var(--line);
         border-radius: 12px;
-        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+        box-shadow: var(--shadow);
         padding: 10px;
       }
-      .app-pop-controls {
+      .dev-pop {
+        left: 0;
+        right: auto;
+        width: 400px;
+      }
+      .pop-controls {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-bottom: 8px;
       }
-      .app-pop input[type='search'] {
+      .pop-title {
+        flex: 1;
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .pop input[type='search'] {
         flex: 1;
         min-width: 0;
-        font: 13px var(--font-body);
+        font: 12.5px var(--font-body);
         color: var(--text);
-        background: var(--bg-card2);
+        background: var(--card2);
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 7px 9px;
         outline: none;
       }
-      .app-pop input[type='search']:focus {
-        border-color: var(--secondary-ink);
+      .pop input[type='search']:focus {
+        border-color: var(--accent2-ink);
       }
+      /* .app-chip = alias que crean live.js/logsPanel.js por código */
+      .chip,
       .app-chip {
         font: 600 11px var(--font-body);
         color: var(--muted);
@@ -365,10 +560,21 @@
         user-select: none;
         white-space: nowrap;
       }
+      .chip.active,
       .app-chip.active {
         color: #fff;
-        background: var(--primary);
-        border-color: var(--primary);
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .chip.on,
+      .app-chip.on {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .chip:disabled,
+      .app-chip:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
       .app-sys {
         display: flex;
@@ -380,21 +586,21 @@
         cursor: pointer;
         user-select: none;
       }
-      .app-list {
+      .pop-list {
         list-style: none;
         margin: 0;
         padding: 0;
-        max-height: 320px;
+        max-height: 300px;
         overflow: auto;
       }
-      .app-list button {
+      .pop-list button {
         width: 100%;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
         text-align: left;
-        font: 13px var(--font-body);
+        font: 12.5px var(--font-body);
         color: var(--text);
         background: none;
         border: none;
@@ -402,29 +608,33 @@
         padding: 7px 9px;
         cursor: pointer;
       }
-      .app-list button:hover {
+      .pop-list button:hover {
         background: var(--chip-bg);
       }
-      .app-list button.current {
-        color: var(--secondary-ink);
+      .pop-list button.current {
+        color: var(--accent2-ink);
         font-weight: 600;
       }
+      .pop-list button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .use-count,
       .app-use {
         font-size: 11px;
         color: var(--muted);
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
       }
-      .app-empty {
+      .pop-empty {
         padding: 12px 9px;
         font-size: 12px;
         color: var(--muted);
       }
 
-      /* --- Menú ☰: export / registros / configuración --- */
+      /* ☰ menu */
       .menu-select {
         position: relative;
-        align-self: center;
       }
       .menu-pop {
         width: 440px;
@@ -461,11 +671,11 @@
         margin-top: 6px;
         min-height: 14px;
       }
+      .menu-status.ok {
+        color: var(--accent2-ink);
+      }
       .menu-status.err {
         color: var(--bad);
-      }
-      .menu-status.ok {
-        color: var(--secondary-ink);
       }
       .sess-meta {
         display: flex;
@@ -484,6 +694,15 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .sess-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .sess-item > button:first-child {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
       .cfg-grid {
         display: grid;
         grid-template-columns: 110px 1fr;
@@ -499,7 +718,7 @@
         width: 100%;
         font: 12.5px var(--font-body);
         color: var(--text);
-        background: var(--bg-card2);
+        background: var(--card2);
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 6px 9px;
@@ -507,13 +726,25 @@
       }
       .cfg-grid input:focus,
       .cfg-grid select:focus {
-        border-color: var(--secondary-ink);
+        border-color: var(--accent2-ink);
       }
       .cfg-actions {
         display: flex;
         align-items: center;
         gap: 10px;
         margin-top: 10px;
+      }
+      .cfg-save {
+        font: 600 12px var(--font-body);
+        color: #fff;
+        background: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: 999px;
+        padding: 6px 16px;
+        cursor: pointer;
+      }
+      .cfg-save:hover {
+        filter: brightness(1.08);
       }
       .switch {
         display: inline-flex;
@@ -552,209 +783,367 @@
           background 0.15s ease;
       }
       .switch input:checked + .slider {
-        background: var(--primary);
-        border-color: var(--primary);
+        background: var(--accent);
+        border-color: var(--accent);
       }
       .switch input:checked + .slider::after {
         transform: translateX(18px);
         background: #fff;
       }
-      .switch-icons {
-        font-size: 13px;
-      }
-      .cfg-save {
-        font: 600 12px var(--font-body);
-        color: #fff;
-        background: var(--primary);
-        border: 1px solid var(--primary);
-        border-radius: 999px;
-        padding: 6px 16px;
-        cursor: pointer;
-      }
-      .cfg-save:hover {
-        filter: brightness(1.08);
-      }
 
-      .rec-badge {
+      /* ================= PERFORMANCE (hero) ================= */
+      .perf-grid {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 14px;
+      }
+      .perf-left {
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 14px;
+        min-width: 0;
+      }
+      .tile {
+        padding: 14px 16px;
+        position: relative;
+      }
+      .tile-label {
         display: flex;
         align-items: center;
-        gap: 9px;
-        height: 38px;
-        background: rgba(225, 29, 72, 0.08);
-        border: 1px solid rgba(225, 29, 72, 0.45);
-        border-radius: 999px;
-        padding: 0 16px;
-        user-select: none;
-      }
-      .rec-badge.offline {
-        background: var(--chip-bg);
-        border-color: var(--line);
-      }
-      .rec-dot {
-        width: 11px;
-        height: 11px;
-        border-radius: 50%;
-        background: var(--bad);
-        animation: pulse 1.2s ease-in-out infinite;
-      }
-      .rec-badge.offline .rec-dot {
-        animation: none;
-        background: var(--muted);
-      }
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.25;
-        }
-      }
-      .rec-label {
+        justify-content: space-between;
+        gap: 8px;
         font-family: var(--font-title);
-        font-weight: 800;
-        font-size: 13px;
+        font-weight: 700;
+        font-size: 12px;
         letter-spacing: 0.12em;
-      }
-      .rec-time {
-        font-variant-numeric: tabular-nums;
-        font-weight: 600;
-        font-size: 14px;
+        text-transform: uppercase;
         color: var(--muted);
       }
-
-      .theme-toggle {
-        height: 38px;
-        padding: 0 12px;
-        display: flex;
+      .target-chip {
+        font-family: var(--font-body);
+        font-weight: 600;
+        font-size: 10.5px;
+        letter-spacing: 0.02em;
+        text-transform: none;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+        border-radius: 999px;
+        padding: 2px 9px;
+        white-space: nowrap;
+      }
+      .fps-num {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 84px;
+        line-height: 1;
+        letter-spacing: -0.01em;
+        margin: 8px 0 0;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+        transition: color 0.3s ease;
+      }
+      .fps-num .unit {
+        font-family: var(--font-body);
+        font-weight: 500;
+        font-size: 16px;
+        color: var(--muted);
+        letter-spacing: 0;
+        margin-left: 4px;
+      }
+      .fps-num.sem-green {
+        color: var(--ok);
+      }
+      .fps-num.sem-yellow {
+        color: var(--warn);
+      }
+      .fps-num.sem-red {
+        color: var(--bad);
+      }
+      .fps-status {
+        display: inline-flex;
         align-items: center;
-        gap: 6px;
-        background: var(--bg-card2);
+        gap: 7px;
+        margin-top: 8px;
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
         color: var(--muted);
         border: 1px solid var(--line);
         border-radius: 999px;
-        font-family: var(--font-body);
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        user-select: none;
+        padding: 4px 12px;
       }
-      .theme-toggle:hover {
-        border-color: var(--secondary-ink);
-        color: var(--text);
+      .fps-status .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
       }
-
-      .brand-odaclick {
-        align-self: center;
+      .fps-status.sem-green {
+        color: var(--ok);
+        border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+        background: color-mix(in srgb, var(--ok) 8%, transparent);
       }
-      .brand-odaclick img {
-        height: 40px;
-        display: block;
+      .fps-status.sem-green .dot {
+        background: var(--ok);
       }
-
-      /* ================= GAUGES ================= */
-      .gauges {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 14px;
-        margin-bottom: 14px;
+      .fps-status.sem-yellow {
+        color: var(--warn);
+        border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+        background: color-mix(in srgb, var(--warn) 9%, transparent);
       }
-      .gauge-card {
-        padding: 12px 10px 4px;
-        text-align: center;
-        position: relative;
+      .fps-status.sem-yellow .dot {
+        background: var(--warn);
       }
-      .gauge-chart {
-        width: 100%;
-        height: 190px;
+      .fps-status.sem-red {
+        color: var(--bad);
+        border-color: color-mix(in srgb, var(--bad) 50%, transparent);
+        background: color-mix(in srgb, var(--bad) 9%, transparent);
       }
-      .gauge-head {
+      .fps-status.sem-red .dot {
+        background: var(--bad);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .tile-div {
+        height: 1px;
+        background: var(--line);
+        margin: 14px 0 10px;
+      }
+      .framerow {
         display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 8px;
+        gap: 18px;
+        flex-wrap: wrap;
       }
-      /* frame-time/jank bajo el donut GPU·FPS (ticket 024; rediseño fino: 031/032) */
-      .gauge-sub {
+      .fstat {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .fstat .fs-l {
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .fstat .fs-v {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 17px;
+        font-variant-numeric: tabular-nums;
+      }
+      .fstat .fs-v .u {
+        font-family: var(--font-body);
+        font-weight: 500;
         font-size: 11px;
         color: var(--muted);
-        margin-top: -6px;
-        padding-bottom: 6px;
-        min-height: 14px;
       }
-      /* Semáforo de FPS (ticket 025): colorea el jank% del subtítulo con el mismo
-         estado que el número de FPS del donut. Sin dato ⇒ sin clase (muted). */
-      .gauge-sub .sem-green {
+      .fstat .fs-v.sem-green {
         color: var(--ok);
-        font-weight: 600;
       }
-      .gauge-sub .sem-yellow {
+      .fstat .fs-v.sem-yellow {
         color: var(--warn);
-        font-weight: 600;
       }
-      .gauge-sub .sem-red {
+      .fstat .fs-v.sem-red {
         color: var(--bad);
-        font-weight: 600;
-      }
-      .event-chip {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        padding: 2px 8px;
-        border-radius: 999px;
-        opacity: 0;
-        transition: opacity 0.3s;
-      }
-      .event-chip.show {
-        opacity: 1;
-      }
-      .event-chip.charging {
-        background: rgba(15, 169, 104, 0.12);
-        color: var(--ok);
-        border: 1px solid rgba(15, 169, 104, 0.4);
       }
 
-      /* ================= MID ROW: pie + timeline ================= */
-      .mid {
-        display: grid;
-        grid-template-columns: 340px minmax(0, 1fr);
-        gap: 14px;
-        margin-bottom: 14px;
+      .big-num {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 38px;
+        line-height: 1.05;
+        font-variant-numeric: tabular-nums;
+        margin-top: 6px;
       }
-      .panel {
-        padding: 14px 16px 8px;
+      .big-num .unit {
+        font-family: var(--font-body);
+        font-weight: 500;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .bar {
+        height: 6px;
+        border-radius: 999px;
+        background: var(--track);
+        margin-top: 8px;
+        overflow: hidden;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: var(--muted);
+        transition:
+          width 0.5s ease,
+          background 0.3s ease;
+      }
+      .bar.thin {
+        height: 3px;
+        margin-top: 5px;
+      }
+      .bar-sub {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 5px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .tl-card {
+        padding: 12px 14px 6px;
+        display: flex;
+        flex-direction: column;
       }
       .panel-head {
         display: flex;
         align-items: baseline;
         justify-content: space-between;
         gap: 10px;
-        margin-bottom: 2px;
         flex-wrap: wrap;
       }
-      .panel-sub {
-        font-size: 11px;
+      .card-title {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
         color: var(--muted);
+      }
+      .panel-sub {
+        font-size: 10.5px;
+        color: var(--muted);
+      }
+      #tlPerf {
+        width: 100%;
+        height: 344px;
+        min-width: 0;
+      }
+
+      /* ================= MEMORY + SYSTEM ================= */
+      .row2 {
+        display: grid;
+        grid-template-columns: minmax(0, 11fr) minmax(0, 9fr);
+        gap: 14px;
+      }
+      .mem-card {
+        padding: 12px 16px 10px;
+      }
+      .mem-body {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
       }
       #memPie {
         width: 100%;
-        height: 300px;
+        height: 210px;
+        min-width: 0;
       }
-      #timeline {
+      .mem-stats {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+      }
+      .mem-kpis {
+        display: flex;
+        gap: 22px;
+        flex-wrap: wrap;
+      }
+      #memTrend {
         width: 100%;
-        height: 300px;
+        height: 86px;
+        min-width: 0;
+      }
+      .sys-card {
+        padding: 12px 16px 14px;
+      }
+      .sys-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px 20px;
+        margin-top: 4px;
+      }
+      .sys-tile {
+        min-width: 0;
+      }
+      .sys-tile .tile-label {
+        justify-content: flex-start;
+        gap: 6px;
+      }
+      .event-chip {
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        padding: 1px 7px;
+        border-radius: 999px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        background: color-mix(in srgb, var(--ok) 12%, transparent);
+        color: var(--ok);
+        border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+      }
+      .event-chip.show {
+        opacity: 1;
+      }
+      .sub-note {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 4px;
+        min-height: 13px;
+        font-variant-numeric: tabular-nums;
       }
 
-      /* ================= NETWORK FOOTER ================= */
+      /* ================= NETWORK ================= */
       .net {
         display: grid;
         grid-template-columns: auto auto auto minmax(0, 1fr);
         align-items: center;
         gap: 26px;
         padding: 12px 20px;
+      }
+      .net-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 120px;
+      }
+      .net-stat .lbl {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .net-stat .val {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 21px;
+        font-variant-numeric: tabular-nums;
+      }
+      .net-stat .tot {
+        font-size: 11px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .net-rx .val {
+        color: var(--s-fps);
+      }
+      .net-tx .val {
+        color: var(--s-gpu);
+      }
+      #netSpark {
+        width: 100%;
+        height: 58px;
+        min-width: 0;
+      }
+      .net-na {
+        font-size: 11px;
+        color: var(--muted);
+        align-self: center;
       }
       .insp-toggle {
         justify-self: start;
@@ -771,57 +1160,13 @@
         white-space: nowrap;
       }
       .insp-toggle.on {
-        color: var(--primary);
-        border-color: var(--primary);
+        color: var(--accent);
+        border-color: var(--accent);
       }
       .insp-toggle:disabled {
         opacity: 0.5;
         cursor: wait;
       }
-      .insp-toggle .insp-hint {
-        font-weight: 400;
-        color: var(--muted);
-      }
-      .net-stat {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 130px;
-      }
-      .net-stat .lbl {
-        font-size: 10px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-      .net-stat .val {
-        font-family: var(--font-title);
-        font-weight: 700;
-        font-size: 22px;
-        font-variant-numeric: tabular-nums;
-      }
-      .net-stat .tot {
-        font-size: 11px;
-        color: var(--muted);
-        font-variant-numeric: tabular-nums;
-      }
-      .net-rx .val {
-        color: var(--secondary-ink);
-      }
-      .net-tx .val {
-        color: var(--primary);
-      }
-      #netSpark {
-        width: 100%;
-        height: 64px;
-      }
-      .net-na {
-        font-size: 11px;
-        color: var(--muted);
-        align-self: center;
-      }
-
-      /* Network inspector */
       .inspector {
         margin-top: 14px;
         padding: 0;
@@ -831,14 +1176,14 @@
         display: flex;
         align-items: baseline;
         gap: 12px;
-        padding: 14px 18px;
+        padding: 12px 18px;
         border-bottom: 1px solid var(--line);
         flex-wrap: wrap;
       }
       .insp-title {
         font-family: var(--font-title);
         font-weight: 800;
-        font-size: 15px;
+        font-size: 14px;
       }
       .insp-sub {
         font-size: 11px;
@@ -850,7 +1195,7 @@
         color: var(--muted);
       }
       .insp-scroll {
-        max-height: 340px;
+        max-height: 300px;
         overflow: auto;
       }
       .insp-table {
@@ -861,7 +1206,7 @@
       .insp-table th {
         position: sticky;
         top: 0;
-        background: var(--bg-card);
+        background: var(--card);
         text-align: left;
         font-size: 10px;
         letter-spacing: 0.08em;
@@ -876,11 +1221,11 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 460px;
-        font-size: 13px;
+        max-width: 420px;
+        font-size: 12.5px;
       }
       .insp-table tr:hover td {
-        background: color-mix(in srgb, var(--primary) 5%, transparent);
+        background: color-mix(in srgb, var(--accent) 5%, transparent);
       }
       .insp-m {
         font-weight: 700;
@@ -890,34 +1235,33 @@
         background: var(--chip-bg);
       }
       .insp-m.https {
-        color: var(--secondary-ink);
+        color: var(--accent2-ink);
       }
       .insp-m.http {
-        color: var(--primary);
+        color: var(--accent);
       }
       .insp-host {
         font-weight: 600;
+      }
+      .insp-ok {
+        color: var(--accent2-ink);
+      }
+      .insp-err {
+        color: var(--bad);
       }
       .insp-time {
         color: var(--muted);
         font-size: 12px;
       }
-      .insp-ok {
-        color: var(--secondary-ink);
-      }
-      .insp-err {
-        color: #d11;
-      }
       .insp-empty {
-        padding: 32px;
+        padding: 28px;
         text-align: center;
         color: var(--muted);
         font-size: 13px;
       }
 
-      /* ================= LOGS PANEL (ticket 028) ================= */
+      /* ================= LOGS ================= */
       .logs {
-        margin-top: 14px;
         padding: 0;
         overflow: hidden;
       }
@@ -926,7 +1270,7 @@
         display: flex;
         align-items: baseline;
         gap: 12px;
-        padding: 14px 18px;
+        padding: 12px 18px;
         background: none;
         border: none;
         font: inherit;
@@ -936,7 +1280,7 @@
         flex-wrap: wrap;
       }
       .logs-head:hover .insp-title {
-        color: var(--secondary-ink);
+        color: var(--accent2-ink);
       }
       .logs-counts {
         margin-left: auto;
@@ -950,7 +1294,6 @@
       .logs-badge {
         font-size: 10px;
         font-weight: 700;
-        letter-spacing: 0.04em;
         border-radius: 999px;
         padding: 1px 8px;
         border: 1px solid var(--line);
@@ -979,18 +1322,18 @@
         border-bottom: 1px solid var(--line);
       }
       .logs-controls input[type='search'] {
-        flex: 1 1 180px;
-        min-width: 140px;
+        flex: 1 1 170px;
+        min-width: 130px;
         font: 12.5px var(--font-body);
         color: var(--text);
-        background: var(--bg-card2);
+        background: var(--card2);
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 6px 9px;
         outline: none;
       }
       .logs-controls input[type='search']:focus {
-        border-color: var(--secondary-ink);
+        border-color: var(--accent2-ink);
       }
       .logs-range {
         display: flex;
@@ -1000,20 +1343,20 @@
         color: var(--muted);
       }
       .logs-range input {
-        font: 11.5px var(--font-body);
+        font: 11px var(--font-body);
         color: var(--text);
-        background: var(--bg-card2);
+        background: var(--card2);
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 4px 6px;
         outline: none;
-        color-scheme: light;
-      }
-      body[data-theme='dark'] .logs-range input {
         color-scheme: dark;
       }
+      body[data-theme='light'] .logs-range input {
+        color-scheme: light;
+      }
       .logs-range input:focus {
-        border-color: var(--secondary-ink);
+        border-color: var(--accent2-ink);
       }
       .log-chip-e.active {
         color: var(--bad);
@@ -1027,15 +1370,10 @@
       }
       .log-chip-i.active,
       .log-chip-d.active {
-        color: var(--secondary-ink);
-        border-color: var(--secondary-ink);
-        background: color-mix(in srgb, var(--secondary) 10%, transparent);
+        color: var(--accent2-ink);
+        border-color: var(--accent2-ink);
+        background: color-mix(in srgb, var(--accent2) 10%, transparent);
       }
-      .app-chip.on {
-        color: var(--primary);
-        border-color: var(--primary);
-      }
-      /* export de logs (ticket 029): chips junto a los filtros + status inline */
       .logs-export {
         display: flex;
         align-items: center;
@@ -1048,40 +1386,26 @@
         font-size: 11px;
         color: var(--muted);
       }
+      .logs-export-status.ok {
+        color: var(--accent2-ink);
+      }
       .logs-export-status.err {
         color: var(--bad);
-      }
-      .logs-export-status.ok {
-        color: var(--secondary-ink);
-      }
-      .app-chip:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      .sess-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .sess-item > button:first-child {
-        width: auto;
-        flex: 1 1 auto;
-        min-width: 0;
       }
       .logs-hidden {
         padding: 6px 14px;
         font-size: 11px;
         color: var(--muted);
         border-bottom: 1px dashed var(--line);
-        background: var(--bg-card2);
+        background: var(--card2);
       }
       .logs-scroll-wrap {
         position: relative;
       }
       .logs-scroll {
-        max-height: 340px;
+        max-height: 320px;
         overflow: auto;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-family: var(--font-mono);
         font-size: 12px;
         line-height: 1.45;
       }
@@ -1095,7 +1419,7 @@
         word-break: break-word;
       }
       .log-row:hover {
-        background: color-mix(in srgb, var(--primary) 5%, transparent);
+        background: color-mix(in srgb, var(--accent) 5%, transparent);
       }
       .log-time {
         color: var(--muted);
@@ -1114,13 +1438,12 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        color: var(--secondary-ink);
+        color: var(--accent2-ink);
       }
       .log-msg {
         flex: 1 1 auto;
         min-width: 0;
       }
-      /* colores por nivel: E/F rojo, W amarillo, resto neutro (ambos temas) */
       .log-row.lvl-E .log-lvl,
       .log-row.lvl-F .log-lvl,
       .log-row.lvl-E .log-msg,
@@ -1135,7 +1458,6 @@
       .log-row.lvl-D .log-msg {
         color: var(--muted);
       }
-      /* crash/ANR resaltado: fondo + borde rojo (el badge marca el inicio del bloque) */
       .log-row.crash {
         background: color-mix(in srgb, var(--bad) 7%, transparent);
         border-left-color: var(--bad);
@@ -1157,12 +1479,12 @@
         transform: translateX(-50%);
         font: 600 12px var(--font-body);
         color: #fff;
-        background: var(--primary);
+        background: var(--accent);
         border: none;
         border-radius: 999px;
         padding: 6px 14px;
         cursor: pointer;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        box-shadow: var(--shadow);
         white-space: nowrap;
       }
       .logs-empty {
@@ -1171,6 +1493,10 @@
         color: var(--muted);
         font-size: 13px;
         font-family: var(--font-body);
+      }
+      .caret {
+        color: var(--muted);
+        font-size: 9px;
       }
 
       footer.credits {
@@ -1184,27 +1510,34 @@
       }
 
       /* ================= RESPONSIVE ================= */
-      @media (max-width: 1100px) {
-        .brand-evermore img {
-          height: 64px;
+      @media (max-width: 1180px) {
+        .perf-grid {
+          grid-template-columns: 1fr;
         }
-        .mid {
+        .perf-left {
+          grid-template-rows: none;
+          grid-template-columns: 1fr 1fr;
+        }
+        .row2 {
           grid-template-columns: 1fr;
         }
       }
-      @media (max-width: 820px) {
+      @media (max-width: 860px) {
         header {
-          gap: 14px;
           flex-wrap: wrap;
         }
         .device-card {
           flex: 1 1 100%;
+          order: 3;
         }
-        .header-right {
-          margin-left: 0;
-          width: 100%;
-          justify-content: flex-start;
-          flex-wrap: wrap;
+        .mem-body {
+          grid-template-columns: 1fr;
+        }
+        .perf-left {
+          grid-template-columns: 1fr;
+        }
+        .fps-num {
+          font-size: 64px;
         }
       }
       @media (max-width: 700px) {
@@ -1214,42 +1547,29 @@
           padding: 12px 16px;
         }
         #netSpark,
-        .insp-toggle {
+        .insp-toggle,
+        .net-na {
           grid-column: 1 / -1;
         }
-      }
-      @media (max-width: 480px) {
+        .sys-grid {
+          grid-template-columns: 1fr;
+          gap: 14px;
+        }
         body {
-          padding: 12px 12px 20px;
-        }
-        .brand-evermore img {
-          height: 56px;
-        }
-        .brand-sub {
-          font-size: 12px;
-        }
-        .gauges {
-          gap: 10px;
-        }
-        .gauge-chart {
-          height: 170px;
-        }
-        #memPie,
-        #timeline {
-          height: 260px;
+          padding: 10px 12px 20px;
         }
       }
     </style>
   </head>
-  <body data-theme="light">
+  <body data-theme="dark">
     <header>
-      <div class="brand-evermore">
+      <div class="brand">
         <img src="assets/evermore-logo.png" alt="Evermore Arcade" />
         <div class="brand-sub">Android Profiler</div>
       </div>
 
       <div class="device-card card" id="devSelect">
-        <button class="dev-btn" id="devBtn" type="button" title="Cambiar device">
+        <button class="dev-btn" id="devBtn" type="button" title="Switch device">
           <div class="device-icon">📱</div>
           <div>
             <div class="device-name" id="devName">Waiting for device…</div>
@@ -1257,38 +1577,49 @@
           </div>
           <span class="caret">▼</span>
         </button>
-        <div class="app-pop dev-pop" id="devPop" hidden>
-          <div class="app-pop-controls">
-            <span class="dev-title">Devices conectados (adb)</span>
-            <button class="app-chip" id="devRefresh" type="button">⟳ Refrescar</button>
+        <div class="pop dev-pop" id="devPop" hidden>
+          <div class="pop-controls">
+            <span class="pop-title">Connected devices (adb)</span>
+            <button class="chip" id="devRefresh" type="button">⟳ Refresh</button>
           </div>
-          <ul class="app-list" id="devList"></ul>
-          <div class="app-empty" id="devEmpty" hidden>Sin devices.</div>
+          <ul class="pop-list" id="devList"></ul>
+          <div class="pop-empty" id="devEmpty" hidden>No devices.</div>
         </div>
       </div>
 
       <div class="header-right">
-        <div class="app-name app-select" id="appSelect">
+        <div
+          class="verdict"
+          id="verdict"
+          title="Live session verdict — same semaphore as the report (avg FPS vs target over the last 60 s)"
+        >
+          <span class="verdict-dot"></span>
+          <span class="verdict-word" id="verdictWord">WARMING UP</span>
+          <span class="verdict-sub" id="verdictSub">— in target · 60 s</span>
+          <span class="v-crash" id="verdictCrash" hidden>1 crash</span>
+        </div>
+
+        <div class="app-name" id="appSelect">
           <label>Profiled app</label>
-          <button class="pkg" id="appPkgBtn" type="button" title="Cambiar app profileada">
+          <button class="pkg" id="appPkgBtn" type="button" title="Switch profiled app">
             <span id="appPkg">—</span>
             <span class="app-launched" id="appLaunched" hidden></span>
             <span class="caret">▼</span>
           </button>
-          <div class="app-pop" id="appPop" hidden>
-            <div class="app-pop-controls">
+          <div class="pop" id="appPop" hidden>
+            <div class="pop-controls">
               <input
                 id="appSearch"
                 type="search"
-                placeholder="Buscar package…"
+                placeholder="Search package…"
                 autocomplete="off"
                 spellcheck="false"
               />
-              <button class="app-chip active" id="appChip" type="button">Evermore</button>
-              <label class="app-sys"><input type="checkbox" id="appSys" /> sistema</label>
+              <button class="chip active" id="appChip" type="button">Evermore</button>
+              <label class="app-sys"><input type="checkbox" id="appSys" /> system</label>
             </div>
-            <ul class="app-list" id="appList"></ul>
-            <div class="app-empty" id="appEmpty" hidden>Sin resultados.</div>
+            <ul class="pop-list" id="appList"></ul>
+            <div class="pop-empty" id="appEmpty" hidden>No results.</div>
           </div>
         </div>
 
@@ -1298,45 +1629,49 @@
           <span class="rec-time" id="recTime">00:00</span>
         </div>
 
+        <button class="icon-btn" id="themeToggle" type="button" title="Toggle light/dark">
+          ☀️
+        </button>
+
         <div class="menu-select" id="menuSelect">
           <button
-            class="theme-toggle"
+            class="icon-btn"
             id="menuBtn"
-            title="Export · registros · configuración"
             type="button"
+            title="Export · session records · settings"
           >
             ☰
           </button>
-          <div class="app-pop menu-pop" id="menuPop" hidden>
+          <div class="pop menu-pop" id="menuPop" hidden>
             <div class="menu-section">
-              <div class="menu-title">Exportar reporte</div>
+              <div class="menu-title">Export report</div>
               <div class="menu-row" id="exportRow">
-                <button class="app-chip" data-window="full" type="button">Sesión completa</button>
-                <button class="app-chip" data-window="5" type="button">5 min</button>
-                <button class="app-chip" data-window="15" type="button">15 min</button>
-                <button class="app-chip" data-window="30" type="button">30 min</button>
-                <button class="app-chip" data-window="60" type="button">1 h</button>
+                <button class="chip" data-window="full" type="button">Full session</button>
+                <button class="chip" data-window="5" type="button">5 min</button>
+                <button class="chip" data-window="15" type="button">15 min</button>
+                <button class="chip" data-window="30" type="button">30 min</button>
+                <button class="chip" data-window="60" type="button">1 h</button>
               </div>
               <div class="menu-status" id="exportStatus"></div>
             </div>
 
             <div class="menu-section">
               <div class="menu-title">
-                <span>Registros de sesiones</span>
-                <button class="app-chip" id="sessRefresh" type="button">⟳</button>
+                <span>Session records</span>
+                <button class="chip" id="sessRefresh" type="button">⟳</button>
               </div>
-              <ul class="app-list" id="sessList"></ul>
-              <div class="app-empty" id="sessEmpty" hidden>Sin sesiones guardadas.</div>
+              <ul class="pop-list" id="sessList"></ul>
+              <div class="pop-empty" id="sessEmpty" hidden>No saved sessions.</div>
             </div>
 
             <div class="menu-section">
-              <div class="menu-title">Configuración</div>
+              <div class="menu-title">Settings</div>
               <div class="cfg-grid">
-                <label for="cfgFilter">Filtro de apps</label>
+                <label for="cfgFilter">App filter</label>
                 <input id="cfgFilter" type="text" autocomplete="off" spellcheck="false" />
                 <label for="cfgInterval">Sampling</label>
                 <select id="cfgInterval">
-                  <option value="auto">Auto (según device)</option>
+                  <option value="auto">Auto (per device)</option>
                   <option value="500">0.5 s</option>
                   <option value="1000">1 s</option>
                   <option value="2000">2 s</option>
@@ -1344,17 +1679,17 @@
                 </select>
                 <label for="cfgFps">Target FPS</label>
                 <input id="cfgFps" type="number" min="1" max="240" step="1" inputmode="numeric" />
-                <label for="cfgTheme">Modo oscuro</label>
+                <label for="cfgTheme">Dark mode</label>
                 <label class="switch">
-                  <input type="checkbox" id="cfgTheme" />
+                  <input type="checkbox" id="cfgTheme" checked />
                   <span class="slider"></span>
-                  <span class="switch-icons">🌙</span>
+                  <span>🌙</span>
                 </label>
-                <label for="cfgReports">Carpeta reportes</label>
+                <label for="cfgReports">Reports folder</label>
                 <input id="cfgReports" type="text" autocomplete="off" spellcheck="false" />
               </div>
               <div class="cfg-actions">
-                <button class="cfg-save" id="cfgSave" type="button">Guardar</button>
+                <button class="cfg-save" id="cfgSave" type="button">Save</button>
                 <span class="menu-status" id="cfgStatus"></span>
               </div>
             </div>
@@ -1371,51 +1706,128 @@
       </div>
     </header>
 
-    <!-- Hero row: 5 donut-gauges (GPU + FPS share one donut; Battery added) -->
-    <section class="gauges">
-      <div class="card gauge-card">
-        <div class="gauge-head"><span class="card-title">CPU</span></div>
-        <div class="gauge-chart" id="gCpu"></div>
-      </div>
-      <div class="card gauge-card">
-        <div class="gauge-head"><span class="card-title">GPU · FPS</span></div>
-        <div class="gauge-chart" id="gGpu"></div>
-        <div class="gauge-sub" id="fpsSub"></div>
-      </div>
-      <div class="card gauge-card">
-        <div class="gauge-head"><span class="card-title">Temp</span></div>
-        <div class="gauge-chart" id="gTemp"></div>
-      </div>
-      <div class="card gauge-card">
-        <div class="gauge-head"><span class="card-title">RAM (PSS)</span></div>
-        <div class="gauge-chart" id="gRam"></div>
-      </div>
-      <div class="card gauge-card">
-        <div class="gauge-head"><span class="card-title">Battery</span></div>
-        <span class="event-chip charging" id="chipCharging">⚡ CHARGING</span>
-        <div class="gauge-chart" id="gBat"></div>
-      </div>
-    </section>
-
-    <!-- Memory pie + timeline -->
-    <section class="mid">
-      <div class="card panel">
-        <div class="panel-head">
-          <span class="card-title">Memory composition</span>
-          <span class="panel-sub">PSS by category</span>
+    <!-- ============ PERFORMANCE (protagonist) ============ -->
+    <div class="section-label">Performance</div>
+    <section class="perf-grid">
+      <div class="perf-left">
+        <div class="card tile fps-tile">
+          <div class="tile-label">
+            FPS <span class="target-chip" id="targetChip">target —</span>
+          </div>
+          <div class="fps-num" id="fpsNum">—<span class="unit">fps</span></div>
+          <div>
+            <span class="fps-status" id="fpsStatus"
+              ><span class="dot"></span><span id="fpsStatusWord">waiting…</span></span
+            >
+          </div>
+          <div class="tile-div"></div>
+          <div class="framerow">
+            <div class="fstat">
+              <span class="fs-l">jank</span>
+              <span class="fs-v" id="jankV">—</span>
+            </div>
+            <div class="fstat">
+              <span class="fs-l">p90 frame</span>
+              <span class="fs-v" id="p90V">—</span>
+            </div>
+            <div class="fstat">
+              <span class="fs-l">p99 frame</span>
+              <span class="fs-v" id="p99V">—</span>
+            </div>
+          </div>
         </div>
-        <div id="memPie"></div>
+        <div class="card tile gpu-tile">
+          <div class="tile-label">GPU</div>
+          <div class="big-num" id="gpuNum">—<span class="unit">%</span></div>
+          <div class="bar"><i id="gpuBar"></i></div>
+          <div class="bar-sub"><span>utilization</span><span id="gpuSub"></span></div>
+        </div>
       </div>
-      <div class="card panel">
+      <div class="card tl-card">
         <div class="panel-head">
           <span class="card-title">Live timeline</span>
-          <span class="panel-sub">sliding 120 s window · click legend to toggle series</span>
+          <span class="panel-sub"
+            >180 s window · real units per lane · shared crosshair · red bands = below target ·
+            click legend to toggle</span
+          >
         </div>
-        <div id="timeline"></div>
+        <div id="tlPerf"></div>
       </div>
     </section>
 
-    <!-- Network footer -->
+    <!-- ============ MEMORY + SYSTEM ============ -->
+    <div class="section-label">Memory &amp; System</div>
+    <section class="row2">
+      <div class="card mem-card">
+        <div class="panel-head">
+          <span class="card-title">Memory</span>
+          <span class="panel-sub">PSS by category · app footprint vs device</span>
+        </div>
+        <div class="mem-body">
+          <div id="memPie"></div>
+          <div class="mem-stats">
+            <div class="mem-kpis">
+              <div class="fstat">
+                <span class="fs-l">PSS total</span>
+                <span class="fs-v" id="pssNum" style="font-size: 26px">—</span>
+              </div>
+              <div class="fstat">
+                <span class="fs-l">RSS</span>
+                <span class="fs-v" id="rssNum" style="font-size: 26px">—</span>
+              </div>
+            </div>
+            <div>
+              <div class="bar thin"><i id="ramAppBar" style="background: var(--mem-java)"></i></div>
+              <div class="bar-sub">
+                <span id="ramAppLbl">app of device RAM</span><span id="ramAppSub">—</span>
+              </div>
+              <div class="bar thin"><i id="ramDevBar" style="background: var(--muted)"></i></div>
+              <div class="bar-sub"><span>device used</span><span id="ramDevSub">—</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-head" style="margin-top: 2px">
+          <span class="panel-sub">PSS trend · <span style="color: var(--s-temp)">●</span> GC</span>
+        </div>
+        <div id="memTrend"></div>
+      </div>
+
+      <div class="card sys-card">
+        <div class="panel-head">
+          <span class="card-title">System</span>
+          <span class="panel-sub">app vs device</span>
+        </div>
+        <div class="sys-grid">
+          <div class="sys-tile">
+            <div class="tile-label">CPU</div>
+            <div class="big-num" id="cpuNum">—<span class="unit">%</span></div>
+            <div class="sub-note" id="coreSub"></div>
+            <div class="bar"><i id="cpuBar"></i></div>
+            <div class="bar thin"><i id="cpuDevBar" style="background: var(--muted)"></i></div>
+            <div class="bar-sub"><span>device total</span><span id="cpuDevSub">—</span></div>
+          </div>
+          <div class="sys-tile">
+            <div class="tile-label">Temp</div>
+            <div class="big-num" id="tempNum">—<span class="unit">°C</span></div>
+            <div class="sub-note" id="tempTrendSub"></div>
+            <div class="bar"><i id="tempBar"></i></div>
+            <div class="bar-sub"><span>25 °C</span><span>50 °C</span></div>
+          </div>
+          <div class="sys-tile">
+            <div class="tile-label">
+              Battery <span class="event-chip" id="chipCharging">⚡ CHARGING</span>
+            </div>
+            <div class="big-num" id="batNum">—<span class="unit">%</span></div>
+            <div class="sub-note" id="batSub"></div>
+            <div class="bar"><i id="batBar"></i></div>
+            <div class="bar-sub"><span>0</span><span>100</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ NETWORK ============ -->
+    <div class="section-label">Network</div>
     <section class="card net">
       <div class="net-stat net-rx">
         <span class="lbl">↓ RX</span>
@@ -1431,7 +1843,7 @@
         class="insp-toggle"
         id="inspToggle"
         type="button"
-        title="Al prender, el tráfico del teléfono pasa por el profiler (proxy + adb reverse) y ves los requests abajo. Al apagar, se restaura la navegación normal del device."
+        title="When on, the phone's traffic goes through the profiler (proxy + adb reverse) and requests appear below. Turning it off restores normal device networking."
       >
         🔎 Inspector <b id="inspState">OFF</b>
       </button>
@@ -1440,13 +1852,11 @@
         Network per-app: N/A on this device (netstats is bucketed, not realtime — deferred)
       </div>
     </section>
-
-    <!-- Network inspector: requests en vivo (debajo de la red). Solo con `live --inspect`. -->
     <section class="card inspector" id="inspector" hidden>
       <div class="insp-head">
         <span class="insp-title">Network Inspector</span>
         <span class="insp-sub"
-          >requests en vivo · HTTPS = host (payload requiere CA) · HTTP = URL completa</span
+          >live requests · HTTPS = host only (payload needs CA) · HTTP = full URL</span
         >
         <span class="insp-count"><b id="flowN">0</b> requests</span>
       </div>
@@ -1464,16 +1874,16 @@
           </thead>
           <tbody id="flowRows"></tbody>
         </table>
-        <div class="insp-empty" id="flowEmpty">Esperando tráfico de la app…</div>
+        <div class="insp-empty" id="flowEmpty">Waiting for app traffic…</div>
       </div>
     </section>
 
-    <!-- Logs de la app (ticket 028): sección colapsable debajo del inspector de red.
-         Filtros por nivel/texto/fecha + pausa de auto-scroll; crashes resaltados. -->
+    <!-- ============ LOGS (tickets 028/029) ============ -->
+    <div class="section-label">App logs</div>
     <section class="card logs" id="logsSection">
-      <button class="logs-head" id="logsToggle" type="button" title="Mostrar / ocultar logs">
+      <button class="logs-head" id="logsToggle" type="button" title="Show / hide logs">
         <span class="insp-title">Logs</span>
-        <span class="insp-sub">logcat de la app · crashes/ANR resaltados</span>
+        <span class="insp-sub">app logcat · crashes/ANR highlighted</span>
         <span class="logs-counts">
           <span><b id="logsTotal">0</b> logs</span>
           <span id="logsMatched" hidden></span>
@@ -1485,62 +1895,60 @@
       <div class="logs-body" id="logsBody" hidden>
         <div class="logs-controls">
           <span id="logsChips">
-            <button class="app-chip log-chip-e active" data-chip="E" type="button">Error</button>
-            <button class="app-chip log-chip-w active" data-chip="W" type="button">Warn</button>
-            <button class="app-chip log-chip-i active" data-chip="I" type="button">Info</button>
-            <button class="app-chip log-chip-d active" data-chip="D" type="button">
+            <button class="chip log-chip-e active" data-chip="E" type="button">Error</button>
+            <button class="chip log-chip-w active" data-chip="W" type="button">Warn</button>
+            <button class="chip log-chip-i active" data-chip="I" type="button">Info</button>
+            <button class="chip log-chip-d active" data-chip="D" type="button">
               Debug+Verbose
             </button>
           </span>
           <input
             id="logsSearch"
             type="search"
-            placeholder="Buscar en message y tag…"
+            placeholder="Search in message and tag…"
             autocomplete="off"
             spellcheck="false"
           />
           <span class="logs-range">
-            desde <input id="logsFrom" type="datetime-local" /> hasta
+            from <input id="logsFrom" type="datetime-local" /> to
             <input id="logsTo" type="datetime-local" />
           </span>
-          <button class="app-chip" id="logsOrder" type="button" title="Orden temporal">
-            ↓ viejo→nuevo
-          </button>
-          <button class="app-chip" id="logsPause" type="button" title="Pausar el auto-scroll">
-            ⏸ Pausa
+          <button class="chip" id="logsOrder" type="button" title="Time order">↓ old→new</button>
+          <button class="chip" id="logsPause" type="button" title="Pause auto-scroll">
+            ⏸ Pause
           </button>
           <span class="logs-export" id="logsExport">
             <button
-              class="app-chip"
+              class="chip"
               data-export="filtered-txt"
               type="button"
-              title="Exportar lo visible con los filtros aplicados (.txt legible)"
+              title="Export what's visible with the current filters (.txt)"
             >
-              ⬇ filtro .txt
+              ⬇ filter .txt
             </button>
             <button
-              class="app-chip"
+              class="chip"
               data-export="filtered-jsonl"
               type="button"
-              title="Exportar lo visible con los filtros aplicados (.jsonl estructurado)"
+              title="Export what's visible with the current filters (.jsonl)"
             >
-              ⬇ filtro .jsonl
+              ⬇ filter .jsonl
             </button>
             <button
-              class="app-chip"
+              class="chip"
               data-export="session-txt"
               type="button"
-              title="Exportar todos los logs de la sesión (.txt legible)"
+              title="Export every log of the session (.txt)"
             >
-              ⬇ sesión .txt
+              ⬇ session .txt
             </button>
             <button
-              class="app-chip"
+              class="chip"
               data-export="session-jsonl"
               type="button"
-              title="Exportar todos los logs de la sesión (.jsonl estructurado)"
+              title="Export every log of the session (.jsonl)"
             >
-              ⬇ sesión .jsonl
+              ⬇ session .jsonl
             </button>
             <span class="logs-export-status" id="logsExportStatus"></span>
           </span>
@@ -1549,9 +1957,9 @@
         <div class="logs-scroll-wrap">
           <div class="logs-scroll" id="logsScroll">
             <div id="logsList"></div>
-            <div class="logs-empty" id="logsEmpty">Esperando logs de la app…</div>
+            <div class="logs-empty" id="logsEmpty">Waiting for app logs…</div>
           </div>
-          <button class="logs-live" id="logsLive" type="button" hidden>▼ volver al vivo</button>
+          <button class="logs-live" id="logsLive" type="button" hidden>▼ back to live</button>
         </div>
       </div>
     </section>
