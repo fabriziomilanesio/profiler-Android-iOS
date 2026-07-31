@@ -176,12 +176,12 @@ describe('crashBlocks / buildLogMarks', () => {
     expect(buildLogMarks(entries, T0, T0 + 60_000)).toEqual([])
   })
 
-  test('ráfaga de ≥5 errores con gaps ≤10 s = una sola marca "N errores"', () => {
+  test('ráfaga de ≥5 errores con gaps ≤10 s = una sola marca "N errors"', () => {
     const entries: LogEntry[] = []
     for (let i = 0; i < BURST_MIN_ERRORS + 2; i++) entries.push(log(i * 1000, 'E', `err ${i}`))
     const marks = buildLogMarks(entries, T0, T0 + 60_000)
     expect(marks).toHaveLength(1)
-    expect(marks[0]!.label).toBe('7 errores')
+    expect(marks[0]!.label).toBe('7 errors')
     expect(marks[0]!.ts).toBe(T0)
   })
 
@@ -217,8 +217,8 @@ describe('crashBlocks / buildLogMarks', () => {
     expect(marks).toHaveLength(MAX_MARKS)
     expect(marks.filter((m) => m.label.startsWith('CRASH:'))).toHaveLength(18)
     // quedan las 2 ráfagas MÁS GRANDES (9 y 8 errores)
-    const bursts = marks.filter((m) => m.label.endsWith('errores'))
-    expect(bursts.map((m) => m.label).sort()).toEqual(['8 errores', '9 errores'])
+    const bursts = marks.filter((m) => m.label.endsWith('errors'))
+    expect(bursts.map((m) => m.label).sort()).toEqual(['8 errors', '9 errors'])
     // resultado cronológico
     for (let i = 1; i < marks.length; i++)
       expect(marks[i]!.ts).toBeGreaterThanOrEqual(marks[i - 1]!.ts)

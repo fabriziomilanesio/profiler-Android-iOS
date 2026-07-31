@@ -335,8 +335,15 @@
     fetch('/api/logs/export', { method: 'POST', body: JSON.stringify(payload) })
       .then(function (r) {
         if (!r.ok) {
-          return r.json().then(function (body) {
-            throw new Error(body.error || 'error ' + r.status)
+          // el error puede venir como texto plano (p.ej. 403 'Forbidden origin'):
+          // try-parse JSON y, si no parsea, mostrar el texto crudo
+          return r.text().then(function (text) {
+            var msg = text
+            try {
+              var body = JSON.parse(text)
+              if (body && body.error) msg = body.error
+            } catch (e2) {}
+            throw new Error(msg || 'error ' + r.status)
           })
         }
         var dispo = r.headers.get('content-disposition') || ''

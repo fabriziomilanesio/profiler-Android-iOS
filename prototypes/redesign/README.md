@@ -7,6 +7,9 @@ t≈40–58 de cada ciclo) y un **crash sintético** (bloque FATAL en logs, marc
 timeline, badge "waiting for process…" y relanzamiento, t≈80; el ciclo se repite cada
 150 s). Arranca con 75 s de historia pre-cargada para que nada esté vacío.
 
+> **Nota:** `app.js` quedó congelado como referencia del 031; los fixes post-032 viven
+> solo en `src/ui`.
+
 Verificación: `bun prototypes/redesign/smoke.js` (SMOKE PASS, ~4k checks, 5 corridas) +
 headless Chromium: **0 errores de consola, 0 px de overflow horizontal** en
 1440/1180/900/700/390. Screenshots: `screenshot.png` (dark), `screenshot-light.png`,

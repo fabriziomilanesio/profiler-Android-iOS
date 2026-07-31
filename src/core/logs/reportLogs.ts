@@ -14,7 +14,7 @@
 //     mismo stacktrace), label "CRASH: <primer mensaje>" (o "ANR: <reason>")
 //     truncado a 40 chars. Los errores E/F sueltos NO marcan (ruido: quedan en
 //     la lista); una ráfaga de ≥ 5 errores con gaps ≤ 10 s colapsa en una única
-//     marca "N errores". Máximo 20 marcas (crashes con prioridad, ráfagas por
+//     marca "N errors". Máximo 20 marcas (crashes con prioridad, ráfagas por
 //     tamaño).
 //   - Recorte: el rango es exactamente el de la ventana exportada
 //     [primer sample, último sample], con una gracia de 10 s al final SOLO
@@ -185,7 +185,7 @@ export function buildLogMarks(
     const bursts = errorBursts(windowEntries)
       .sort((a, b) => b.count - a.count)
       .slice(0, room)
-      .map((b) => ({ ts: clamp(b.ts), label: `${b.count} errores` }))
+      .map((b) => ({ ts: clamp(b.ts), label: `${b.count} errors` }))
     marks = [...crashes, ...bursts]
   }
   return marks.sort((a, b) => a.ts - b.ts)

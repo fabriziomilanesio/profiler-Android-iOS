@@ -465,22 +465,37 @@
     var counts = L.totalByLevel || {}
     document.getElementById('logsSection').hidden = false
 
+    // Bloques de crash con el MISMO criterio que crashBlocks (reportLogs.ts):
+    // SOLO las entradas isCrash agrupan por gap ≤ CRASH_BLOCK_GAP_MS — una W/E
+    // no-crash intercalada en medio del stacktrace NO parte el <details> en dos.
+    // Las intercaladas se pintan como filas sueltas a continuación del bloque.
+    var blocks = [] // arrays de índices en entries
+    var cur = null
+    for (var k = 0; k < entries.length; k++) {
+      if (!entries[k].isCrash) continue
+      if (cur && entries[k].ts - entries[cur[cur.length - 1]].ts <= CRASH_BLOCK_GAP_MS) {
+        cur.push(k)
+      } else {
+        cur = [k]
+        blocks.push(cur)
+      }
+    }
+    var blockAt = {} // índice de la primera entrada del bloque → entradas del bloque
+    var swallowed = {} // índices ya emitidos dentro de un bloque
+    blocks.forEach(function (b) {
+      blockAt[b[0]] = b.map(function (idx) {
+        return entries[idx]
+      })
+      for (var j = 1; j < b.length; j++) swallowed[b[j]] = true
+    })
+
     var html = []
-    var crashBlocks = 0
-    var i = 0
-    while (i < entries.length) {
+    var crashBlocks = blocks.length
+    for (var i = 0; i < entries.length; i++) {
       var e = entries[i]
-      if (e.isCrash) {
-        var j = i + 1
-        while (
-          j < entries.length &&
-          entries[j].isCrash &&
-          entries[j].ts - entries[j - 1].ts <= CRASH_BLOCK_GAP_MS
-        ) {
-          j++
-        }
-        var block = entries.slice(i, j)
-        crashBlocks++
+      if (swallowed[i]) continue
+      var block = blockAt[i]
+      if (block) {
         var body = block
           .map(function (b) {
             return esc(b.message)
@@ -504,7 +519,6 @@
             body +
             '</pre></details>',
         )
-        i = j
       } else {
         html.push(
           '<div class="log-row lv-' +
@@ -519,7 +533,6 @@
             esc(e.message) +
             '</span></div>',
         )
-        i++
       }
     }
     if (!entries.length) {

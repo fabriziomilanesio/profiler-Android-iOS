@@ -89,7 +89,9 @@
   var VERDICT_S = 60 // ventana del mini-veredicto (espejo del reporte 026)
   var VERDICT_MIN_TICKS = 5 // menos ticks con dato ⇒ WARMING UP
 
-  var deviceRamMb = 8192 // actualizado desde DeviceInfo.ramTotalMb
+  // DeviceInfo.ramTotalMb del device ACTUAL; null hasta que reporte (las barras
+  // de RAM degradan a valor absoluto sin %) — nunca se hereda del device anterior
+  var deviceRamMb = null
   var deviceCores = null // DeviceInfo.cores → "≈ X% of one core"
 
   function $(id) {
@@ -288,20 +290,41 @@
     return chart
   }
 
-  // bandas rojas: tramos consecutivos con status 'red' (mismo criterio del 026)
+  // ± medio tick real para los spans (mismo criterio que el fix del template del
+  // reporte): el intervalo efectivo es configurable (1–2 s), así que se estima
+  // con la mediana de los gaps entre ticks buffereados.
+  function halfTickMs() {
+    var gaps = []
+    for (var i = 1; i < tickStatus.length; i++) {
+      gaps.push(tickStatus[i][0] - tickStatus[i - 1][0])
+    }
+    if (gaps.length === 0) return 500
+    gaps.sort(function (a, b) {
+      return a - b
+    })
+    return gaps[Math.floor(gaps.length / 2)] / 2
+  }
+
+  // bandas rojas: tramos consecutivos con status 'red' (mismo criterio del 026),
+  // acolchonados ± medio tick — un tick rojo aislado pinta banda visible
   function redSpans() {
     var spans = []
     var start = null
+    var last = null
     for (var i = 0; i < tickStatus.length; i++) {
-      var st = tickStatus[i][1]
-      if (st === 'red' && start === null) start = tickStatus[i][0]
-      if (st !== 'red' && start !== null) {
-        spans.push([start, tickStatus[i][0]])
+      if (tickStatus[i][1] === 'red') {
+        if (start === null) start = tickStatus[i][0]
+        last = tickStatus[i][0]
+      } else if (start !== null) {
+        spans.push([start, last])
         start = null
       }
     }
-    if (start !== null) spans.push([start, tickStatus[tickStatus.length - 1][0]])
-    return spans
+    if (start !== null) spans.push([start, last])
+    var h = halfTickMs()
+    return spans.map(function (s) {
+      return [s[0] - h, s[1] + h]
+    })
   }
 
   function tlMarks() {
@@ -529,18 +552,26 @@
     $('pssNum').textContent = pss === null || pss === undefined ? '—' : fmtMb(pss)
     var rss = s.mem ? s.mem.rss : null
     $('rssNum').textContent = rss === null || rss === undefined ? '—' : fmtMb(rss)
-    // barras app / device
+    // barras app / device (sin ramTotalMb del device: valor absoluto, sin %)
     if (pss !== null && pss !== undefined) {
-      $('ramAppBar').style.width = Math.min(100, (pss / deviceRamMb) * 100) + '%'
-      $('ramAppSub').textContent = fmtMb(pss) + ' · ' + ((pss / deviceRamMb) * 100).toFixed(1) + '%'
+      $('ramAppBar').style.width = deviceRamMb
+        ? Math.min(100, (pss / deviceRamMb) * 100) + '%'
+        : '0%'
+      $('ramAppSub').textContent = deviceRamMb
+        ? fmtMb(pss) + ' · ' + ((pss / deviceRamMb) * 100).toFixed(1) + '%'
+        : fmtMb(pss)
     } else {
       $('ramAppBar').style.width = '0%'
       $('ramAppSub').textContent = '—'
     }
     var devUsed = s.deviceRamUsedMb
     if (devUsed !== null && devUsed !== undefined) {
-      $('ramDevBar').style.width = Math.min(100, (devUsed / deviceRamMb) * 100) + '%'
-      $('ramDevSub').textContent = fmtMb(devUsed) + ' of ' + fmtMb(deviceRamMb)
+      $('ramDevBar').style.width = deviceRamMb
+        ? Math.min(100, (devUsed / deviceRamMb) * 100) + '%'
+        : '0%'
+      $('ramDevSub').textContent = deviceRamMb
+        ? fmtMb(devUsed) + ' of ' + fmtMb(deviceRamMb)
+        : fmtMb(devUsed)
     } else {
       $('ramDevBar').style.width = '0%'
       $('ramDevSub').textContent = '—'
@@ -882,10 +913,10 @@
       specs.push(
         'Android ' + info.androidRelease + (info.apiLevel ? ' (API ' + info.apiLevel + ')' : ''),
       )
-    if (info.ramTotalMb) {
-      deviceRamMb = info.ramTotalMb
-      specs.push((info.ramTotalMb / 1024).toFixed(1) + ' GB RAM')
-    }
+    // device nuevo sin ramTotalMb ⇒ null (las barras de RAM degradan a valor
+    // absoluto); nunca queda colgada la RAM total del device anterior
+    deviceRamMb = info.ramTotalMb || null
+    if (deviceRamMb) specs.push((deviceRamMb / 1024).toFixed(1) + ' GB RAM')
     if (info.gpu) specs.push(info.gpu)
     if (info.soc) specs.push(info.soc)
     if (info.cores) {
@@ -903,7 +934,7 @@
       el.appendChild(span)
     })
     if (pkg) $('appPkg').textContent = pkg
-    $('ramAppLbl').textContent = 'app of ' + fmtMb(deviceRamMb)
+    $('ramAppLbl').textContent = deviceRamMb ? 'app of ' + fmtMb(deviceRamMb) : 'app'
     if (lastSample) renderMem(lastSample)
   }
 
@@ -952,6 +983,8 @@
     })
     $('ramAppBar').style.width = '0%'
     $('ramAppSub').textContent = '—'
+    $('ramDevBar').style.width = '0%'
+    $('ramDevSub').textContent = '—'
     $('fpsNum').innerHTML = '—<span class="unit">fps</span>'
     setSem($('fpsNum'), null)
     setSem($('fpsStatus'), null)
@@ -960,6 +993,27 @@
     setSem($('jankV'), null)
     $('p90V').textContent = '—'
     $('p99V').textContent = '—'
+    // tiles de GPU/CPU/Temp/Battery y textos de red: sin esto quedaban los
+    // valores de la app/device anterior congelados hasta el próximo sample
+    $('gpuNum').innerHTML = '—<span class="unit">%</span>'
+    $('gpuBar').style.width = '0%'
+    $('gpuSub').textContent = ''
+    $('cpuNum').innerHTML = '—<span class="unit">%</span>'
+    $('coreSub').textContent = ''
+    $('cpuBar').style.width = '0%'
+    $('cpuDevBar').style.width = '0%'
+    $('cpuDevSub').textContent = '—'
+    $('tempNum').innerHTML = '—<span class="unit">°C</span>'
+    $('tempBar').style.width = '0%'
+    $('tempTrendSub').textContent = ''
+    $('batNum').innerHTML = '—<span class="unit">%</span>'
+    $('batBar').style.width = '0%'
+    $('batSub').textContent = ''
+    $('chipCharging').classList.remove('show')
+    $('rxNow').textContent = '— KB/s'
+    $('txNow').textContent = '— KB/s'
+    $('rxTot').textContent = 'total —'
+    $('txTot').textContent = 'total —'
     renderVerdict()
   }
 

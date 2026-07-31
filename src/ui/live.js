@@ -277,14 +277,27 @@
     el.className = 'menu-status' + (kind ? ' ' + kind : '')
   }
 
+  // Las respuestas de error pueden ser texto plano (p.ej. 403 'Forbidden origin'):
+  // leer como texto y try-parsear JSON; si no parsea, mostrar el texto crudo.
+  function errorFromResponse(r) {
+    return r.text().then(function (text) {
+      var msg = text
+      try {
+        var body = JSON.parse(text)
+        if (body && body.error) msg = body.error
+      } catch (e) {}
+      return new Error(msg || 'error ' + r.status)
+    })
+  }
+
   // Descarga vía blob (no navegación): un error del server se muestra, no rompe la página.
   function downloadReport(query, statusEl) {
     setStatus(statusEl, 'Generating report…')
     fetch('/api/report?' + query)
       .then(function (r) {
         if (!r.ok) {
-          return r.json().then(function (body) {
-            throw new Error(body.error || 'error ' + r.status)
+          return errorFromResponse(r).then(function (err) {
+            throw err
           })
         }
         var dispo = r.headers.get('content-disposition') || ''
@@ -521,17 +534,19 @@
     inspBtn.disabled = true
     fetch('/api/inspector', { method: 'POST', body: JSON.stringify({ enabled: !inspectorOn }) })
       .then(function (r) {
-        return r.json().then(function (body) {
-          if (!r.ok) throw new Error(body.error || 'error ' + r.status)
-          return body
-        })
+        if (!r.ok) {
+          return errorFromResponse(r).then(function (err) {
+            throw err
+          })
+        }
+        return r.json()
       })
       .then(function (body) {
         setInspectorUi(body.inspector.enabled)
       })
       .catch(function (e) {
         inspStateEl.textContent = 'ERR'
-        inspBtn.title = 'No se pudo cambiar el inspector: ' + e.message
+        inspBtn.title = 'Could not toggle the inspector: ' + e.message
         setTimeout(function () {
           setInspectorUi(inspectorOn)
         }, 2500)
@@ -593,24 +608,29 @@
   }
 
   // --- Señales de perf derivadas del stream de logs (rediseño 031/032) ---
-  // Crash: el comienzo de un bloque isCrash (líneas consecutivas del mismo pid
-  // comparten un solo evento) marca CRASH en la timeline y suma al chip del
-  // veredicto. GC: las líneas del ART ("GC freed…") ponen el punto ámbar sobre
-  // el trend de PSS. Ambas son best-effort — solo miran lo que ya llega por WS.
-  var lastLogWasCrash = false
-  var lastCrashPid = null
+  // Crash: MISMO criterio que crashBlocks del reporte (reportLogs.ts): entradas
+  // isCrash con gap ≤ CRASH_BLOCK_GAP_MS son el mismo bloque, SIN mirar el pid —
+  // un crash nativo llega con DOS pids (la línea "F libc" con el pid de la app,
+  // los frames del tombstone con el pid de crash_dump64) y aun así es UN crash.
+  // GC: las líneas del ART ("GC freed…") ponen el punto ámbar sobre el trend de
+  // PSS. Ambas son best-effort — solo miran lo que ya llega por WS.
+  // Espejo hardcodeado de CRASH_BLOCK_GAP_MS (src/core/logs/reportLogs.ts):
+  // live.js es JS plano servido estático y no puede importar el core TS.
+  // GUARDIA: src/ui/mirrors.test.ts compara este valor contra el del core.
+  var CRASH_BLOCK_GAP_MS = 2000
+  var lastCrashTs = null
   var GC_RE = /\bGC freed\b|concurrent copying GC|concurrent mark compact GC/
 
   function scanLogSignals(entries) {
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i]
       if (e.isCrash) {
-        if (!lastLogWasCrash || lastCrashPid !== e.pid) ProfilerDashboard.noteCrash(e.ts)
-        lastLogWasCrash = true
-        lastCrashPid = e.pid
-      } else {
-        lastLogWasCrash = false
-        if (GC_RE.test(e.message)) ProfilerDashboard.noteGc(e.ts)
+        if (lastCrashTs === null || e.ts - lastCrashTs > CRASH_BLOCK_GAP_MS) {
+          ProfilerDashboard.noteCrash(e.ts)
+        }
+        lastCrashTs = e.ts
+      } else if (GC_RE.test(e.message)) {
+        ProfilerDashboard.noteGc(e.ts)
       }
     }
   }
