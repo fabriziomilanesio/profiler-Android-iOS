@@ -1035,6 +1035,39 @@
         color: var(--primary);
         border-color: var(--primary);
       }
+      /* export de logs (ticket 029): chips junto a los filtros + status inline */
+      .logs-export {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding-left: 10px;
+        border-left: 1px solid var(--line);
+      }
+      .logs-export-status {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .logs-export-status.err {
+        color: var(--bad);
+      }
+      .logs-export-status.ok {
+        color: var(--secondary-ink);
+      }
+      .app-chip:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .sess-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .sess-item > button:first-child {
+        width: auto;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
       .logs-hidden {
         padding: 6px 14px;
         font-size: 11px;
@@ -1476,6 +1509,41 @@
           <button class="app-chip" id="logsPause" type="button" title="Pausar el auto-scroll">
             ⏸ Pausa
           </button>
+          <span class="logs-export" id="logsExport">
+            <button
+              class="app-chip"
+              data-export="filtered-txt"
+              type="button"
+              title="Exportar lo visible con los filtros aplicados (.txt legible)"
+            >
+              ⬇ filtro .txt
+            </button>
+            <button
+              class="app-chip"
+              data-export="filtered-jsonl"
+              type="button"
+              title="Exportar lo visible con los filtros aplicados (.jsonl estructurado)"
+            >
+              ⬇ filtro .jsonl
+            </button>
+            <button
+              class="app-chip"
+              data-export="session-txt"
+              type="button"
+              title="Exportar todos los logs de la sesión (.txt legible)"
+            >
+              ⬇ sesión .txt
+            </button>
+            <button
+              class="app-chip"
+              data-export="session-jsonl"
+              type="button"
+              title="Exportar todos los logs de la sesión (.jsonl estructurado)"
+            >
+              ⬇ sesión .jsonl
+            </button>
+            <span class="logs-export-status" id="logsExportStatus"></span>
+          </span>
         </div>
         <div class="logs-hidden" id="logsHidden" hidden></div>
         <div class="logs-scroll-wrap">

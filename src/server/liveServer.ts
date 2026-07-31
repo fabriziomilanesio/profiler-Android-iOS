@@ -25,9 +25,15 @@ import { LogcatCapture } from '../core/logs/logcatCapture'
 import { LogRing, DEFAULT_LOG_CAP } from '../core/logs/logRing'
 import { LogSink } from '../core/logs/logSink'
 import type { LogEntry } from '../core/logs/logEntry'
+import {
+  logsExportFilename,
+  parseExportEntries,
+  serializeLogsJsonl,
+  serializeLogsTxt,
+} from '../core/logs/exportLogs'
 import { buildReportSession } from '../core/session/stats'
 import { generateReportHtml, reportFilename } from '../report/generateReport'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   startHttpServer,
@@ -232,6 +238,9 @@ export class LiveServer {
         }
         if (url.pathname === '/api/logs' && req.method === 'GET') {
           return this.handleLogs(url)
+        }
+        if (url.pathname === '/api/logs/export' && req.method === 'POST') {
+          return this.handleLogsExport(req)
         }
         if (url.pathname === '/api/config' && req.method === 'GET') {
           return Response.json({
@@ -459,6 +468,105 @@ export class LiveServer {
       }
     }
     return Response.json({ entries: this.logRing.last(n) })
+  }
+
+  /**
+   * POST /api/logs/export (ticket 029) — serializa logs a .txt legible o .jsonl,
+   * guarda copia en la carpeta de reportes y devuelve el archivo como attachment
+   * (mismo doble destino que /api/report). Body:
+   *   { scope: 'session'|'filtered', format: 'txt'|'jsonl', sessionId?, entries? }
+   *
+   * Decisión de arquitectura: para scope 'filtered' el CLIENTE manda las entries
+   * visibles (LogsPanel.getFilteredEntries) en el body — no una spec de filtro que
+   * el server re-aplique sobre su ring. El buffer del cliente es el único que sabe
+   * exactamente qué se ve: se limpia al cambiar de app/device mientras el ring del
+   * server conserva líneas de la app anterior (limitación documentada del 028), y
+   * el dedup bootstrap↔WS también vive del lado del cliente. El peor caso (50k
+   * entries ≈ 12 MB) viaja por localhost: irrelevante para una tool local.
+   */
+  private async handleLogsExport(req: Request): Promise<Response> {
+    const origin = req.headers.get('origin')
+    if (origin !== null && !isLocalOrigin(origin)) {
+      return new Response('Forbidden origin', { status: 403 })
+    }
+    let body: Record<string, unknown>
+    try {
+      body = (await req.json()) as Record<string, unknown>
+    } catch {
+      return Response.json({ error: 'body inválido' }, { status: 400 })
+    }
+    const format = body['format']
+    if (format !== 'txt' && format !== 'jsonl') {
+      return Response.json({ error: 'format inválido (txt|jsonl)' }, { status: 400 })
+    }
+    const scope = body['scope']
+    if (scope !== 'session' && scope !== 'filtered') {
+      return Response.json({ error: 'scope inválido (session|filtered)' }, { status: 400 })
+    }
+
+    let entries: LogEntry[]
+    let sessionId: string | null = null
+    if (scope === 'filtered') {
+      // input hostil: viene del browser y termina escrito a disco — validar/normalizar
+      const parsed = parseExportEntries(body['entries'], DEFAULT_LOG_CAP)
+      if (parsed === null) {
+        return Response.json({ error: 'entries inválidas' }, { status: 400 })
+      }
+      if (parsed.length === 0) {
+        return Response.json({ error: 'sin logs para exportar' }, { status: 409 })
+      }
+      entries = parsed
+    } else {
+      const requested = body['sessionId']
+      if (requested !== undefined && typeof requested !== 'string') {
+        return Response.json({ error: 'sessionId inválido' }, { status: 400 })
+      }
+      this.flushLogs() // lo pendiente va a disco antes de leer el NDJSON
+      if (requested !== undefined && requested !== this.sessionLog?.id) {
+        // sesión pasada: solo existe en el NDJSON hermano (LogSink valida el id)
+        if (!this.opts.sessionsDir) {
+          return Response.json({ error: 'sin historial' }, { status: 404 })
+        }
+        const read = LogSink.read(this.opts.sessionsDir, requested)
+        if (read === null || read.length === 0) {
+          return Response.json({ error: 'la sesión no tiene logs' }, { status: 404 })
+        }
+        entries = read
+        sessionId = requested
+      } else {
+        // sesión en curso: lo persistido; sin sessionsDir cae al ring en memoria
+        sessionId = this.sessionLog?.id ?? null
+        const read =
+          this.opts.sessionsDir && sessionId ? LogSink.read(this.opts.sessionsDir, sessionId) : null
+        entries = read ?? this.logRing.last(DEFAULT_LOG_CAP)
+        if (entries.length === 0) {
+          return Response.json({ error: 'la sesión no tiene logs' }, { status: 404 })
+        }
+      }
+    }
+
+    const content = format === 'txt' ? serializeLogsTxt(entries) : serializeLogsJsonl(entries)
+    const filename = logsExportFilename({
+      format,
+      filtered: scope === 'filtered',
+      sessionId,
+      now: new Date(),
+    })
+    // copia en la carpeta de reportes (best-effort: el download no depende del disco)
+    try {
+      const dir = this.config().reportsDir
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, filename), content)
+    } catch {
+      /* sin copia local */
+    }
+    return new Response(content, {
+      headers: {
+        'content-type':
+          format === 'txt' ? 'text/plain; charset=utf-8' : 'application/x-ndjson; charset=utf-8',
+        'content-disposition': `attachment; filename="${filename}"`,
+      },
+    })
   }
 
   private async tick(): Promise<void> {
@@ -814,10 +922,17 @@ export class LiveServer {
     })
   }
 
-  /** GET /api/sessions — historial en disco, más recientes primero. */
+  /** GET /api/sessions — historial en disco, más recientes primero.
+   *  `hasLogs` habilita/deshabilita los botones de export de logs del menú (029). */
   private handleListSessions(): Response {
     const dir = this.opts.sessionsDir
-    const sessions = dir ? SessionLog.list(dir) : []
+    this.flushLogs() // que la sesión en curso reporte hasLogs al día
+    const sessions = dir
+      ? SessionLog.list(dir).map((s) => ({
+          ...s,
+          hasLogs: existsSync(join(dir, `${s.id}.logs.jsonl`)),
+        }))
+      : []
     return Response.json({ sessions, current: this.sessionLog?.id ?? null })
   }
 

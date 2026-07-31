@@ -20,6 +20,9 @@
  *   LogsPanel.clear()                — cambio de app/device: panel limpio
  *   LogsPanel.getFilteredEntries()   — TODAS las entries que pasan el filtro
  *                                      actual, en el orden visible (029: export)
+ *   LogsPanel.downloadExport(payload, container, onStatus)
+ *                                    — POST /api/logs/export → descarga blob
+ *                                      (lo usa también el menú ☰ para sesiones)
  */
 ;(function () {
   'use strict'
@@ -50,6 +53,8 @@
     order: document.getElementById('logsOrder'),
     pause: document.getElementById('logsPause'),
     live: document.getElementById('logsLive'),
+    exportWrap: document.getElementById('logsExport'),
+    exportStatus: document.getElementById('logsExportStatus'),
   }
 
   var buf = [] // ring del cliente (más vieja primero)
@@ -312,6 +317,64 @@
     return out
   }
 
+  // ---------- Export (ticket 029) ----------
+
+  function setExportStatus(msg, kind) {
+    els.exportStatus.textContent = msg || ''
+    els.exportStatus.className = 'logs-export-status' + (kind ? ' ' + kind : '')
+  }
+
+  /**
+   * POST /api/logs/export → blob → descarga en el browser. El server además
+   * guarda una copia en la carpeta de reportes (mismo doble destino que el
+   * reporte HTML). `container` recibe el <a> sintético: dentro de un popover
+   * evita que el click burbujee a document y lo cierre (patrón de live.js).
+   */
+  function downloadExport(payload, container, onStatus) {
+    onStatus('Exportando logs…', '')
+    fetch('/api/logs/export', { method: 'POST', body: JSON.stringify(payload) })
+      .then(function (r) {
+        if (!r.ok) {
+          return r.json().then(function (body) {
+            throw new Error(body.error || 'error ' + r.status)
+          })
+        }
+        var dispo = r.headers.get('content-disposition') || ''
+        var m = dispo.match(/filename="([^"]+)"/)
+        return r.blob().then(function (blob) {
+          var a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = m ? m[1] : 'evermore-logs.' + payload.format
+          ;(container || document.body).appendChild(a)
+          a.click()
+          a.remove()
+          setTimeout(function () {
+            URL.revokeObjectURL(a.href)
+          }, 10000)
+          onStatus('Logs exportados (copia en la carpeta de reportes).', 'ok')
+        })
+      })
+      .catch(function (e) {
+        onStatus('No se pudo exportar: ' + e.message, 'err')
+      })
+  }
+
+  els.exportWrap.addEventListener('click', function (ev) {
+    var kind = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-export')
+    if (!kind) return
+    var parts = kind.split('-') // "scope-format"
+    var payload = { scope: parts[0], format: parts[1] }
+    if (payload.scope === 'filtered') {
+      // el export de "lo visible" serializa lo que el cliente ya sabe que se ve
+      payload.entries = getFilteredEntries()
+      if (payload.entries.length === 0) {
+        setExportStatus('Sin líneas con el filtro actual.', 'err')
+        return
+      }
+    }
+    downloadExport(payload, null, setExportStatus)
+  })
+
   // ---------- Controles ----------
 
   els.toggle.addEventListener('click', function () {
@@ -401,5 +464,6 @@
     bootstrap: bootstrap,
     clear: clear,
     getFilteredEntries: getFilteredEntries,
+    downloadExport: downloadExport,
   }
 })()

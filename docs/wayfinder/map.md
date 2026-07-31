@@ -140,6 +140,13 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   (UMD: browser y bun:test comparten el archivo), render por cap de 1000 filas con
   indicador (no virtualización), dedup bootstrap↔WS por `ts|pid|tid|level|tag|message`;
   `LogsPanel.getFilteredEntries()` listo para el export del 029.
+- [Export de logs — .txt legible + .jsonl, sesión completa o filtrado](tickets/029-export-logs.md) —
+  `POST /api/logs/export` único: para "lo filtrado" el cliente manda las entries visibles
+  (solo su buffer sabe qué se ve; el ring del server guarda líneas de apps anteriores),
+  el server serializa (`src/core/logs/exportLogs.ts` puro: txt con `[CRASH]`/`[ANR]` por
+  línea, jsonl tal cual), guarda copia en la carpeta de reportes y devuelve el archivo
+  (doble destino como `/api/report`); sesiones pasadas vía `LogSink.read` con botones
+  .txt/.jsonl en el ☰ (deshabilitados si `hasLogs: false`).
 - [Sampling en dos carriles](tickets/023-sampling-dos-carriles-overhead.md) — el profiler
   exigía al device en gama baja (observer effect de `dumpsys meminfo` cada 1 s). Carril
   rápido (cats + FPS + RSS vivo por VmRSS) cada tick; carril lento (meminfo 15 s,

@@ -330,6 +330,7 @@
         menu.sessEmpty.textContent = 'Sin sesiones guardadas.'
         data.sessions.forEach(function (s) {
           var li = document.createElement('li')
+          li.className = 'sess-item'
           var b = document.createElement('button')
           b.type = 'button'
           var metaBox = document.createElement('span')
@@ -357,6 +358,31 @@
             downloadReport('session=' + encodeURIComponent(s.id), menu.exportStatus)
           })
           li.appendChild(b)
+          // export de logs de la sesión (ticket 029): .txt / .jsonl junto al reporte;
+          // sesión sin archivo de logs ⇒ botones deshabilitados, sin error
+          ;['txt', 'jsonl'].forEach(function (fmt) {
+            var lb = document.createElement('button')
+            lb.type = 'button'
+            lb.className = 'app-chip'
+            lb.textContent = '⬇ .' + fmt
+            if (s.hasLogs) {
+              lb.title = 'Exportar los logs de la sesión (.' + fmt + ')'
+              lb.addEventListener('click', function (e) {
+                e.stopPropagation()
+                LogsPanel.downloadExport(
+                  { scope: 'session', format: fmt, sessionId: s.id },
+                  menu.pop,
+                  function (msg, kind) {
+                    setStatus(menu.exportStatus, msg, kind)
+                  },
+                )
+              })
+            } else {
+              lb.disabled = true
+              lb.title = 'Sesión sin logs guardados'
+            }
+            li.appendChild(lb)
+          })
           menu.sessList.appendChild(li)
         })
       })

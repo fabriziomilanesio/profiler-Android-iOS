@@ -651,3 +651,209 @@ describe('LiveServer logs (ticket 027)', () => {
     }
   })
 })
+
+describe('LiveServer /api/logs/export (ticket 029)', () => {
+  const UNITY_LINE = (msg: string, pid = 111, tid = 190) =>
+    `2026-07-31 10:15:02.087 ${pid} ${tid} I Unity   : ${msg}`
+
+  const FILTERED_ENTRIES = [
+    {
+      ts: 1786000000000,
+      level: 'E',
+      tag: 'Unity',
+      message: 'NullReferenceException: señal 💥',
+      pid: 111,
+      tid: 190,
+      source: 'logcat',
+    },
+    {
+      ts: 1786000000100,
+      level: 'E',
+      tag: 'AndroidRuntime',
+      message: 'FATAL EXCEPTION: main',
+      pid: 111,
+      source: 'logcat',
+      isCrash: true,
+    },
+  ]
+
+  const exportReq = (url: string, body: unknown) =>
+    fetch(`${url}/api/logs/export`, { method: 'POST', body: JSON.stringify(body) })
+
+  test('scope filtered + txt: attachment -filtered.txt, crashes marcados, copia en reportes', async () => {
+    const { mkdtempSync, readdirSync, readFileSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const reportsDir = mkdtempSync(join(tmpdir(), 'reports-'))
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], [], 'FAKE-SERIAL', {
+      reportsDir,
+    })
+    try {
+      const res = await exportReq(url, {
+        scope: 'filtered',
+        format: 'txt',
+        entries: FILTERED_ENTRIES,
+      })
+      expect(res.status).toBe(200)
+      const dispo = res.headers.get('content-disposition') ?? ''
+      expect(dispo).toContain('evermore-logs-')
+      expect(dispo).toContain('-filtered.txt')
+      const txt = await res.text()
+      expect(txt).toContain('E/Unity(111): NullReferenceException: señal 💥')
+      expect(txt).toContain('[CRASH] ')
+      expect(txt).toContain('E/AndroidRuntime(111): FATAL EXCEPTION: main')
+      // copia en la carpeta de reportes, con el mismo contenido
+      const copy = readdirSync(reportsDir).find((f) => f.endsWith('-filtered.txt'))
+      expect(copy).toBeDefined()
+      expect(readFileSync(join(reportsDir, copy!), 'utf8')).toBe(txt)
+    } finally {
+      await server.stop()
+      rmSync(reportsDir, { recursive: true, force: true })
+    }
+  })
+
+  test('scope filtered + jsonl: cada línea parsea a la LogEntry mandada', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [])
+    try {
+      const res = await exportReq(url, {
+        scope: 'filtered',
+        format: 'jsonl',
+        entries: FILTERED_ENTRIES,
+      })
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toContain('application/x-ndjson')
+      const lines = (await res.text()).split('\n').filter(Boolean)
+      expect(lines).toHaveLength(2)
+      expect(JSON.parse(lines[0]!)).toMatchObject({ tag: 'Unity', level: 'E', tid: 190 })
+      expect(JSON.parse(lines[1]!)).toMatchObject({ tag: 'AndroidRuntime', isCrash: true })
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('scope session (en curso): exporta el NDJSON de la sesión con el id en el nombre', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'sessions-'))
+    const { server, url, streams } = await startServer(
+      new Map([[PKG, 111]]),
+      [],
+      [],
+      'FAKE-SERIAL',
+      { sessionsDir },
+    )
+    try {
+      const app = streams.find((s) => s.command.includes('--pid=111'))!
+      app.onLine(UNITY_LINE('exportame'))
+      await new Promise((r) => setTimeout(r, 60)) // flush del sink (logFlushMs=20)
+      const list = (await (await fetch(`${url}/api/sessions`)).json()) as { current: string }
+      const res = await exportReq(url, { scope: 'session', format: 'txt' })
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-disposition')).toContain(`evermore-logs-${list.current}.txt`)
+      expect(await res.text()).toContain('I/Unity(111): exportame')
+    } finally {
+      await server.stop()
+      rmSync(sessionsDir, { recursive: true, force: true })
+    }
+  })
+
+  test('sesión pasada: exporta su .logs.jsonl vía LogSink; sin archivo ⇒ 404 claro', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'sessions-'))
+    // sesión "vieja" pre-existente con logs
+    const { LogSink } = await import('../core/logs/logSink')
+    const oldId = '2026-07-30T09-00-00'
+    new LogSink(sessionsDir, oldId).append([
+      {
+        ts: 1786000000000,
+        level: 'W',
+        tag: 'Unity',
+        message: 'atlas no precargado',
+        pid: 99,
+        source: 'logcat',
+      },
+    ])
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], [], 'FAKE-SERIAL', {
+      sessionsDir,
+    })
+    try {
+      const res = await exportReq(url, { scope: 'session', format: 'jsonl', sessionId: oldId })
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-disposition')).toContain(`evermore-logs-${oldId}.jsonl`)
+      expect(await res.text()).toContain('atlas no precargado')
+
+      // sesión sin logs (sin <id>.logs.jsonl): 404 con mensaje, no error
+      const missing = await exportReq(url, {
+        scope: 'session',
+        format: 'txt',
+        sessionId: '2026-07-29T08-00-00',
+      })
+      expect(missing.status).toBe(404)
+      expect(((await missing.json()) as { error: string }).error).toContain('no tiene logs')
+
+      // path traversal en sessionId: LogSink valida el id ⇒ 404
+      expect(
+        (await exportReq(url, { scope: 'session', format: 'txt', sessionId: '../evil' })).status,
+      ).toBe(404)
+    } finally {
+      await server.stop()
+      rmSync(sessionsDir, { recursive: true, force: true })
+    }
+  })
+
+  test('validación: format/scope/entries inválidos ⇒ 400; filtered vacío ⇒ 409', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [])
+    try {
+      expect((await exportReq(url, { scope: 'filtered', format: 'pdf' })).status).toBe(400)
+      expect((await exportReq(url, { scope: 'todo', format: 'txt' })).status).toBe(400)
+      expect(
+        (await exportReq(url, { scope: 'filtered', format: 'txt', entries: 'nope' })).status,
+      ).toBe(400)
+      expect(
+        (
+          await exportReq(url, {
+            scope: 'filtered',
+            format: 'txt',
+            entries: [{ ts: 'x', level: 'I' }],
+          })
+        ).status,
+      ).toBe(400)
+      expect((await exportReq(url, { scope: 'filtered', format: 'txt', entries: [] })).status).toBe(
+        409,
+      )
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('/api/sessions reporta hasLogs por sesión (habilita los botones del menú)', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'sessions-'))
+    const { server, url, streams } = await startServer(
+      new Map([[PKG, 111]]),
+      [],
+      [],
+      'FAKE-SERIAL',
+      { sessionsDir },
+    )
+    try {
+      await new Promise((r) => setTimeout(r, 150)) // primer tick crea la sesión
+      const before = (await (await fetch(`${url}/api/sessions`)).json()) as {
+        sessions: Array<{ hasLogs: boolean }>
+      }
+      expect(before.sessions[0]!.hasLogs).toBe(false) // sin logs todavía
+
+      const app = streams.find((s) => s.command.includes('--pid=111'))!
+      app.onLine(UNITY_LINE('ahora sí'))
+      await new Promise((r) => setTimeout(r, 60))
+      const after = (await (await fetch(`${url}/api/sessions`)).json()) as {
+        sessions: Array<{ hasLogs: boolean }>
+      }
+      expect(after.sessions[0]!.hasLogs).toBe(true)
+    } finally {
+      await server.stop()
+      rmSync(sessionsDir, { recursive: true, force: true })
+    }
+  })
+})
