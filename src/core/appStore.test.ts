@@ -152,6 +152,36 @@ describe('AppStore (persistencia)', () => {
     ).toBe(true)
   })
 
+  test('fpsTarget (ticket 025): default 30 y migración de configs viejas sin el campo', () => {
+    expect(defaultAppStoreData().fpsTarget).toBe(30)
+    // config pre-025 (sin fpsTarget) ⇒ migra al default sin romper el resto
+    const old = parseAppStore(JSON.stringify({ last: 'com.evermore.oda.qa', intervalMs: 2000 }))
+    expect(old.fpsTarget).toBe(30)
+    expect(old.last).toBe('com.evermore.oda.qa')
+    // valores válidos se toman (redondeados); basura ⇒ default
+    expect(parseAppStore(JSON.stringify({ fpsTarget: 60 })).fpsTarget).toBe(60)
+    expect(parseAppStore(JSON.stringify({ fpsTarget: 59.6 })).fpsTarget).toBe(60)
+    expect(parseAppStore(JSON.stringify({ fpsTarget: 0 })).fpsTarget).toBe(30)
+    expect(parseAppStore(JSON.stringify({ fpsTarget: 999 })).fpsTarget).toBe(30)
+    expect(parseAppStore(JSON.stringify({ fpsTarget: '60' })).fpsTarget).toBe(30)
+  })
+
+  test('set() aplica fpsTarget validado, persiste y recarga', () => {
+    dir = mkdtempSync(join(tmpdir(), 'appstore-'))
+    const path = join(dir, 'config.json')
+    const legacy = join(dir, 'apps.json')
+    const store = new AppStore(path, legacy)
+    expect(store.data.fpsTarget).toBe(30)
+
+    store.set({ fpsTarget: 60 })
+    expect(store.data.fpsTarget).toBe(60)
+    store.set({ fpsTarget: -5 } as never) // fuera de rango ⇒ se ignora
+    expect(store.data.fpsTarget).toBe(60)
+
+    const reloaded = new AppStore(path, legacy)
+    expect(reloaded.data.fpsTarget).toBe(60)
+  })
+
   test('autoIntervalMs: gama baja (<4 GB) ⇒ 2 s; resto (o sin device) ⇒ 1 s', () => {
     expect(autoIntervalMs(3667)).toBe(2000) // SM-A155M
     expect(autoIntervalMs(4095)).toBe(2000)

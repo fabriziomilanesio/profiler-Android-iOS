@@ -682,6 +682,20 @@
         padding-bottom: 6px;
         min-height: 14px;
       }
+      /* Semáforo de FPS (ticket 025): colorea el jank% del subtítulo con el mismo
+         estado que el número de FPS del donut. Sin dato ⇒ sin clase (muted). */
+      .gauge-sub .sem-green {
+        color: var(--ok);
+        font-weight: 600;
+      }
+      .gauge-sub .sem-yellow {
+        color: var(--warn);
+        font-weight: 600;
+      }
+      .gauge-sub .sem-red {
+        color: var(--bad);
+        font-weight: 600;
+      }
       .event-chip {
         position: absolute;
         top: 10px;
@@ -1070,6 +1084,8 @@
                   <option value="2000">2 s</option>
                   <option value="5000">5 s</option>
                 </select>
+                <label for="cfgFps">Target FPS</label>
+                <input id="cfgFps" type="number" min="1" max="240" step="1" inputmode="numeric" />
                 <label for="cfgTheme">Modo oscuro</label>
                 <label class="switch">
                   <input type="checkbox" id="cfgTheme" />

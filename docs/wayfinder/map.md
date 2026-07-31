@@ -115,6 +115,11 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   y jank% por tick derivados del histograma `present2present` del dump de timestats que ya se
   hacía (cero comandos nuevos); umbral de jank = perder ≥1 vsync del panel real
   (`refreshHz` leído una vez de `--latency`, fallback 60) sobre la cadencia propia de la app.
+- [Target FPS configurable + semáforos verde/amarillo/rojo](tickets/025-target-fps-semaforos.md) —
+  `fpsTarget` persistido en config (default 30, editable en ☰, aplica en caliente);
+  `fpsStatus(fps, target)` pura en `src/core/perf/threshold.ts` (verde ≥ target ·
+  amarillo ≥ 80% · rojo abajo, null-safe) reutilizable por el reporte del 026; el FPS
+  del donut y el jank% del subtítulo toman el color del estado.
 - [Sampling en dos carriles](tickets/023-sampling-dos-carriles-overhead.md) — el profiler
   exigía al device en gama baja (observer effect de `dumpsys meminfo` cada 1 s). Carril
   rápido (cats + FPS + RSS vivo por VmRSS) cada tick; carril lento (meminfo 15 s,

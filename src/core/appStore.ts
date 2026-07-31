@@ -28,15 +28,32 @@ export interface AppStoreData {
   intervalAuto: boolean
   /** carpeta donde se guarda la copia de cada reporte exportado. */
   reportsDir: string
+  /**
+   * Target de FPS del semáforo (ticket 025): verde ≥ target · amarillo ≥ 80% ·
+   * rojo abajo. Default 30 (gama baja donde testea Evermore). Aplica en caliente
+   * desde el panel de config; el reporte (026) declara el target usado.
+   */
+  fpsTarget: number
 }
 
 /** Campos que el panel de configuración puede escribir (PUT /api/config). */
 export type ConfigPatch = Partial<
-  Pick<AppStoreData, 'filterTerm' | 'theme' | 'intervalMs' | 'intervalAuto' | 'reportsDir'>
+  Pick<
+    AppStoreData,
+    'filterTerm' | 'theme' | 'intervalMs' | 'intervalAuto' | 'reportsDir' | 'fpsTarget'
+  >
 >
 
 /** Umbral de gama baja para el intervalo auto (MB de RAM del device). */
 export const LOW_RAM_MB = 4096
+
+/** Rango sano del target de FPS (paneles reales van de ~24 a 240 Hz). */
+export const FPS_TARGET_MIN = 1
+export const FPS_TARGET_MAX = 240
+
+function isValidFpsTarget(v: unknown): v is number {
+  return typeof v === 'number' && v >= FPS_TARGET_MIN && v <= FPS_TARGET_MAX
+}
 
 /**
  * Intervalo default del sampling según el device (modo auto). El SM-A155M (3.7 GB)
@@ -60,6 +77,7 @@ export function defaultAppStoreData(): AppStoreData {
     intervalMs: 1000,
     intervalAuto: true,
     reportsDir: defaultReportsDir(),
+    fpsTarget: 30,
   }
 }
 
@@ -97,6 +115,8 @@ export function parseAppStore(json: string): AppStoreData {
   if (typeof o['reportsDir'] === 'string' && o['reportsDir'].trim()) {
     d.reportsDir = o['reportsDir'].trim()
   }
+  // ticket 025: configs pre-025 (sin el campo) migran solas al default 30
+  if (isValidFpsTarget(o['fpsTarget'])) d.fpsTarget = Math.round(o['fpsTarget'])
   return d
 }
 
@@ -176,6 +196,7 @@ export class AppStore {
     if (typeof patch.reportsDir === 'string' && patch.reportsDir.trim()) {
       d.reportsDir = patch.reportsDir.trim()
     }
+    if (isValidFpsTarget(patch.fpsTarget)) d.fpsTarget = Math.round(patch.fpsTarget)
     this.data_ = d
     this.save()
   }

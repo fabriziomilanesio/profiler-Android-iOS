@@ -259,6 +259,7 @@
     sessRefresh: document.getElementById('sessRefresh'),
     cfgFilter: document.getElementById('cfgFilter'),
     cfgInterval: document.getElementById('cfgInterval'),
+    cfgFps: document.getElementById('cfgFps'),
     cfgTheme: document.getElementById('cfgTheme'),
     cfgReports: document.getElementById('cfgReports'),
     cfgSave: document.getElementById('cfgSave'),
@@ -369,6 +370,9 @@
     }
     menu.cfgTheme.checked = cfg.theme === 'dark'
     menu.cfgReports.value = cfg.reportsDir
+    menu.cfgFps.value = cfg.fpsTarget
+    // el semáforo del donut usa el target al toque (aplica en caliente, ticket 025)
+    ProfilerDashboard.setFpsTarget(cfg.fpsTarget)
   }
 
   function loadConfig(applyTheme) {
@@ -390,6 +394,9 @@
       filterTerm: menu.cfgFilter.value.trim(),
       theme: menu.cfgTheme.checked ? 'dark' : 'light',
       reportsDir: menu.cfgReports.value.trim(),
+      // el server valida el rango (1–240); inválido ⇒ lo ignora y fillConfig
+      // repone el valor vigente con la respuesta
+      fpsTarget: Number(menu.cfgFps.value),
     }
     // "auto" delega el intervalo al server (según device); un valor concreto = manual
     if (menu.cfgInterval.value === 'auto') patch.intervalAuto = true

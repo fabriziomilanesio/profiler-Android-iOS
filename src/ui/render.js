@@ -84,6 +84,28 @@
   var latestFps = null
   var NA = '{na|N/A}'
 
+  // ---------- semáforo de FPS (ticket 025) ----------
+  // Espejo de src/core/perf/threshold.ts (la UI es JS plano servido estático, sin
+  // bundler): verde ≥ target · amarillo ≥ 80% del target · rojo abajo. Sin FPS o
+  // target inválido ⇒ null (sin color, no rojo). live.js actualiza fpsTarget desde
+  // /api/config (default 30) y el cambio re-pinta en caliente.
+  var fpsTarget = 30
+
+  function fpsStatusOf(fps, target) {
+    if (fps === null || fps === undefined || !isFinite(fps) || fps < 0) return null
+    if (typeof target !== 'number' || !isFinite(target) || target <= 0) return null
+    if (fps >= target) return 'green'
+    if (fps >= target * 0.8) return 'yellow'
+    return 'red'
+  }
+
+  function setFpsTarget(n) {
+    if (typeof n !== 'number' || !isFinite(n) || n <= 0) return
+    if (n === fpsTarget) return
+    fpsTarget = n
+    if (lastSample) render(lastSample) // re-pinta el semáforo sin esperar otro tick
+  }
+
   function gaugeDefs() {
     return {
       cpu: {
@@ -106,7 +128,14 @@
         max: 100,
         color: bands(65, 85),
         fmt: function (v) {
-          var fpsLine = latestFps === null ? '' : '\n{fps|' + Math.round(latestFps) + ' FPS}'
+          var fpsLine = ''
+          if (latestFps !== null) {
+            // el valor de FPS toma el color del semáforo (ticket 025); sin estado
+            // (target inválido) queda en el gris muted de siempre
+            var st = fpsStatusOf(latestFps, fpsTarget)
+            var tok = st === null ? 'fps' : 'fps' + st
+            fpsLine = '\n{' + tok + '|' + Math.round(latestFps) + ' FPS}'
+          }
           return (v === null ? NA : Math.round(v) + '{u|%}') + fpsLine
         },
       },
@@ -186,6 +215,28 @@
               fontSize: 14,
               fontFamily: FONT_BODY,
               fontWeight: 600,
+              padding: [4, 0, 0, 0],
+            },
+            // variantes con el color del semáforo (ticket 025) para la línea de FPS
+            fpsgreen: {
+              color: C.ok,
+              fontSize: 14,
+              fontFamily: FONT_BODY,
+              fontWeight: 700,
+              padding: [4, 0, 0, 0],
+            },
+            fpsyellow: {
+              color: C.warn,
+              fontSize: 14,
+              fontFamily: FONT_BODY,
+              fontWeight: 700,
+              padding: [4, 0, 0, 0],
+            },
+            fpsred: {
+              color: C.bad,
+              fontSize: 14,
+              fontFamily: FONT_BODY,
+              fontWeight: 700,
               padding: [4, 0, 0, 0],
             },
             na: { color: C.muted, fontSize: 20, fontFamily: FONT_BODY, fontWeight: 600 },
@@ -633,10 +684,18 @@
         var sub = 'p90 ' + Math.round(fr.p90Ms) + ' ms'
         if (fr.p99Ms !== null) sub += ' · p99 ' + Math.round(fr.p99Ms) + ' ms'
         if (fr.jankPct !== null) {
-          sub +=
-            ' · jank ' + (fr.jankPct < 10 ? fr.jankPct.toFixed(1) : Math.round(fr.jankPct)) + '%'
+          // el jank% hereda el estado del semáforo de FPS del tick (ticket 025);
+          // sin estado queda en muted como el resto del subtítulo
+          fsub.textContent = sub + ' · '
+          var jankEl = document.createElement('span')
+          var jst = fpsStatusOf(s.fps, fpsTarget)
+          if (jst !== null) jankEl.className = 'sem-' + jst
+          jankEl.textContent =
+            'jank ' + (fr.jankPct < 10 ? fr.jankPct.toFixed(1) : Math.round(fr.jankPct)) + '%'
+          fsub.appendChild(jankEl)
+        } else {
+          fsub.textContent = sub
         }
-        fsub.textContent = sub
       } else {
         fsub.textContent = 'frame-time N/A'
       }
@@ -811,6 +870,7 @@
     setConnected: setConnected,
     resetSeries: resetSeries,
     setTheme: applyTheme,
+    setFpsTarget: setFpsTarget,
     getTheme: function () {
       return theme
     },

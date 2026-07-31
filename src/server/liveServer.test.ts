@@ -372,6 +372,27 @@ describe('LiveServer export/config/sesiones', () => {
     }
   })
 
+  test('target de FPS (ticket 025): GET arranca en 30 y PUT lo aplica en caliente', async () => {
+    const { server, url, store } = await startServer(new Map([[PKG, 111]]), [])
+    try {
+      const before = (await (await fetch(`${url}/api/config`)).json()) as {
+        config: { fpsTarget: number }
+      }
+      expect(before.config.fpsTarget).toBe(30) // default del grilling (gama baja)
+
+      const put = await fetch(`${url}/api/config`, {
+        method: 'PUT',
+        body: JSON.stringify({ fpsTarget: 60 }),
+      })
+      expect(put.status).toBe(200)
+      const body = (await put.json()) as { config: { fpsTarget: number } }
+      expect(body.config.fpsTarget).toBe(60) // el cliente re-pinta con esta respuesta
+      expect(store.data.fpsTarget).toBe(60) // y quedó en el store (persistiría a disco)
+    } finally {
+      await server.stop()
+    }
+  })
+
   test('intervalo auto (ticket 023): device gama baja resuelve 2 s; manual lo pisa; auto lo restaura', async () => {
     const { t } = fakeTransport(new Map([[PKG, 111]]), [])
     // el device fake es gama baja: captureDeviceInfo lee este /proc/meminfo (3.6 GB)
