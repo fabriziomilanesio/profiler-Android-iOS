@@ -787,7 +787,15 @@ export class LiveServer {
     if (samples.length === 0) {
       return Response.json({ error: 'sin muestras en la ventana pedida' }, { status: 409 })
     }
-    const session = buildReportSession({ samples, packageName: pkg, device, intervalMs, trimmed })
+    const session = buildReportSession({
+      samples,
+      packageName: pkg,
+      device,
+      intervalMs,
+      trimmed,
+      // el veredicto del reporte usa el target configurado al momento de exportar
+      fpsTarget: this.config().fpsTarget,
+    })
     const html = generateReportHtml(session, this.config().theme, new Date())
     const filename = reportFilename(session, new Date())
     // copia en la carpeta de reportes (best-effort: el download no depende del disco)

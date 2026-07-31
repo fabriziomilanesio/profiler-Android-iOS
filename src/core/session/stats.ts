@@ -3,6 +3,7 @@
 // memAvg → breakdown PSS promedio. Funciones puras, null-safe: los Samples reales
 // traen null en lo no disponible y acá se filtra (una métrica sin datos ⇒ null).
 import type { DeviceInfo, MemSample, Sample } from '../schema'
+import { buildPerfVerdict, type PerfVerdict } from '../perf/verdict'
 
 export interface ScalarStats {
   avg: number
@@ -90,8 +91,12 @@ export interface ReportSession {
   sampleCount: number
   /** true si la ventana pedida se recortó al tramo de la app actual (hubo switches). */
   trimmed: boolean
+  /** target de FPS configurado al generar el reporte (config.fpsTarget, ticket 025) */
+  fpsTarget: number
   series: ReportSeriesPoint[]
   summary: ReportSummary
+  /** veredicto de perf de la ventana (ticket 026) — derivado de series + fpsTarget */
+  verdict: PerfVerdict
 }
 
 function percentile(sortedAsc: number[], p: number): number {
@@ -200,6 +205,8 @@ export interface BuildReportOptions {
   device: DeviceInfo | null
   intervalMs: number
   trimmed: boolean
+  /** config.fpsTarget al momento de exportar; ausente ⇒ 30 (el default del AppStore) */
+  fpsTarget?: number
 }
 
 /** Arma la sesión completa que consume el template del reporte. */
@@ -212,6 +219,33 @@ export function buildReportSession(opts: BuildReportOptions): ReportSession {
   const spanS = first && last ? Math.round((last.ts - first.ts) / 1000) + 1 : 0
   const activeS = Math.round((samples.length * opts.intervalMs) / 1000)
   const durationS = samples.length ? Math.max(1, Math.min(spanS, activeS)) : 0
+  const fpsTarget = opts.fpsTarget ?? 30
+  const series: ReportSeriesPoint[] = samples.map((s) => ({
+    t: s.t,
+    ts: s.ts,
+    cpu: s.cpu,
+    gpu: s.gpu,
+    fps: s.fps,
+    // ?? null: sesiones viejas no traen frame
+    frameP90Ms: s.frame?.p90Ms ?? null,
+    jankPct: s.frame?.jankPct ?? null,
+    tempC: s.tempC,
+    ramMb: s.mem.pss,
+    // ?? null: sesiones viejas del historial no traen estos campos
+    deviceCpu: s.deviceCpu ?? null,
+    deviceRamMb: s.deviceRamUsedMb ?? null,
+    mem: {
+      java: s.mem.java,
+      native: s.mem.native,
+      graphics: s.mem.graphics,
+      code: s.mem.code,
+      stack: s.mem.stack,
+      other: s.mem.other,
+    },
+    battery: { level: s.battery.levelPct, tempC: s.battery.tempC, mA: s.battery.mA },
+    netRxKb: s.netRxKb,
+    netTxKb: s.netTxKb,
+  }))
   return {
     app: opts.packageName.split('.').pop() ?? opts.packageName,
     bundleId: opts.packageName,
@@ -233,32 +267,9 @@ export function buildReportSession(opts: BuildReportOptions): ReportSession {
     samplingHz: +(1000 / opts.intervalMs).toFixed(2),
     sampleCount: samples.length,
     trimmed: opts.trimmed,
-    series: samples.map((s) => ({
-      t: s.t,
-      ts: s.ts,
-      cpu: s.cpu,
-      gpu: s.gpu,
-      fps: s.fps,
-      // ?? null: sesiones viejas no traen frame
-      frameP90Ms: s.frame?.p90Ms ?? null,
-      jankPct: s.frame?.jankPct ?? null,
-      tempC: s.tempC,
-      ramMb: s.mem.pss,
-      // ?? null: sesiones viejas del historial no traen estos campos
-      deviceCpu: s.deviceCpu ?? null,
-      deviceRamMb: s.deviceRamUsedMb ?? null,
-      mem: {
-        java: s.mem.java,
-        native: s.mem.native,
-        graphics: s.mem.graphics,
-        code: s.mem.code,
-        stack: s.mem.stack,
-        other: s.mem.other,
-      },
-      battery: { level: s.battery.levelPct, tempC: s.battery.tempC, mA: s.battery.mA },
-      netRxKb: s.netRxKb,
-      netTxKb: s.netTxKb,
-    })),
+    fpsTarget,
+    series,
     summary: summarize(samples),
+    verdict: buildPerfVerdict(series, fpsTarget),
   }
 }

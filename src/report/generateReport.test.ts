@@ -84,6 +84,54 @@ describe('generateReportHtml', () => {
     expect(html).not.toContain('vendor/echarts.min.js"')
   })
 
+  test('veredicto de perf embebido: target declarado, semáforo y secciones (026)', () => {
+    const html = generateReportHtml(SESSION, 'light', new Date('2026-07-31T18:00:00Z'))
+    // secciones nuevas del template
+    expect(html).toContain('id="verdictCard"')
+    expect(html).toContain('id="corrChart"')
+    expect(html).toContain('Worst stretches')
+    expect(html).toContain('Thermal throttling')
+    // datos del veredicto embebidos (fps 58 vs target default 30 ⇒ verde, 100% en target)
+    expect(html).toContain('"fpsTarget":30')
+    expect(html).toContain('"overall":"green"')
+    expect(html).toContain('"timeInTarget":{"greenPct":100')
+    expect(html).toContain('"throttling":{"detected":false')
+  })
+
+  test('el target configurado viaja hasta el reporte (no siempre 30)', () => {
+    const s60 = buildReportSession({
+      samples: [sample(0), sample(1), sample(2)],
+      packageName: 'com.evermore.oda.qa',
+      device: null,
+      intervalMs: 1000,
+      trimmed: false,
+      fpsTarget: 60,
+    })
+    expect(s60.fpsTarget).toBe(60)
+    expect(s60.verdict.overall).toBe('yellow') // 58 fps ≥ 80% de 60
+    const html = generateReportHtml(s60, 'light', new Date('2026-07-31T18:00:00Z'))
+    expect(html).toContain('"fpsTarget":60')
+  })
+
+  test('sesión vieja sin frame ni FPS: veredicto degrada sin romper el reporte', () => {
+    const legacy = buildReportSession({
+      samples: [sample(0), sample(1), sample(2)].map((s) => {
+        const clone = { ...s, fps: null } as Partial<Sample>
+        delete clone.frame
+        return clone as Sample
+      }),
+      packageName: 'com.evermore.oda.qa',
+      device: null,
+      intervalMs: 1000,
+      trimmed: false,
+    })
+    expect(legacy.verdict.overall).toBeNull()
+    expect(legacy.verdict.timeInTarget).toBeNull()
+    expect(legacy.verdict.worstWindows).toEqual([])
+    const html = generateReportHtml(legacy, 'dark', new Date('2026-07-31T18:00:00Z'))
+    expect(html).toContain('"overall":null')
+  })
+
   test('escapa </script> dentro de los datos (no corta el script del template)', () => {
     const evil = buildReportSession({
       samples: [sample(0)],

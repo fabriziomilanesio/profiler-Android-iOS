@@ -126,6 +126,13 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   NDJSON hermano `<id>.logs.jsonl` junto a la sesión; app stream `--pid` re-armado al cambiar
   pid/app/device + crash stream (`-b crash,events`) adjudicado por pid/package con backoff;
   WS `{type:'logs'}` en batch + GET /api/logs. Pendiente: overhead en gama baja con device real.
+- [Reporte — correlación FPS↔GPU/CPU/temp + veredicto de perf](tickets/026-reporte-correlacion-veredicto.md) —
+  apertura del reporte con semáforo general (`fpsStatus` sobre el avg), % del tiempo en
+  target ponderado por ticks, peores 3 tramos (ventana 30 s, score 70 % déficit FPS +
+  30 % jank, piso 1) y throttling térmico conservador (≥ 42 °C sostenida 60 s + caída
+  ≥ 15 % de FPS/GPU vs base fría, sin base no acusa); chart de correlación en dos grids
+  con dataZoom compartido y tramos rojos sombreados; target declarado, todo puro en
+  `src/core/perf/verdict.ts`; hook `session.marks` listo para el 030.
 - [Sampling en dos carriles](tickets/023-sampling-dos-carriles-overhead.md) — el profiler
   exigía al device en gama baja (observer effect de `dumpsys meminfo` cada 1 s). Carril
   rápido (cats + FPS + RSS vivo por VmRSS) cada tick; carril lento (meminfo 15 s,

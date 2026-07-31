@@ -16,6 +16,8 @@
       muted: '#66667A',
       line: '#E2E2EC',
       ok: '#0FA968',
+      warn: '#E08A00',
+      bad: '#E11D48',
       violet: '#7C5CE0',
       amber: '#D98A00',
       blue: '#1E90D6',
@@ -32,6 +34,8 @@
       muted: '#9B9BAB',
       line: '#2A2A38',
       ok: '#2EE59D',
+      warn: '#FFC24B',
+      bad: '#FF4D6D',
       violet: '#B18CFF',
       amber: '#FFB03A',
       blue: '#5AD1FF',
@@ -128,6 +132,169 @@
         'Recortado al tramo continuo de ' +
         sess.bundleId +
         ' (hubo cambios de app/device en la ventana)'
+    }
+  }
+
+  function fmtTime(ts) {
+    var d = new Date(ts)
+    var pad = function (n) {
+      return (n < 10 ? '0' : '') + n
+    }
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds())
+  }
+
+  // ---------- veredicto de perf (ticket 026) ----------
+  function renderVerdict(sess) {
+    var V = sess.verdict || null
+    var target = sess.fpsTarget
+    document.getElementById('verdictTarget').textContent = 'target: ' + target + ' FPS'
+
+    var light = document.getElementById('verdictLight')
+    var title = document.getElementById('verdictTitle')
+    var sub = document.getElementById('verdictSubtitle')
+    var overall = V ? V.overall : null
+    var TITLES = {
+      green: 'Performance on target',
+      yellow: 'Performance near target',
+      red: 'Performance below target',
+    }
+    light.className = 'verdict-light' + (overall ? ' sem-' + overall : '')
+    title.textContent = overall ? TITLES[overall] : 'Insufficient data'
+    if (V && V.avgFps !== null) {
+      var jank = sess.summary.frame ? sess.summary.frame.jankPct : null
+      sub.textContent =
+        'avg ' +
+        nf(V.avgFps, 1, ' FPS') +
+        ' over the exported window' +
+        (jank !== null ? ' · session jank ' + nf(jank, 1, '%') : '')
+    } else {
+      sub.textContent = 'no FPS data in this window — verdict unavailable'
+    }
+
+    // % del tiempo en target (ponderado por ticks con dato)
+    var bar = document.getElementById('shareBar')
+    var legend = document.getElementById('shareLegend')
+    var T = V && V.timeInTarget
+    if (T) {
+      bar.innerHTML =
+        '<div class="share-seg-green" style="width:' +
+        T.greenPct +
+        '%"></div>' +
+        '<div class="share-seg-yellow" style="width:' +
+        T.yellowPct +
+        '%"></div>' +
+        '<div class="share-seg-red" style="width:' +
+        T.redPct +
+        '%"></div>'
+      legend.innerHTML =
+        'time in target <b class="g">' +
+        nf(T.greenPct, 0, '%') +
+        '</b> · near <b class="y">' +
+        nf(T.yellowPct, 0, '%') +
+        '</b> · below <b class="r">' +
+        nf(T.redPct, 0, '%') +
+        '</b> (' +
+        T.ticks +
+        ' ticks)'
+    } else {
+      bar.innerHTML = ''
+      legend.textContent = 'no FPS data to split by status'
+    }
+
+    // peores tramos (ventana deslizante 30 s, score compuesto FPS+jank)
+    var worst = document.getElementById('worstList')
+    var wins = (V && V.worstWindows) || []
+    if (wins.length) {
+      worst.innerHTML = wins
+        .map(function (w, i) {
+          var facts = [
+            'FPS ' + nf(w.avgFps, 1) + ' avg / ' + nf(w.minFps, 1) + ' min',
+            w.avgJankPct !== null ? 'jank ' + nf(w.avgJankPct, 1, '%') : null,
+            w.avgGpu !== null ? 'GPU ' + nf(w.avgGpu, 0, '%') : null,
+            w.avgCpu !== null ? 'CPU ' + nf(w.avgCpu, 0, '%') : null,
+            w.avgTempC !== null ? nf(w.avgTempC, 1, ' °C') : null,
+          ]
+          return (
+            '<div class="worst-row">' +
+            '<span class="worst-score">#' +
+            (i + 1) +
+            ' · score ' +
+            nf(w.score, 0) +
+            '</span>' +
+            '<span class="worst-when">' +
+            fmtTime(w.startTs) +
+            '–' +
+            fmtTime(w.endTs) +
+            '</span>' +
+            '<span class="worst-facts">' +
+            facts.filter(Boolean).join(' · ') +
+            '</span>' +
+            '</div>'
+          )
+        })
+        .join('')
+    } else {
+      worst.innerHTML =
+        '<div class="verdict-empty">' +
+        (T
+          ? 'No bad stretches — the whole window stayed on target.'
+          : 'No FPS data — nothing to rank.') +
+        '</div>'
+    }
+
+    // throttling térmico (heurística conservadora del core, ya resuelta en los datos)
+    var box = document.getElementById('throttleBox')
+    var th = V && V.throttling
+    if (th && th.detected) {
+      var drops = []
+      if (th.fpsDropPct !== null && th.baselineFps !== null) {
+        drops.push(
+          'FPS ' +
+            nf(th.baselineFps, 1) +
+            ' → ' +
+            nf(th.hotFps, 1) +
+            ' (−' +
+            nf(th.fpsDropPct, 0, '%') +
+            ')',
+        )
+      }
+      if (th.gpuDropPct !== null && th.baselineGpu !== null) {
+        drops.push(
+          'GPU ' +
+            nf(th.baselineGpu, 0, '%') +
+            ' → ' +
+            nf(th.hotGpu, 0, '%') +
+            ' (−' +
+            nf(th.gpuDropPct, 0, '%') +
+            ')',
+        )
+      }
+      box.innerHTML =
+        '<span class="throttle-flag bad">Throttling detected</span><br/>' +
+        'Sustained high temperature ' +
+        fmtTime(th.hotStartTs) +
+        '–' +
+        fmtTime(th.hotEndTs) +
+        ' (peak ' +
+        nf(th.peakTempC, 1, ' °C') +
+        ') with a correlated drop vs the cool baseline: ' +
+        drops.join(' · ')
+    } else if (th && th.hotStartTs !== null) {
+      box.innerHTML =
+        '<span class="throttle-flag ok">Not detected</span><br/>' +
+        'Sustained heat ' +
+        fmtTime(th.hotStartTs) +
+        '–' +
+        fmtTime(th.hotEndTs) +
+        ' (peak ' +
+        nf(th.peakTempC, 1, ' °C') +
+        ') but no correlated FPS/GPU drop — not calling it throttling.'
+    } else {
+      box.innerHTML =
+        '<span class="throttle-flag ok">Not detected</span><br/>' +
+        (sess.summary.tempC
+          ? 'Temperature never stayed high long enough in this window.'
+          : 'No temperature data in this window.')
     }
   }
 
@@ -260,7 +427,7 @@
   }
 
   // ---------- memory pie ----------
-  var memPie, timeline
+  var memPie, timeline, corr
 
   function memMeta() {
     return [
@@ -328,6 +495,251 @@
             return { name: m.name, value: mem[m.key] || 0, itemStyle: { color: m.color } }
           }),
         },
+      ],
+    })
+    return chart
+  }
+
+  // ---------- correlación FPS ↔ GPU/CPU/temp (ticket 026) ----------
+  // Dos grids con x + dataZoom compartidos: arriba FPS (eje izq) + frame-time p90
+  // (eje der, ms); abajo GPU%/CPU% (eje izq 0-100) + temp (eje der °C). Los tramos
+  // rojos (FPS bajo target, precalculados en verdict.redSpans) se sombrean en ambos.
+  function makeCorrelation(sess) {
+    var chart = echarts.init(document.getElementById('corrChart'))
+    var V = sess.verdict || {}
+    var target = sess.fpsTarget
+    var pts = sess.series
+
+    function dataOf(get) {
+      return pts.map(function (s) {
+        return [s.ts, get(s)]
+      })
+    }
+    var maxFps = 0
+    pts.forEach(function (s) {
+      if (s.fps !== null && s.fps > maxFps) maxFps = s.fps
+    })
+    var fpsAxisMax = Math.ceil(Math.max(target * 1.2, maxFps * 1.05, 1) / 5) * 5
+
+    var redFill = theme === 'dark' ? 'rgba(255,77,109,0.14)' : 'rgba(225,29,72,0.09)'
+    var redAreas = (V.redSpans || []).map(function (sp) {
+      // ± medio tick para que un tramo de un solo tick tenga ancho visible
+      return [{ xAxis: sp.startTs - 500 }, { xAxis: sp.endTs + 500 }]
+    })
+    function markRed(extra) {
+      var m = { silent: true, itemStyle: { color: redFill }, data: redAreas }
+      if (extra) for (var k in extra) m[k] = extra[k]
+      return m
+    }
+
+    var fpsSeries = {
+      name: 'FPS',
+      type: 'line',
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+      showSymbol: false,
+      smooth: 0.15,
+      connectNulls: false,
+      lineStyle: { width: 2.2, color: C.secondary },
+      itemStyle: { color: C.secondary },
+      emphasis: { disabled: true },
+      data: dataOf(function (s) {
+        return s.fps
+      }),
+      markLine: {
+        silent: true,
+        symbol: 'none',
+        animation: false,
+        lineStyle: { color: C.muted, type: 'dashed', width: 1 },
+        label: {
+          formatter: 'target ' + target,
+          position: 'insideEndTop',
+          color: C.muted,
+          fontFamily: FONT_BODY,
+          fontSize: 10,
+        },
+        data: [{ yAxis: Math.min(target, fpsAxisMax) }],
+      },
+      markArea: markRed(),
+    }
+
+    // HOOK (ticket 030): marcas puntuales de crashes/errores sobre el timeline.
+    // Contrato: session.marks = [{ ts, label }] embebido en ReportData ⇒ acá se
+    // pintan como líneas verticales en el grid de FPS, sin tocar el resto del chart.
+    if (sess.marks && sess.marks.length) {
+      fpsSeries.markLine.data = fpsSeries.markLine.data.concat(
+        sess.marks.map(function (m) {
+          return {
+            xAxis: m.ts,
+            lineStyle: { color: C.bad, type: 'solid', width: 1.5 },
+            label: { formatter: m.label || '⚠', color: C.bad, fontSize: 10 },
+          }
+        }),
+      )
+    }
+
+    function corrLine(name, xi, yi, color, get, dashed) {
+      return {
+        name: name,
+        type: 'line',
+        xAxisIndex: xi,
+        yAxisIndex: yi,
+        showSymbol: false,
+        smooth: 0.15,
+        connectNulls: false,
+        lineStyle: { width: 1.8, color: color, type: dashed ? 'dashed' : 'solid' },
+        itemStyle: { color: color },
+        emphasis: { disabled: true },
+        data: dataOf(get),
+        markArea: xi === 1 ? markRed() : undefined,
+      }
+    }
+
+    var UNITS = { FPS: ' fps', 'Frame p90': ' ms', 'GPU %': '%', 'CPU %': '%', Temp: ' °C' }
+    var axisCommon = {
+      type: 'time',
+      axisLine: { lineStyle: { color: C.line } },
+      splitLine: { show: false },
+    }
+
+    chart.setOption({
+      animation: false,
+      backgroundColor: 'transparent',
+      axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: C.line } },
+      legend: {
+        top: 0,
+        left: 4,
+        icon: 'roundRect',
+        itemWidth: 14,
+        itemHeight: 5,
+        textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 12 },
+        inactiveColor: C.legendOff,
+        data: ['FPS', 'Frame p90', 'GPU %', 'CPU %', 'Temp'],
+      },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: C.card2,
+        borderColor: C.line,
+        textStyle: { color: C.text, fontFamily: FONT_BODY, fontSize: 12 },
+        formatter: function (params) {
+          if (!params.length) return ''
+          var lines = [echarts.time.format(params[0].value[0], '{HH}:{mm}:{ss}', false)]
+          params.forEach(function (p) {
+            var v = p.value[1]
+            lines.push(
+              p.marker +
+                ' ' +
+                p.seriesName +
+                ': <b>' +
+                (v === null || v === undefined ? 'N/A' : nf(v, 1, UNITS[p.seriesName] || '')) +
+                '</b>',
+            )
+          })
+          return lines.join('<br/>')
+        },
+      },
+      grid: [
+        { left: 52, right: 52, top: 32, height: 180 },
+        { left: 52, right: 52, top: 252, height: 130 },
+      ],
+      xAxis: [
+        Object.assign(
+          { gridIndex: 0, axisLabel: { show: false }, axisTick: { show: false } },
+          axisCommon,
+        ),
+        Object.assign(
+          {
+            gridIndex: 1,
+            axisLabel: {
+              color: C.muted,
+              fontFamily: FONT_BODY,
+              fontSize: 10,
+              formatter: '{HH}:{mm}:{ss}',
+            },
+          },
+          axisCommon,
+        ),
+      ],
+      yAxis: [
+        {
+          gridIndex: 0,
+          type: 'value',
+          min: 0,
+          max: fpsAxisMax,
+          name: 'FPS',
+          nameTextStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          splitLine: { lineStyle: { color: C.split } },
+        },
+        {
+          gridIndex: 0,
+          type: 'value',
+          min: 0,
+          name: 'ms',
+          position: 'right',
+          nameTextStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          splitLine: { show: false },
+        },
+        {
+          gridIndex: 1,
+          type: 'value',
+          min: 0,
+          max: 100,
+          name: '%',
+          nameTextStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          splitLine: { lineStyle: { color: C.split } },
+        },
+        {
+          gridIndex: 1,
+          type: 'value',
+          name: '°C',
+          position: 'right',
+          nameTextStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          splitLine: { show: false },
+        },
+      ],
+      dataZoom: [
+        { type: 'inside', xAxisIndex: [0, 1] },
+        {
+          type: 'slider',
+          xAxisIndex: [0, 1],
+          bottom: 6,
+          height: 16,
+          borderColor: C.line,
+          handleStyle: { color: C.card2, borderColor: C.muted },
+          moveHandleStyle: { color: C.muted },
+          fillerColor: theme === 'dark' ? 'rgba(0,230,218,0.10)' : 'rgba(0,158,150,0.08)',
+          dataBackground: {
+            lineStyle: { color: C.line },
+            areaStyle: { color: C.split },
+          },
+          textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+        },
+      ],
+      series: [
+        fpsSeries,
+        corrLine(
+          'Frame p90',
+          0,
+          1,
+          C.violet,
+          function (s) {
+            return s.frameP90Ms
+          },
+          true,
+        ),
+        corrLine('GPU %', 1, 2, C.primary, function (s) {
+          return s.gpu
+        }),
+        corrLine('CPU %', 1, 2, C.blue, function (s) {
+          return s.cpu
+        }),
+        corrLine('Temp', 1, 3, C.amber, function (s) {
+          return s.tempC
+        }),
       ],
     })
     return chart
@@ -513,11 +925,13 @@
   function buildAll() {
     memPie = makeMemPie(SESSION)
     timeline = makeTimeline(SESSION)
+    corr = makeCorrelation(SESSION)
   }
   function disposeAll() {
     if (memPie) memPie.dispose()
     if (timeline) timeline.dispose()
-    memPie = timeline = null
+    if (corr) corr.dispose()
+    memPie = timeline = corr = null
   }
 
   // ---------- theme toggle (local al reporte) ----------
@@ -536,11 +950,13 @@
 
   // ---------- first paint ----------
   renderMeta(SESSION)
+  renderVerdict(SESSION)
   renderCards(SESSION)
   buildAll()
   syncThemeButton()
   window.addEventListener('resize', function () {
     if (memPie) memPie.resize()
     if (timeline) timeline.resize()
+    if (corr) corr.resize()
   })
 })()

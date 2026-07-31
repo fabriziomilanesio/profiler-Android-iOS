@@ -245,6 +245,165 @@
         align-self: flex-start;
       }
 
+      /* ---- veredicto de perf (ticket 026) ---- */
+      .verdict {
+        padding: 16px 18px 14px;
+        margin-bottom: 14px;
+      }
+      .verdict-main {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .verdict-light {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex: 0 0 auto;
+      }
+      .verdict-light.sem-green {
+        background: var(--ok);
+        box-shadow: 0 0 12px var(--ok);
+      }
+      .verdict-light.sem-yellow {
+        background: var(--warn);
+        box-shadow: 0 0 12px var(--warn);
+      }
+      .verdict-light.sem-red {
+        background: var(--bad);
+        box-shadow: 0 0 12px var(--bad);
+      }
+      .verdict-title {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 20px;
+        line-height: 1.15;
+      }
+      .verdict-sub {
+        font-size: 12px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .verdict-target {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--secondary-ink);
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 11px;
+        white-space: nowrap;
+      }
+      .verdict-share {
+        flex: 1 1 240px;
+        min-width: 220px;
+      }
+      .share-bar {
+        display: flex;
+        height: 10px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+      }
+      .share-seg-green {
+        background: var(--ok);
+      }
+      .share-seg-yellow {
+        background: var(--warn);
+      }
+      .share-seg-red {
+        background: var(--bad);
+      }
+      .share-legend {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .share-legend b.g {
+        color: var(--ok);
+      }
+      .share-legend b.y {
+        color: var(--warn);
+      }
+      .share-legend b.r {
+        color: var(--bad);
+      }
+      .verdict-detail {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+        gap: 16px;
+        margin-top: 14px;
+      }
+      .worst-row {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 7px 0;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+        flex-wrap: wrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .worst-row:first-of-type {
+        margin-top: 8px;
+      }
+      .worst-score {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 12px;
+        color: var(--bad);
+        background: rgba(225, 29, 72, 0.09);
+        border: 1px solid var(--bad);
+        border-radius: 999px;
+        padding: 1px 9px;
+        white-space: nowrap;
+      }
+      .worst-when {
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .worst-facts {
+        color: var(--muted);
+      }
+      .verdict-empty {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+      .throttle-box {
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.55;
+        font-variant-numeric: tabular-nums;
+      }
+      .throttle-flag {
+        display: inline-block;
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        border-radius: 999px;
+        padding: 2px 10px;
+        margin-bottom: 6px;
+      }
+      .throttle-flag.bad {
+        color: var(--bad);
+        border: 1px solid var(--bad);
+        background: rgba(225, 29, 72, 0.09);
+      }
+      .throttle-flag.ok {
+        color: var(--secondary-ink);
+        border: 1px solid var(--line);
+        background: var(--chip-bg);
+      }
+
       .cards {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
@@ -296,6 +455,14 @@
         color: var(--primary);
       }
 
+      .corr {
+        margin-bottom: 14px;
+      }
+      #corrChart {
+        width: 100%;
+        height: 460px;
+      }
+
       .mid {
         display: grid;
         grid-template-columns: 340px minmax(0, 1fr);
@@ -343,10 +510,16 @@
           justify-content: flex-start;
           flex-wrap: wrap;
         }
+        .verdict-detail {
+          grid-template-columns: 1fr;
+        }
       }
       @media (max-width: 480px) {
         body {
           padding: 12px 12px 20px;
+        }
+        #corrChart {
+          height: 400px;
         }
         .brand-evermore img {
           height: 54px;
@@ -402,7 +575,46 @@
         </div>
       </div>
 
+      <!-- Veredicto de perf (ticket 026): semáforo general + % en target + peores
+           tramos + throttling térmico, sobre la ventana exportada -->
+      <section class="card verdict" id="verdictCard">
+        <div class="verdict-main">
+          <span class="verdict-light" id="verdictLight"></span>
+          <div class="verdict-headline">
+            <div class="verdict-title" id="verdictTitle">—</div>
+            <div class="verdict-sub" id="verdictSubtitle">—</div>
+          </div>
+          <span class="verdict-target" id="verdictTarget">target: — FPS</span>
+          <div class="verdict-share">
+            <div class="share-bar" id="shareBar"></div>
+            <div class="share-legend" id="shareLegend">—</div>
+          </div>
+        </div>
+        <div class="verdict-detail">
+          <div>
+            <span class="card-title">Worst stretches</span>
+            <div id="worstList"></div>
+          </div>
+          <div>
+            <span class="card-title">Thermal throttling</span>
+            <div class="throttle-box" id="throttleBox"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="cards" id="metricCards"></section>
+
+      <!-- Chart principal de correlación (ticket 026): FPS/frame-time arriba,
+           GPU/CPU/temp abajo, x + dataZoom compartidos, tramos rojos marcados -->
+      <section class="card panel corr">
+        <div class="panel-head">
+          <span class="card-title">Correlation — FPS ↔ GPU · CPU · Temp</span>
+          <span class="panel-sub" id="corrSub"
+            >shaded = FPS below target · shared zoom (drag / wheel)</span
+          >
+        </div>
+        <div id="corrChart"></div>
+      </section>
 
       <section class="mid">
         <div class="card panel">
