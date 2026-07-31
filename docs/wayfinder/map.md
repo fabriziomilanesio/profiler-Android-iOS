@@ -111,6 +111,10 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   contra el device real: `Sampler` 1 Hz best-effort sobre `AdbTransport`, `LiveServer`
   HTTP+WS sirviendo `src/ui/`, red device-wide por delta de `/proc/net/dev`, inspector
   HTTP pass-through opcional (`--inspect`) con proxy + `adb reverse`.
+- [Frame-time y jank primera clase](tickets/024-frametime-jank-primera-clase.md) — p50/p90/p99
+  y jank% por tick derivados del histograma `present2present` del dump de timestats que ya se
+  hacía (cero comandos nuevos); umbral de jank = perder ≥1 vsync del panel real
+  (`refreshHz` leído una vez de `--latency`, fallback 60) sobre la cadencia propia de la app.
 - [Sampling en dos carriles](tickets/023-sampling-dos-carriles-overhead.md) — el profiler
   exigía al device en gama baja (observer effect de `dumpsys meminfo` cada 1 s). Carril
   rápido (cats + FPS + RSS vivo por VmRSS) cada tick; carril lento (meminfo 15 s,
@@ -123,8 +127,7 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   decidido en el ticket 025 (target configurable, verde/amarillo/rojo); el resto se
   calibra con datos de sesiones reales de evermore, no a priori.
 - **SDK de logging dentro del juego Unity** (canal estructurado `source: 'game'` con
-  categorías y contexto de gameplay, montado sobre el esquema de log-entry del ticket
-  027) — decidido en el grilling 2026-07-31 que va *después* de esta iteración; requiere
+  categorías y contexto de gameplay, montado sobre el esquema de log-entry del ticket 027) — decidido en el grilling 2026-07-31 que va _después_ de esta iteración; requiere
   tocar evermorearcade y build nuevo.
 - Escenario de juego estandarizado como "benchmark run" de evermore (misma escena/duración)
   para que las comparaciones entre builds sean justas.

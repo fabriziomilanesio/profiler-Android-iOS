@@ -12,6 +12,14 @@ function sample(t: number): Sample {
     deviceRamUsedMb: 2800,
     gpu: 60,
     fps: 58,
+    frame: {
+      p50Ms: 16,
+      p90Ms: 17,
+      p99Ms: 33,
+      jankPct: 2,
+      jankFrames: 2,
+      totalFrames: 100,
+    },
     tempC: 33,
     mem: {
       pss: 900,
@@ -42,6 +50,7 @@ const SESSION = buildReportSession({
     gpu: 'Mali-G57',
     ramTotalMb: 3666,
     cores: 8,
+    refreshHz: 90,
   },
   intervalMs: 1000,
   trimmed: false,

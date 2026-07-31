@@ -16,6 +16,14 @@ function sample(t: number, over: Partial<Sample> = {}): Sample {
     deviceRamUsedMb: 2800 + t,
     gpu: 60,
     fps: 58,
+    frame: {
+      p50Ms: 16,
+      p90Ms: 17,
+      p99Ms: 33,
+      jankPct: 2,
+      jankFrames: 2,
+      totalFrames: 100,
+    },
     tempC: 33,
     mem: {
       pss: 900 + t,
@@ -69,6 +77,35 @@ describe('summarize', () => {
     const S = summarize([sample(0, { gpu: null }), sample(1, { gpu: null })])
     expect(S.gpu).toBeNull()
   })
+
+  test('frame: jank% de sesión ponderado por frames del tick, jankFrames sumados', () => {
+    const S = summarize([
+      // tick pesado: 10 janky / 1000 frames (1%)
+      sample(0, {
+        frame: { p50Ms: 33, p90Ms: 33, p99Ms: 44, jankPct: 1, jankFrames: 10, totalFrames: 1000 },
+      }),
+      // tick liviano: 5 janky / 50 frames (10%) — el promedio simple daría 5.5%
+      sample(1, {
+        frame: { p50Ms: 33, p90Ms: 44, p99Ms: 58, jankPct: 10, jankFrames: 5, totalFrames: 50 },
+      }),
+    ])
+    expect(S.frame.jankPct).toBeCloseTo((15 / 1050) * 100, 5) // ≈1.43%, no 5.5%
+    expect(S.frame.jankFrames).toBe(15)
+    expect(S.frame.p90Ms!.peak).toBe(44)
+    expect(S.frame.p50Ms!.avg).toBe(33)
+  })
+
+  test('frame: sesiones viejas sin el campo ⇒ todo null, sin romper', () => {
+    const legacy = [sample(0), sample(1)].map((s) => {
+      const clone = { ...s } as Partial<Sample>
+      delete clone.frame
+      return clone as Sample
+    })
+    const S = summarize(legacy)
+    expect(S.frame.p90Ms).toBeNull()
+    expect(S.frame.jankPct).toBeNull()
+    expect(S.frame.jankFrames).toBeNull()
+  })
 })
 
 describe('buildReportSession', () => {
@@ -86,6 +123,7 @@ describe('buildReportSession', () => {
         gpu: 'Mali-G57',
         ramTotalMb: 3666,
         cores: 8,
+        refreshHz: 90,
       },
       intervalMs: 1000,
       trimmed: false,
@@ -98,6 +136,10 @@ describe('buildReportSession', () => {
     expect(r.series[0]!.ramMb).toBe(900)
     expect(r.series[0]!.battery.level).toBe(80)
     expect(r.summary.fps!.avg).toBe(58)
+    expect(r.device!.refreshHz).toBe(90)
+    expect(r.series[0]!.frameP90Ms).toBe(17)
+    expect(r.series[0]!.jankPct).toBe(2)
+    expect(r.summary.frame.p99Ms!.peak).toBe(33)
   })
 })
 

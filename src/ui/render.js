@@ -4,8 +4,9 @@
  * live.js feeds it real Samples over WebSocket; this file only renders.
  *
  * Differences vs the prototype:
- *  - Fed by real Samples ({cpu, gpu, fps, tempC, mem:{...}, battery:{...}, netRxKb, netTxKb});
- *    every field may be null → drawn as N/A (never 0).
+ *  - Fed by real Samples ({cpu, gpu, fps, frame:{...}, tempC, mem:{...}, battery:{...},
+ *    netRxKb, netTxKb}); every field may be null → drawn as N/A (never 0).
+ *  - frame (ticket 024): p90/p99 frame-time + jank% as a subtitle under the GPU·FPS donut.
  *  - 5th gauge: Battery (level %). A "CHARGING" chip shows when plugged.
  *  - Network shows N/A note when netRxKb/netTxKb are null (bucketed, not realtime).
  */
@@ -624,6 +625,23 @@
     var chip = document.getElementById('chipCharging')
     if (chip) chip.classList.toggle('show', s.battery.charging === true)
 
+    // frame-time/jank under the GPU·FPS donut (ticket 024; fine redesign: 031/032)
+    var fsub = document.getElementById('fpsSub')
+    if (fsub) {
+      var fr = s.frame
+      if (fr && fr.p90Ms !== null) {
+        var sub = 'p90 ' + Math.round(fr.p90Ms) + ' ms'
+        if (fr.p99Ms !== null) sub += ' · p99 ' + Math.round(fr.p99Ms) + ' ms'
+        if (fr.jankPct !== null) {
+          sub +=
+            ' · jank ' + (fr.jankPct < 10 ? fr.jankPct.toFixed(1) : Math.round(fr.jankPct)) + '%'
+        }
+        fsub.textContent = sub
+      } else {
+        fsub.textContent = 'frame-time N/A'
+      }
+    }
+
     updateMemPie(s.mem, s.mem.pss)
 
     var now = s.ts || Date.now()
@@ -704,6 +722,7 @@
       deviceCores = info.cores
       specs.push(info.cores + ' cores')
     }
+    if (info.refreshHz) specs.push(info.refreshHz + ' Hz')
     specs.push(info.serial)
     var el = document.getElementById('devSpecs')
     el.innerHTML = ''
@@ -734,6 +753,8 @@
     netTotalTx = 0
     netEverSeen = false
     lastSample = null
+    var fsub = document.getElementById('fpsSub')
+    if (fsub) fsub.textContent = ''
     if (timeline)
       timeline.setOption({
         series: SERIES.map(function (_, i) {

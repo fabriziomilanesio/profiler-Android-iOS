@@ -25,7 +25,7 @@ import type { BatterySample, MemSample, Sample } from '../schema'
 import { parseMeminfo, mergeMemSamples, parseVmRssMb } from '../collectors/meminfo'
 import { parseCpu, parseDeviceCpu, type CpuSnapshot } from '../collectors/cpu'
 import { parseDeviceMemUsedMb } from '../collectors/deviceMem'
-import { parseFps } from '../collectors/fps'
+import { parseFps, parseFrameStats, NULL_FRAME } from '../collectors/fps'
 import { parseTemp } from '../collectors/temp'
 import { parseGpu } from '../collectors/gpu'
 import { parseBattery } from '../collectors/battery'
@@ -81,6 +81,11 @@ export interface SamplerOptions {
   lanes?: Partial<LaneIntervals>
   /** clock inyectable (tests); default Date.now. */
   now?: () => number
+  /**
+   * Refresh rate real del panel en Hz (DeviceInfo.refreshHz, leído una vez al
+   * conectar) — define el vsync del umbral de jank. null/ausente ⇒ 60 Hz.
+   */
+  refreshHz?: number | null
 }
 
 /** Resuelve el pid del package (best-effort). null si no está corriendo. */
@@ -153,6 +158,7 @@ export class Sampler {
   private childPids: number[] = []
   private readonly lanes: LaneIntervals
   private readonly now: () => number
+  private readonly refreshHz: number | null
   // carril lento: próximas corridas (0 = correr en el próximo tick) + último valor
   private nextMeminfoTs = 0
   private nextSlowTs = 0
@@ -172,6 +178,7 @@ export class Sampler {
   ) {
     this.lanes = { ...DEFAULT_LANES, ...opts.lanes }
     this.now = opts.now ?? Date.now
+    this.refreshHz = opts.refreshHz ?? null
   }
 
   /** pid actual (0 = proceso todavía no visto; refreshPid lo engancha cuando aparece). */
@@ -284,6 +291,8 @@ export class Sampler {
       gpu: safe(() => parseGpu(gpuRaw), null),
       // filtrar el layer de la app (el dump lista NotificationShade/StatusBar también)
       fps: safe(() => parseFps(fpsRaw, this.pkg), null),
+      // frame-times/jank del MISMO dump (ticket 024): cero comandos adb extra
+      frame: safe(() => parseFrameStats(fpsRaw, this.pkg, this.refreshHz), NULL_FRAME),
       tempC: this.lastTempC,
       // PSS/composición del carril lento (carry-forward) + RSS fresco de este tick
       mem: { ...this.lastMem, rss: procSnap?.appRssMb ?? null },

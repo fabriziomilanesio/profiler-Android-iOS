@@ -79,14 +79,23 @@ export async function captureDeviceInfo(
       return ''
     }
   }
-  const [getprop, procMeminfo, sf, nproc] = await Promise.all([
+  const [getprop, procMeminfo, sf, nproc, sfLatency] = await Promise.all([
     safe('getprop'),
     safe('cat /proc/meminfo'),
     // grep de la línea GLES: (aparece varias líneas abajo, no en el header)
     safe('dumpsys SurfaceFlinger | grep -m1 "GLES:"'),
     safe('nproc'),
+    // refresh rate del panel (ticket 024): la 1ª línea es el período de vsync en ns
+    safe('dumpsys SurfaceFlinger --latency'),
   ])
-  return parseDeviceInfo({ getprop, procMeminfo, surfaceflingerGles: sf, nproc, serial })
+  return parseDeviceInfo({
+    getprop,
+    procMeminfo,
+    surfaceflingerGles: sf,
+    nproc,
+    surfaceflingerLatency: sfLatency,
+    serial,
+  })
 }
 
 export class LiveServer {
@@ -156,7 +165,13 @@ export class LiveServer {
       this.device = await captureDeviceInfo(this.opts.transport, this.serial)
 
       const pid = await resolvePid(this.opts.transport, this.serial, this.opts.packageName)
-      const sampler = new Sampler(this.opts.transport, this.serial, this.opts.packageName, pid ?? 0)
+      const sampler = new Sampler(
+        this.opts.transport,
+        this.serial,
+        this.opts.packageName,
+        pid ?? 0,
+        { refreshHz: this.device?.refreshHz ?? null },
+      )
       this.sampler = sampler
       // habilitar timestats de SurfaceFlinger (FPS acumula desde acá)
       await sampler.init()
@@ -517,7 +532,9 @@ export class LiveServer {
       pid = await this.waitForPid(serial, pkg, 5000)
     }
 
-    const sampler = new Sampler(transport, serial, pkg, pid ?? 0)
+    const sampler = new Sampler(transport, serial, pkg, pid ?? 0, {
+      refreshHz: this.device?.refreshHz ?? null,
+    })
     await sampler.init()
     this.sampler = sampler
     // estado de vida fresco: sin proceso arranca en pausa (no persistir nulls de espera)

@@ -14,6 +14,7 @@ describe('protocolo WS', () => {
       gpu: 'Mali-G57 MC2',
       ramTotalMb: 3666,
       cores: 8,
+      refreshHz: 90,
     }
     expect(JSON.parse(deviceMessage(device))).toEqual({ type: 'device', device })
   })
@@ -27,6 +28,7 @@ describe('protocolo WS', () => {
       deviceRamUsedMb: 2827,
       gpu: 99,
       fps: 33.9,
+      frame: { p50Ms: 33, p90Ms: 33, p99Ms: 33, jankPct: 0.9, jankFrames: 11, totalFrames: 1178 },
       tempC: 30.9,
       mem: {
         pss: 905,

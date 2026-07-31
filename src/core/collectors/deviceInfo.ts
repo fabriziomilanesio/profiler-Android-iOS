@@ -7,7 +7,11 @@
 // BUG que arregla (README fixtures): antes el nombre de GPU capturaba
 // "------RE GLES (Ganesh)------" del grep de SurfaceFlinger → basura. Ahora tomamos
 // el renderer limpio de la línea GLES:, con fallback a getprop.
+// Refresh rate del panel (ticket 024): primera línea de `dumpsys SurfaceFlinger
+// --latency` = período de refresh en ns (11111111 → 90 Hz). Se lee UNA vez acá;
+// el sampler lo usa para el umbral de jank (cae a 60 Hz si viene null).
 import type { DeviceInfo } from '../schema'
+import { parseRefreshRate } from './fps'
 
 function getprop(raw: string, key: string): string | null {
   // formato: [ro.product.model]: [SM-A155M]
@@ -35,6 +39,8 @@ export interface DeviceInfoInputs {
   surfaceflingerGles: string
   /** salida de `nproc` (cores online). Vacío ⇒ cores null. */
   nproc?: string
+  /** salida de `dumpsys SurfaceFlinger --latency` (refresh rate). Vacío ⇒ null. */
+  surfaceflingerLatency?: string
   serial: string
 }
 
@@ -75,5 +81,6 @@ export function parseDeviceInfo(inputs: DeviceInfoInputs): DeviceInfo {
     gpu,
     ramTotalMb,
     cores,
+    refreshHz: inputs.surfaceflingerLatency ? parseRefreshRate(inputs.surfaceflingerLatency) : null,
   }
 }

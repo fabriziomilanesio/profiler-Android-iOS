@@ -23,8 +23,8 @@ renace con otro pid?
 - **Esquema de log-entry genérico** con `source: 'logcat' | 'game'` — el SDK dentro del
   juego Unity es una iteración futura (fog del mapa) y debe enchufarse acá sin migración.
 - Ring buffer en memoria con cap (supuesto: mismo espíritu que el cap ~8 h de la sesión)
-  + **persistencia NDJSON junto a la sesión** existente, para exportar logs de sesiones
-  pasadas.
+  - **persistencia NDJSON junto a la sesión** existente, para exportar logs de sesiones
+    pasadas.
 - Cambio de app/device en caliente recablea el stream igual que el sampler.
 - Overhead: `logcat --pid` corre en el device pero es barato (lector de ring buffer del
   kernel); verificar en gama baja que no aparezca en el top de CPU igual que se hizo en

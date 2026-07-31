@@ -20,10 +20,24 @@ export interface BatterySummary {
   tempAvg: number | null
 }
 
+/** Resumen de frame-times/jank de la sesión (ticket 024 — insumo del reporte 026). */
+export interface FrameSummary {
+  /** stats de los p50/p90/p99 por tick (ms) */
+  p50Ms: ScalarStats | null
+  p90Ms: ScalarStats | null
+  p99Ms: ScalarStats | null
+  /** % janky de la sesión, ponderado por frames del tick (fallback: promedio simple) */
+  jankPct: number | null
+  /** total de frames que perdieron ≥1 vsync en la sesión */
+  jankFrames: number | null
+}
+
 export interface ReportSummary {
   cpu: ScalarStats | null
   gpu: ScalarStats | null
   fps: ScalarStats | null
+  /** frame-times/jank derivados por tick (null-safe: sesiones viejas no los traen) */
+  frame: FrameSummary
   tempC: ScalarStats | null
   ramMb: ScalarStats | null
   /** CPU total del device (0–100%) */
@@ -41,6 +55,10 @@ export interface ReportSeriesPoint {
   cpu: number | null
   gpu: number | null
   fps: number | null
+  /** frame-time p90 del tick (ms) — la señal de tirones para el timeline del reporte */
+  frameP90Ms: number | null
+  /** % de frames janky del tick */
+  jankPct: number | null
   tempC: number | null
   ramMb: number | null
   deviceCpu: number | null
@@ -62,6 +80,8 @@ export interface ReportSession {
     gpu: string | null
     soc: string | null
     cores: number | null
+    /** refresh rate del panel (Hz) — contexto del umbral de jank */
+    refreshHz: number | null
     serial: string
   } | null
   startedAt: string
@@ -112,6 +132,35 @@ function avgOrNull(values: number[]): number | null {
   return sum / values.length
 }
 
+/**
+ * Jank de sesión: ponderado por los frames de cada tick cuando hay conteos
+ * (11 janky sobre 1178 frames ≠ promedio de porcentajes de ticks desparejos);
+ * si ningún tick trae conteos, cae al promedio simple de jankPct.
+ */
+function summarizeFrames(samples: Sample[]): FrameSummary {
+  let jankSum = 0
+  let framesSum = 0
+  let jankSeen = false
+  for (const s of samples) {
+    const f = s.frame
+    if (f && f.jankFrames !== null && f.totalFrames !== null && f.totalFrames > 0) {
+      jankSum += f.jankFrames
+      framesSum += f.totalFrames
+      jankSeen = true
+    }
+  }
+  return {
+    p50Ms: scalarStats(pick(samples, (s) => s.frame?.p50Ms ?? null)),
+    p90Ms: scalarStats(pick(samples, (s) => s.frame?.p90Ms ?? null)),
+    p99Ms: scalarStats(pick(samples, (s) => s.frame?.p99Ms ?? null)),
+    jankPct:
+      framesSum > 0
+        ? (jankSum / framesSum) * 100
+        : avgOrNull(pick(samples, (s) => s.frame?.jankPct ?? null)),
+    jankFrames: jankSeen ? jankSum : null,
+  }
+}
+
 export function summarize(samples: Sample[]): ReportSummary {
   const levels = pick(samples, (s) => s.battery.levelPct)
   const battTemps = pick(samples, (s) => s.battery.tempC)
@@ -128,6 +177,7 @@ export function summarize(samples: Sample[]): ReportSummary {
     cpu: scalarStats(pick(samples, (s) => s.cpu)),
     gpu: scalarStats(pick(samples, (s) => s.gpu)),
     fps: scalarStats(pick(samples, (s) => s.fps)),
+    frame: summarizeFrames(samples),
     tempC: scalarStats(pick(samples, (s) => s.tempC)),
     ramMb: scalarStats(pick(samples, (s) => s.mem.pss)),
     deviceCpu: scalarStats(pick(samples, (s) => s.deviceCpu)),
@@ -173,6 +223,8 @@ export function buildReportSession(opts: BuildReportOptions): ReportSession {
           gpu: device.gpu ?? null,
           soc: device.soc ?? null,
           cores: device.cores ?? null,
+          // ?? null: fichas viejas del historial no traen refreshHz
+          refreshHz: device.refreshHz ?? null,
           serial: device.serial,
         }
       : null,
@@ -187,6 +239,9 @@ export function buildReportSession(opts: BuildReportOptions): ReportSession {
       cpu: s.cpu,
       gpu: s.gpu,
       fps: s.fps,
+      // ?? null: sesiones viejas no traen frame
+      frameP90Ms: s.frame?.p90Ms ?? null,
+      jankPct: s.frame?.jankPct ?? null,
       tempC: s.tempC,
       ramMb: s.mem.pss,
       // ?? null: sesiones viejas del historial no traen estos campos

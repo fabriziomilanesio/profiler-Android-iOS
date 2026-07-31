@@ -8,7 +8,7 @@ import { parseMeminfo, mergeMemSamples } from './meminfo'
 import { parseCpu, parseDeviceCpu } from './cpu'
 import { parseDeviceMemUsedMb } from './deviceMem'
 import { parsePids } from '../sampler/sampler'
-import { parseFps } from './fps'
+import { parseFps, parseFrameStats, parseRefreshRate } from './fps'
 import { parseTemp } from './temp'
 import { parseGpu } from './gpu'
 import { parseBattery } from './battery'
@@ -264,6 +264,113 @@ describe('parseFps (SurfaceFlinger --timestats averageFPS)', () => {
   })
 })
 
+describe('parseRefreshRate (SurfaceFlinger --latency, 1ª línea = período ns)', () => {
+  test('fixture real del A15: 11111111 ns ⇒ 90 Hz', () => {
+    expect(parseRefreshRate(read('session/final/latency.txt'))).toBe(90)
+  })
+
+  test('períodos típicos: 60 y 120 Hz', () => {
+    expect(parseRefreshRate('16666666\n')).toBe(60)
+    expect(parseRefreshRate('8333333\n1467832456789123 1467832473455789 1467832456999999')).toBe(
+      120,
+    )
+  })
+
+  test('basura / vacío / centinela pending-fence ⇒ null', () => {
+    expect(parseRefreshRate('no such layer')).toBeNull()
+    expect(parseRefreshRate('')).toBeNull()
+    expect(parseRefreshRate('0')).toBeNull()
+    expect(parseRefreshRate('9223372036854775807')).toBeNull() // Hz fuera de rango
+  })
+})
+
+describe('parseFrameStats (histograma present2present del mismo dump de timestats)', () => {
+  const dump = read('session/final/timestats-dump.txt')
+  const PKG = 'com.evermore.oda.qa'
+
+  test('p50/p90/p99 y jank del layer real de la app a 90 Hz', () => {
+    // histograma del layer: 21ms=21 22ms=367 32ms=12 33ms=767 44ms=10 58ms=1 (1178 frames)
+    const f = parseFrameStats(dump, PKG, 90)
+    expect(f.totalFrames).toBe(1178)
+    expect(f.p50Ms).toBe(33)
+    expect(f.p90Ms).toBe(33)
+    expect(f.p99Ms).toBe(33)
+    // cadencia = 3 vsyncs de 11.1 ms (juego a ~30 FPS en panel 90 Hz — NO es jank);
+    // janky = perdió ≥1 vsync sobre eso: buckets 44 (10) y 58 (1)
+    expect(f.jankFrames).toBe(11)
+    expect(f.jankPct).toBeCloseTo((11 / 1178) * 100, 3)
+  })
+
+  test('30 FPS clavados en panel de 90 Hz ⇒ 0% jank (umbral relativo, no 16.6 ms)', () => {
+    const steady = [
+      'layerName = SurfaceView[com.evermore.oda.qa/x]@0(BLAST)#1',
+      'present2present histogram is as below:',
+      '33ms=100',
+    ].join('\n')
+    const f = parseFrameStats(steady, PKG, 90)
+    expect(f.jankFrames).toBe(0)
+    expect(f.jankPct).toBe(0)
+    expect(f.p50Ms).toBe(33)
+  })
+
+  test('el umbral depende del refresh real: 22 ms es jank a 90 Hz, no bajo 60 Hz', () => {
+    const hist = [
+      'layerName = SurfaceView[com.evermore.oda.qa/x]@0(BLAST)#1',
+      'present2present histogram is as below:',
+      '11ms=80 22ms=20',
+    ].join('\n')
+    // a 90 Hz la cadencia es 1 vsync (11.1 ms): un frame de 22 ms perdió un vsync
+    expect(parseFrameStats(hist, PKG, 90).jankFrames).toBe(20)
+    // con el fallback 60 Hz (refreshHz null) el vsync asumido es 16.6 ms ⇒ 22 ms no llega
+    expect(parseFrameStats(hist, PKG, null).jankFrames).toBe(0)
+  })
+
+  test('multi-layer: usa el histograma del SurfaceView de la app, no el primero', () => {
+    const multi = [
+      'layerName = NotificationShade#1789',
+      'present2present histogram is as below:',
+      '16ms=500',
+      'layerName = ca6669f SurfaceView[com.evermore.oda.qa/x]@0(BLAST)#1798',
+      'present2present histogram is as below:',
+      '16ms=90 33ms=10',
+    ].join('\n')
+    const f = parseFrameStats(multi, PKG, 60)
+    expect(f.totalFrames).toBe(100)
+    expect(f.p50Ms).toBe(16)
+    expect(f.p90Ms).toBe(16)
+    expect(f.p99Ms).toBe(33)
+    expect(f.jankFrames).toBe(10) // cadencia 1 vsync de 16.6 ms; 33 ms perdió uno
+    expect(f.jankPct).toBeCloseTo(10, 5)
+  })
+
+  test('dump con layers pero sin el de la app (idle/background) ⇒ todo null', () => {
+    const f = parseFrameStats(
+      'layerName = NotificationShade#1\npresent2present histogram is as below:\n16ms=10',
+      PKG,
+      90,
+    )
+    expect(f.p50Ms).toBeNull()
+    expect(f.jankPct).toBeNull()
+  })
+
+  test('histograma vacío (todo en 0) / formato desconocido ⇒ todo null, sin throw', () => {
+    const idle = [
+      'layerName = SurfaceView[com.evermore.oda.qa/x]@0(BLAST)#1',
+      'present2present histogram is as below:',
+      '0ms=0 16ms=0 33ms=0',
+    ].join('\n')
+    expect(parseFrameStats(idle, PKG, 90).p50Ms).toBeNull()
+    expect(parseFrameStats('garbage', PKG, 90).totalFrames).toBeNull()
+  })
+
+  test('sin package cae al histograma global presentToPresent (formato legacy)', () => {
+    const f = parseFrameStats(dump, undefined, 90)
+    // global del fixture: suma 1182 frames (incluye 10ms=1 y 11ms=5 de otros layers)
+    expect(f.totalFrames).toBe(1182)
+    expect(f.p50Ms).toBe(33)
+  })
+})
+
 describe('parseTemp (thermalservice HAL, mType 0=CPU/AP)', () => {
   test('reporta CPU(AP) desde "Current temperatures from HAL"', () => {
     const t = parseTemp(read('oneshot/dumpsys-thermalservice.txt'))
@@ -376,9 +483,12 @@ describe('parseDeviceInfo (getprop + /proc/meminfo)', () => {
       getprop: read('oneshot/getprop.txt'),
       procMeminfo: read('oneshot/proc-meminfo.txt'),
       surfaceflingerGles: read('oneshot/surfaceflinger-gles.txt'),
+      surfaceflingerLatency: read('session/final/latency.txt'),
       serial: 'REDACTED-SERIAL',
     })
     expect(info.serial).toBe('REDACTED-SERIAL')
+    // panel del A15: período 11111111 ns ⇒ 90 Hz
+    expect(info.refreshHz).toBe(90)
     expect(info.model).toBe('SM-A155M')
     expect(info.manufacturer).toBe('samsung')
     expect(info.androidRelease).toBe('16')
@@ -413,5 +523,7 @@ describe('parseDeviceInfo (getprop + /proc/meminfo)', () => {
     expect(info.model).toBe('X')
     expect(info.gpu).toBeNull()
     expect(info.ramTotalMb).toBeNull()
+    // sin --latency (o ilegible) ⇒ refreshHz null; el jank cae a 60 Hz aguas abajo
+    expect(info.refreshHz).toBeNull()
   })
 })

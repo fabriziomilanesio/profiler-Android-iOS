@@ -674,6 +674,14 @@
         align-items: center;
         gap: 8px;
       }
+      /* frame-time/jank bajo el donut GPU·FPS (ticket 024; rediseño fino: 031/032) */
+      .gauge-sub {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: -6px;
+        padding-bottom: 6px;
+        min-height: 14px;
+      }
       .event-chip {
         position: absolute;
         top: 10px;
@@ -1098,6 +1106,7 @@
       <div class="card gauge-card">
         <div class="gauge-head"><span class="card-title">GPU · FPS</span></div>
         <div class="gauge-chart" id="gGpu"></div>
+        <div class="gauge-sub" id="fpsSub"></div>
       </div>
       <div class="card gauge-card">
         <div class="gauge-head"><span class="card-title">Temp</span></div>

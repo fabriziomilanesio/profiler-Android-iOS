@@ -40,6 +40,27 @@ export interface MemSample {
   other: number | null
 }
 
+/**
+ * Frame-times y jank del tick (ticket 024), derivados del histograma
+ * present2present del MISMO dump de SurfaceFlinger timestats que ya trae el FPS —
+ * cero comandos adb extra. El umbral de jank es relativo a la cadencia propia de
+ * la app medida en vsyncs REALES del panel (60/90/120 Hz), no 16.6 ms fijo.
+ */
+export interface FrameSample {
+  /** frame-time mediano del tick, en ms (intervalo present→present) */
+  p50Ms: number | null
+  /** frame-time p90 del tick, en ms */
+  p90Ms: number | null
+  /** frame-time p99 del tick, en ms */
+  p99Ms: number | null
+  /** % de frames del tick que perdieron ≥1 vsync vs la cadencia de la app (0–100) */
+  jankPct: number | null
+  /** conteo de frames que perdieron ≥1 vsync (los mismos del jankPct) */
+  jankFrames: number | null
+  /** frames medidos en la ventana del tick (pondera el jank% de la sesión) */
+  totalFrames: number | null
+}
+
 /** Estado de batería (`dumpsys battery`). */
 export interface BatterySample {
   /** nivel 0–100 (%) */
@@ -71,6 +92,8 @@ export interface Sample {
   gpu: number | null
   /** FPS promedio (averageFPS de SurfaceFlinger timestats) */
   fps: number | null
+  /** frame-times/jank del tick (mismo dump que fps). Sesiones viejas: undefined. */
+  frame: FrameSample
   /** temperatura principal (CPU/AP) en °C */
   tempC: number | null
   /** memoria PSS + breakdown */
@@ -102,4 +125,11 @@ export interface DeviceInfo {
   ramTotalMb: number | null
   /** cores de CPU online (nproc) — para el label "≈ X% de un core" */
   cores: number | null
+  /**
+   * Refresh rate real del panel en Hz (60/90/120…), leído UNA vez al conectar
+   * desde la primera línea de `dumpsys SurfaceFlinger --latency` (período de
+   * refresh en ns — la línea más estable del comando, presente aun cuando el
+   * layer no matchea). null = no se pudo leer (el jank cae a 60 Hz).
+   */
+  refreshHz: number | null
 }
