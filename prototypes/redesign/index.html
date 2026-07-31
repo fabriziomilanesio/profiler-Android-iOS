@@ -1,0 +1,1854 @@
+<!doctype html>
+<!--
+  Evermore Android Profiler — REDESIGN prototype (wayfinder ticket 031).
+  Static + offline: open with a double click. Simulated 1 Hz data (sim.js) with a
+  scripted FPS drop (red semaphore) and a synthetic crash (logs + app-died badge).
+  Layout contract for ticket 032; see README.md in this folder for the decisions.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Evermore Android Profiler — redesign</title>
+    <link rel="icon" type="image/png" href="assets/evermore-appicon.png" />
+    <style>
+      /* ---- Vendored fonts (offline, system fallback) ---- */
+      @font-face {
+        font-family: 'Baloo 2';
+        font-weight: 600;
+        src: url('vendor/fonts/baloo-2-latin-600-normal.woff2') format('woff2');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Baloo 2';
+        font-weight: 700;
+        src: url('vendor/fonts/baloo-2-latin-700-normal.woff2') format('woff2');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Baloo 2';
+        font-weight: 800;
+        src: url('vendor/fonts/baloo-2-latin-800-normal.woff2') format('woff2');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Inter';
+        font-weight: 400;
+        src: url('vendor/fonts/inter-latin-400-normal.woff2') format('woff2');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Inter';
+        font-weight: 500;
+        src: url('vendor/fonts/inter-latin-500-normal.woff2') format('woff2');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Inter';
+        font-weight: 600;
+        src: url('vendor/fonts/inter-latin-600-normal.woff2') format('woff2');
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Inter';
+        font-weight: 700;
+        src: url('vendor/fonts/inter-latin-700-normal.woff2') format('woff2');
+        font-display: swap;
+      }
+
+      /* =====================================================================
+         THEME TOKENS — DARK is the protagonist (default); light via data-theme.
+         Brand accents (assets/brand/README.md): #EB008B / #00E6DA stay as UI
+         chrome. CHART SERIES use deeper, validated steps (dataviz six checks):
+         dark band L 0.48–0.67, light band L 0.43–0.77 — pro, not gamer-neon.
+         ===================================================================== */
+      :root,
+      body[data-theme='dark'] {
+        --bg: #0b0b10;
+        --card: #15151d;
+        --card2: #1b1b25;
+        --line: #2a2a38;
+        --text: #f2f2f6;
+        --muted: #9b9bab;
+        --chip-bg: rgba(255, 255, 255, 0.04);
+        --accent: #eb008b; /* brand magenta — UI chrome only */
+        --accent2: #00e6da; /* brand teal   — UI chrome only */
+        --accent2-ink: #00e6da;
+        /* status (reserved — never used as series colors) */
+        --ok: #2ee59d;
+        --warn: #ffc24b;
+        --bad: #ff4d6d;
+        /* categorical series (validated, dark surface #15151D) */
+        --s-fps: #00a89e;
+        --s-gpu: #eb008b;
+        --s-cpu: #8b6be8;
+        --s-temp: #c77f00;
+        /* memory donut (chromatic order validated; stack/other = neutrals) */
+        --mem-java: #eb008b;
+        --mem-graphics: #8b6be8;
+        --mem-native: #00a89e;
+        --mem-code: #c77f00;
+        --mem-stack: #7a7a90;
+        --mem-other: #4e4e62;
+        --glow-1: rgba(235, 0, 139, 0.08);
+        --glow-2: rgba(0, 230, 218, 0.055);
+        --dot-grid: rgba(255, 255, 255, 0.024);
+        --track: #22222e;
+        --shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+        --font-title: 'Baloo 2', ui-rounded, system-ui, sans-serif;
+        --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      body[data-theme='light'] {
+        --bg: #f4f4f9;
+        --card: #ffffff;
+        --card2: #fbfbfe;
+        --line: #e2e2ec;
+        --text: #1c1c28;
+        --muted: #66667a;
+        --chip-bg: rgba(28, 28, 40, 0.04);
+        --accent2-ink: #009e96;
+        --ok: #0fa968;
+        --warn: #e08a00;
+        --bad: #e11d48;
+        --s-fps: #009e96;
+        --s-gpu: #eb008b;
+        --s-cpu: #7c5ce0;
+        --s-temp: #b8860b;
+        --mem-java: #eb008b;
+        --mem-graphics: #7c5ce0;
+        --mem-native: #009e96;
+        --mem-code: #b8860b;
+        --mem-stack: #9a9ab0;
+        --mem-other: #c6c6d4;
+        --glow-1: rgba(235, 0, 139, 0.05);
+        --glow-2: rgba(0, 230, 218, 0.06);
+        --dot-grid: rgba(28, 28, 40, 0.03);
+        --track: #ececf4;
+        --shadow: 0 14px 36px rgba(28, 28, 40, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background:
+          radial-gradient(1100px 460px at 12% -8%, var(--glow-1), transparent 60%),
+          radial-gradient(950px 460px at 92% -8%, var(--glow-2), transparent 60%),
+          radial-gradient(var(--dot-grid) 1px, transparent 1px) 0 0 / 26px 26px,
+          var(--bg);
+        color: var(--text);
+        font-family: var(--font-body);
+        min-height: 100vh;
+        padding: 14px 20px 26px;
+      }
+
+      .card {
+        background: linear-gradient(180deg, var(--card2), var(--card));
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        min-width: 0;
+      }
+
+      /* Section rails: uppercase label + brand tick + hairline (grafana-row style) */
+      .section-label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 18px 2px 8px;
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 11.5px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .section-label::before {
+        content: '';
+        width: 14px;
+        height: 4px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--accent), var(--accent2));
+        flex: 0 0 auto;
+      }
+      .section-label::after {
+        content: '';
+        flex: 1 1 auto;
+        height: 1px;
+        background: var(--line);
+      }
+      .section-label .rail-extra {
+        letter-spacing: 0.04em;
+        text-transform: none;
+        font-family: var(--font-body);
+        font-weight: 500;
+        font-size: 11px;
+      }
+
+      /* ================= HEADER ================= */
+      header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 4px 2px 10px;
+        flex-wrap: nowrap;
+      }
+      .brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 0 0 auto;
+      }
+      .brand img {
+        height: 48px;
+        display: block;
+        filter: drop-shadow(0 3px 12px rgba(235, 0, 139, 0.28));
+      }
+      .brand-sub {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 10px;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--accent2-ink);
+        margin-top: -2px;
+      }
+
+      .device-card {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        flex: 1 1 auto;
+        position: relative;
+        padding: 7px 12px;
+      }
+      .dev-btn {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        flex: 1 1 auto;
+        background: none;
+        border: none;
+        padding: 0;
+        text-align: left;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+      }
+      .dev-btn > div {
+        min-width: 0;
+      }
+      .device-icon {
+        font-size: 20px;
+      }
+      .device-name {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 14.5px;
+        white-space: nowrap;
+      }
+      .device-specs {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+      .spec {
+        font-size: 10px;
+        color: var(--muted);
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 1px 7px;
+        white-space: nowrap;
+      }
+      .spec.hz {
+        color: var(--accent2-ink);
+        border-color: var(--accent2-ink);
+      }
+      .dev-btn .caret {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .header-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px 10px;
+        flex: 0 1 auto;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      /* Mini-verdict pill: live overall state, same semaphore as the report */
+      .verdict {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 38px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--chip-bg);
+        white-space: nowrap;
+        cursor: default;
+      }
+      .verdict-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex: 0 0 auto;
+      }
+      .verdict-word {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 12.5px;
+        letter-spacing: 0.08em;
+      }
+      .verdict-sub {
+        font-size: 10.5px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .verdict.v-green {
+        border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+        background: color-mix(in srgb, var(--ok) 9%, transparent);
+      }
+      .verdict.v-green .verdict-dot {
+        background: var(--ok);
+      }
+      .verdict.v-green .verdict-word {
+        color: var(--ok);
+      }
+      .verdict.v-yellow {
+        border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+        background: color-mix(in srgb, var(--warn) 10%, transparent);
+      }
+      .verdict.v-yellow .verdict-dot {
+        background: var(--warn);
+      }
+      .verdict.v-yellow .verdict-word {
+        color: var(--warn);
+      }
+      .verdict.v-red {
+        border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+        background: color-mix(in srgb, var(--bad) 10%, transparent);
+      }
+      .verdict.v-red .verdict-dot {
+        background: var(--bad);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .verdict.v-red .verdict-word {
+        color: var(--bad);
+      }
+      .verdict .v-crash {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--bad);
+        border: 1px solid var(--bad);
+        border-radius: 999px;
+        padding: 1px 7px;
+      }
+
+      .app-name {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        position: relative;
+      }
+      .app-name label {
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      button.pkg {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        max-width: 250px;
+        font-family: var(--font-body);
+        font-size: 12.5px;
+        color: var(--text);
+        background: var(--card2);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 6px 10px;
+      }
+      button.pkg:hover {
+        border-color: var(--accent2-ink);
+      }
+      button.pkg #appPkg {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      button.pkg .caret {
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .app-launched {
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        color: var(--accent2-ink);
+        border: 1px solid var(--accent2-ink);
+        border-radius: 999px;
+        padding: 1px 7px;
+        white-space: nowrap;
+      }
+      .app-launched.waiting {
+        color: var(--warn);
+        border-color: var(--warn);
+      }
+
+      .rec-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 38px;
+        background: rgba(225, 29, 72, 0.08);
+        border: 1px solid rgba(225, 29, 72, 0.45);
+        border-radius: 999px;
+        padding: 0 14px;
+        user-select: none;
+      }
+      .rec-badge.offline {
+        background: var(--chip-bg);
+        border-color: var(--line);
+      }
+      .rec-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--bad);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .rec-badge.offline .rec-dot {
+        animation: none;
+        background: var(--muted);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.25;
+        }
+      }
+      .rec-label {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+      }
+      .rec-time {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .icon-btn {
+        height: 38px;
+        min-width: 38px;
+        padding: 0 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        background: var(--card2);
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-family: var(--font-body);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+      }
+      .icon-btn:hover {
+        border-color: var(--accent2-ink);
+        color: var(--text);
+      }
+      .brand-odaclick img {
+        height: 36px;
+        display: block;
+      }
+
+      /* Popovers (device / app / menu) */
+      .pop {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 60;
+        width: 360px;
+        max-width: calc(100vw - 32px);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        padding: 10px;
+      }
+      .dev-pop {
+        left: 0;
+        right: auto;
+        width: 400px;
+      }
+      .pop-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .pop-title {
+        flex: 1;
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .pop input[type='search'] {
+        flex: 1;
+        min-width: 0;
+        font: 12.5px var(--font-body);
+        color: var(--text);
+        background: var(--card2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 9px;
+        outline: none;
+      }
+      .pop input[type='search']:focus {
+        border-color: var(--accent2-ink);
+      }
+      .chip {
+        font: 600 11px var(--font-body);
+        color: var(--muted);
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 5px 11px;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+      }
+      .chip.active {
+        color: #fff;
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .chip:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .app-sys {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--muted);
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+      }
+      .pop-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: 300px;
+        overflow: auto;
+      }
+      .pop-list button {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        text-align: left;
+        font: 12.5px var(--font-body);
+        color: var(--text);
+        background: none;
+        border: none;
+        border-radius: 8px;
+        padding: 7px 9px;
+        cursor: pointer;
+      }
+      .pop-list button:hover {
+        background: var(--chip-bg);
+      }
+      .pop-list button.current {
+        color: var(--accent2-ink);
+        font-weight: 600;
+      }
+      .pop-list button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .use-count {
+        font-size: 11px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .dev-serial {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .dev-state {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--warn);
+        border: 1px solid var(--warn);
+        border-radius: 999px;
+        padding: 1px 7px;
+        white-space: nowrap;
+      }
+      .pop-empty {
+        padding: 12px 9px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      /* ☰ menu */
+      .menu-select {
+        position: relative;
+      }
+      .menu-pop {
+        width: 440px;
+        max-height: min(560px, 80vh);
+        overflow: auto;
+      }
+      .menu-section {
+        padding: 8px 4px 10px;
+      }
+      .menu-section + .menu-section {
+        border-top: 1px solid var(--line);
+      }
+      .menu-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .menu-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .menu-status {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+        min-height: 14px;
+      }
+      .menu-status.ok {
+        color: var(--accent2-ink);
+      }
+      .menu-status.err {
+        color: var(--bad);
+      }
+      .sess-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .sess-date {
+        font-size: 12.5px;
+        color: var(--text);
+      }
+      .sess-sub {
+        font-size: 11px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sess-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .sess-item > button:first-child {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .cfg-grid {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 8px 10px;
+        align-items: center;
+      }
+      .cfg-grid label {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .cfg-grid input,
+      .cfg-grid select {
+        width: 100%;
+        font: 12.5px var(--font-body);
+        color: var(--text);
+        background: var(--card2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 9px;
+        outline: none;
+      }
+      .cfg-grid input:focus,
+      .cfg-grid select:focus {
+        border-color: var(--accent2-ink);
+      }
+      .cfg-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .cfg-save {
+        font: 600 12px var(--font-body);
+        color: #fff;
+        background: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: 999px;
+        padding: 6px 16px;
+        cursor: pointer;
+      }
+      .cfg-save:hover {
+        filter: brightness(1.08);
+      }
+      .switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+        justify-self: start;
+      }
+      .switch input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .switch .slider {
+        width: 40px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        position: relative;
+        transition: background 0.15s ease;
+        flex: 0 0 auto;
+      }
+      .switch .slider::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition:
+          transform 0.15s ease,
+          background 0.15s ease;
+      }
+      .switch input:checked + .slider {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .switch input:checked + .slider::after {
+        transform: translateX(18px);
+        background: #fff;
+      }
+
+      /* ================= PERFORMANCE (hero) ================= */
+      .perf-grid {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 14px;
+      }
+      .perf-left {
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 14px;
+        min-width: 0;
+      }
+      .tile {
+        padding: 14px 16px;
+        position: relative;
+      }
+      .tile-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .target-chip {
+        font-family: var(--font-body);
+        font-weight: 600;
+        font-size: 10.5px;
+        letter-spacing: 0.02em;
+        text-transform: none;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+        border-radius: 999px;
+        padding: 2px 9px;
+        white-space: nowrap;
+      }
+      .fps-num {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 84px;
+        line-height: 1;
+        letter-spacing: -0.01em;
+        margin: 8px 0 0;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+        transition: color 0.3s ease;
+      }
+      .fps-num .unit {
+        font-family: var(--font-body);
+        font-weight: 500;
+        font-size: 16px;
+        color: var(--muted);
+        letter-spacing: 0;
+        margin-left: 4px;
+      }
+      .fps-num.sem-green {
+        color: var(--ok);
+      }
+      .fps-num.sem-yellow {
+        color: var(--warn);
+      }
+      .fps-num.sem-red {
+        color: var(--bad);
+      }
+      .fps-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 8px;
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px 12px;
+      }
+      .fps-status .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .fps-status.sem-green {
+        color: var(--ok);
+        border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+        background: color-mix(in srgb, var(--ok) 8%, transparent);
+      }
+      .fps-status.sem-green .dot {
+        background: var(--ok);
+      }
+      .fps-status.sem-yellow {
+        color: var(--warn);
+        border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+        background: color-mix(in srgb, var(--warn) 9%, transparent);
+      }
+      .fps-status.sem-yellow .dot {
+        background: var(--warn);
+      }
+      .fps-status.sem-red {
+        color: var(--bad);
+        border-color: color-mix(in srgb, var(--bad) 50%, transparent);
+        background: color-mix(in srgb, var(--bad) 9%, transparent);
+      }
+      .fps-status.sem-red .dot {
+        background: var(--bad);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .tile-div {
+        height: 1px;
+        background: var(--line);
+        margin: 14px 0 10px;
+      }
+      .framerow {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+      .fstat {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .fstat .fs-l {
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .fstat .fs-v {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 17px;
+        font-variant-numeric: tabular-nums;
+      }
+      .fstat .fs-v .u {
+        font-family: var(--font-body);
+        font-weight: 500;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .fstat .fs-v.sem-green {
+        color: var(--ok);
+      }
+      .fstat .fs-v.sem-yellow {
+        color: var(--warn);
+      }
+      .fstat .fs-v.sem-red {
+        color: var(--bad);
+      }
+
+      .big-num {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 38px;
+        line-height: 1.05;
+        font-variant-numeric: tabular-nums;
+        margin-top: 6px;
+      }
+      .big-num .unit {
+        font-family: var(--font-body);
+        font-weight: 500;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .bar {
+        height: 6px;
+        border-radius: 999px;
+        background: var(--track);
+        margin-top: 8px;
+        overflow: hidden;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: var(--muted);
+        transition:
+          width 0.5s ease,
+          background 0.3s ease;
+      }
+      .bar.thin {
+        height: 3px;
+        margin-top: 5px;
+      }
+      .bar-sub {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 5px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .tl-card {
+        padding: 12px 14px 6px;
+        display: flex;
+        flex-direction: column;
+      }
+      .panel-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .card-title {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .panel-sub {
+        font-size: 10.5px;
+        color: var(--muted);
+      }
+      #tlPerf {
+        width: 100%;
+        height: 344px;
+        min-width: 0;
+      }
+
+      /* ================= MEMORY + SYSTEM ================= */
+      .row2 {
+        display: grid;
+        grid-template-columns: minmax(0, 11fr) minmax(0, 9fr);
+        gap: 14px;
+      }
+      .mem-card {
+        padding: 12px 16px 10px;
+      }
+      .mem-body {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+      }
+      #memPie {
+        width: 100%;
+        height: 210px;
+        min-width: 0;
+      }
+      .mem-stats {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+      }
+      .mem-kpis {
+        display: flex;
+        gap: 22px;
+        flex-wrap: wrap;
+      }
+      #memTrend {
+        width: 100%;
+        height: 86px;
+        min-width: 0;
+      }
+      .sys-card {
+        padding: 12px 16px 14px;
+      }
+      .sys-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px 20px;
+        margin-top: 4px;
+      }
+      .sys-tile {
+        min-width: 0;
+      }
+      .sys-tile .tile-label {
+        justify-content: flex-start;
+        gap: 6px;
+      }
+      .event-chip {
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        padding: 1px 7px;
+        border-radius: 999px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        background: color-mix(in srgb, var(--ok) 12%, transparent);
+        color: var(--ok);
+        border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+      }
+      .event-chip.show {
+        opacity: 1;
+      }
+      .sub-note {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 4px;
+        min-height: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ================= NETWORK ================= */
+      .net {
+        display: grid;
+        grid-template-columns: auto auto auto minmax(0, 1fr);
+        align-items: center;
+        gap: 26px;
+        padding: 12px 20px;
+      }
+      .net-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 120px;
+      }
+      .net-stat .lbl {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .net-stat .val {
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: 21px;
+        font-variant-numeric: tabular-nums;
+      }
+      .net-stat .tot {
+        font-size: 11px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .net-rx .val {
+        color: var(--s-fps);
+      }
+      .net-tx .val {
+        color: var(--s-gpu);
+      }
+      #netSpark {
+        width: 100%;
+        height: 58px;
+        min-width: 0;
+      }
+      .insp-toggle {
+        justify-self: start;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        font: 600 12px var(--font-body);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .insp-toggle.on {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .inspector {
+        margin-top: 14px;
+        padding: 0;
+        overflow: hidden;
+      }
+      .insp-head {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .insp-title {
+        font-family: var(--font-title);
+        font-weight: 800;
+        font-size: 14px;
+      }
+      .insp-sub {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .insp-count {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .insp-scroll {
+        max-height: 300px;
+        overflow: auto;
+      }
+      .insp-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      .insp-table th {
+        position: sticky;
+        top: 0;
+        background: var(--card);
+        text-align: left;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .insp-table td {
+        padding: 6px 14px;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 420px;
+        font-size: 12.5px;
+      }
+      .insp-m {
+        font-weight: 700;
+        font-size: 11px;
+        padding: 1px 7px;
+        border-radius: 5px;
+        background: var(--chip-bg);
+      }
+      .insp-m.https {
+        color: var(--accent2-ink);
+      }
+      .insp-m.http {
+        color: var(--accent);
+      }
+      .insp-ok {
+        color: var(--accent2-ink);
+      }
+      .insp-err {
+        color: var(--bad);
+      }
+      .insp-time {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .insp-empty {
+        padding: 28px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      /* ================= LOGS ================= */
+      .logs {
+        padding: 0;
+        overflow: hidden;
+      }
+      .logs-head {
+        width: 100%;
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 12px 18px;
+        background: none;
+        border: none;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        flex-wrap: wrap;
+      }
+      .logs-head:hover .insp-title {
+        color: var(--accent2-ink);
+      }
+      .logs-counts {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .logs-badge {
+        font-size: 10px;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 1px 8px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        background: var(--chip-bg);
+      }
+      .logs-badge.badge-e.nonzero {
+        color: var(--bad);
+        border-color: var(--bad);
+        background: color-mix(in srgb, var(--bad) 10%, transparent);
+      }
+      .logs-badge.badge-w.nonzero {
+        color: var(--warn);
+        border-color: var(--warn);
+        background: color-mix(in srgb, var(--warn) 10%, transparent);
+      }
+      .logs-body {
+        border-top: 1px solid var(--line);
+      }
+      .logs-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .logs-controls input[type='search'] {
+        flex: 1 1 170px;
+        min-width: 130px;
+        font: 12.5px var(--font-body);
+        color: var(--text);
+        background: var(--card2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 9px;
+        outline: none;
+      }
+      .logs-controls input[type='search']:focus {
+        border-color: var(--accent2-ink);
+      }
+      .logs-range {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .logs-range input {
+        font: 11px var(--font-body);
+        color: var(--text);
+        background: var(--card2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 4px 6px;
+        outline: none;
+        color-scheme: dark;
+      }
+      body[data-theme='light'] .logs-range input {
+        color-scheme: light;
+      }
+      .log-chip-e.active {
+        color: var(--bad);
+        border-color: var(--bad);
+        background: color-mix(in srgb, var(--bad) 10%, transparent);
+      }
+      .log-chip-w.active {
+        color: var(--warn);
+        border-color: var(--warn);
+        background: color-mix(in srgb, var(--warn) 10%, transparent);
+      }
+      .log-chip-i.active,
+      .log-chip-d.active {
+        color: var(--accent2-ink);
+        border-color: var(--accent2-ink);
+        background: color-mix(in srgb, var(--accent2) 10%, transparent);
+      }
+      .logs-export {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding-left: 10px;
+        border-left: 1px solid var(--line);
+      }
+      .logs-export-status {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .logs-export-status.ok {
+        color: var(--accent2-ink);
+      }
+      .logs-hidden {
+        padding: 6px 14px;
+        font-size: 11px;
+        color: var(--muted);
+        border-bottom: 1px dashed var(--line);
+        background: var(--card2);
+      }
+      .logs-scroll-wrap {
+        position: relative;
+      }
+      .logs-scroll {
+        max-height: 320px;
+        overflow: auto;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .log-row {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 1px 14px;
+        border-left: 3px solid transparent;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .log-row:hover {
+        background: color-mix(in srgb, var(--accent) 5%, transparent);
+      }
+      .log-time {
+        color: var(--muted);
+        flex: 0 0 auto;
+        font-variant-numeric: tabular-nums;
+      }
+      .log-lvl {
+        flex: 0 0 12px;
+        font-weight: 700;
+        color: var(--muted);
+        text-align: center;
+      }
+      .log-tag {
+        flex: 0 0 auto;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--accent2-ink);
+      }
+      .log-msg {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .log-row.lvl-E .log-lvl,
+      .log-row.lvl-F .log-lvl,
+      .log-row.lvl-E .log-msg,
+      .log-row.lvl-F .log-msg {
+        color: var(--bad);
+      }
+      .log-row.lvl-W .log-lvl,
+      .log-row.lvl-W .log-msg {
+        color: var(--warn);
+      }
+      .log-row.lvl-V .log-msg,
+      .log-row.lvl-D .log-msg {
+        color: var(--muted);
+      }
+      .log-row.crash {
+        background: color-mix(in srgb, var(--bad) 7%, transparent);
+        border-left-color: var(--bad);
+      }
+      .log-crash-badge {
+        flex: 0 0 auto;
+        font: 700 9px var(--font-body);
+        letter-spacing: 0.08em;
+        color: #fff;
+        background: var(--bad);
+        border-radius: 4px;
+        padding: 1px 6px;
+        align-self: center;
+      }
+      .logs-live {
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        font: 600 12px var(--font-body);
+        color: #fff;
+        background: var(--accent);
+        border: none;
+        border-radius: 999px;
+        padding: 6px 14px;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+        white-space: nowrap;
+      }
+      .logs-empty {
+        padding: 28px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+        font-family: var(--font-body);
+      }
+      .caret {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      footer.credits {
+        margin-top: 16px;
+        text-align: center;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      footer.credits b {
+        color: var(--text);
+      }
+
+      /* ================= RESPONSIVE ================= */
+      @media (max-width: 1180px) {
+        .perf-grid {
+          grid-template-columns: 1fr;
+        }
+        .perf-left {
+          grid-template-rows: none;
+          grid-template-columns: 1fr 1fr;
+        }
+        .row2 {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 860px) {
+        header {
+          flex-wrap: wrap;
+        }
+        .device-card {
+          flex: 1 1 100%;
+          order: 3;
+        }
+        .mem-body {
+          grid-template-columns: 1fr;
+        }
+        .perf-left {
+          grid-template-columns: 1fr;
+        }
+        .fps-num {
+          font-size: 64px;
+        }
+      }
+      @media (max-width: 700px) {
+        .net {
+          grid-template-columns: 1fr 1fr;
+          gap: 12px 20px;
+          padding: 12px 16px;
+        }
+        #netSpark,
+        .insp-toggle {
+          grid-column: 1 / -1;
+        }
+        .sys-grid {
+          grid-template-columns: 1fr;
+          gap: 14px;
+        }
+        body {
+          padding: 10px 12px 20px;
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <header>
+      <div class="brand">
+        <img src="assets/evermore-logo.png" alt="Evermore Arcade" />
+        <div class="brand-sub">Android Profiler</div>
+      </div>
+
+      <div class="device-card card" id="devSelect">
+        <button class="dev-btn" id="devBtn" type="button" title="Switch device">
+          <div class="device-icon">📱</div>
+          <div>
+            <div class="device-name" id="devName">Samsung SM-A155M</div>
+            <div class="device-specs" id="devSpecs"></div>
+          </div>
+          <span class="caret">▼</span>
+        </button>
+        <div class="pop dev-pop" id="devPop" hidden>
+          <div class="pop-controls">
+            <span class="pop-title">Connected devices (adb)</span>
+            <button class="chip" id="devRefresh" type="button">⟳ Refresh</button>
+          </div>
+          <ul class="pop-list" id="devList"></ul>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="verdict" id="verdict" title="Live session verdict — same semaphore as the report (share of ticks in FPS target over the last 60 s)">
+          <span class="verdict-dot"></span>
+          <span class="verdict-word" id="verdictWord">WARMING UP</span>
+          <span class="verdict-sub" id="verdictSub">— in target · 60 s</span>
+          <span class="v-crash" id="verdictCrash" hidden>1 crash</span>
+        </div>
+
+        <div class="app-name" id="appSelect">
+          <label>Profiled app</label>
+          <button class="pkg" id="appPkgBtn" type="button" title="Switch profiled app">
+            <span id="appPkg">com.evermore.oda.qa</span>
+            <span class="app-launched" id="appLaunched">🚀 launched</span>
+            <span class="caret">▼</span>
+          </button>
+          <div class="pop" id="appPop" hidden>
+            <div class="pop-controls">
+              <input id="appSearch" type="search" placeholder="Search package…" autocomplete="off" spellcheck="false" />
+              <button class="chip active" id="appChip" type="button">Evermore</button>
+              <label class="app-sys"><input type="checkbox" id="appSys" /> system</label>
+            </div>
+            <ul class="pop-list" id="appList"></ul>
+            <div class="pop-empty" id="appEmpty" hidden>No results.</div>
+          </div>
+        </div>
+
+        <div class="rec-badge" id="recBadge" title="Live connection status">
+          <span class="rec-dot"></span>
+          <span class="rec-label" id="recLabel">LIVE</span>
+          <span class="rec-time" id="recTime">00:00</span>
+        </div>
+
+        <button class="icon-btn" id="themeToggle" type="button" title="Toggle light/dark">☀️</button>
+
+        <div class="menu-select" id="menuSelect">
+          <button class="icon-btn" id="menuBtn" type="button" title="Export · session records · settings">☰</button>
+          <div class="pop menu-pop" id="menuPop" hidden>
+            <div class="menu-section">
+              <div class="menu-title">Export report</div>
+              <div class="menu-row" id="exportRow">
+                <button class="chip" data-window="full" type="button">Full session</button>
+                <button class="chip" data-window="5" type="button">5 min</button>
+                <button class="chip" data-window="15" type="button">15 min</button>
+                <button class="chip" data-window="30" type="button">30 min</button>
+                <button class="chip" data-window="60" type="button">1 h</button>
+              </div>
+              <div class="menu-status" id="exportStatus"></div>
+            </div>
+            <div class="menu-section">
+              <div class="menu-title">
+                <span>Session records</span>
+                <button class="chip" id="sessRefresh" type="button">⟳</button>
+              </div>
+              <ul class="pop-list" id="sessList"></ul>
+            </div>
+            <div class="menu-section">
+              <div class="menu-title">Settings</div>
+              <div class="cfg-grid">
+                <label for="cfgFilter">App filter</label>
+                <input id="cfgFilter" type="text" value="evermore" autocomplete="off" spellcheck="false" />
+                <label for="cfgInterval">Sampling</label>
+                <select id="cfgInterval">
+                  <option value="auto">Auto (1 s)</option>
+                  <option value="500">0.5 s</option>
+                  <option value="1000">1 s</option>
+                  <option value="2000">2 s</option>
+                  <option value="5000">5 s</option>
+                </select>
+                <label for="cfgFps">Target FPS</label>
+                <input id="cfgFps" type="number" min="1" max="240" step="1" value="60" inputmode="numeric" />
+                <label for="cfgTheme">Dark mode</label>
+                <label class="switch">
+                  <input type="checkbox" id="cfgTheme" checked />
+                  <span class="slider"></span>
+                  <span>🌙</span>
+                </label>
+                <label for="cfgReports">Reports folder</label>
+                <input id="cfgReports" type="text" value="~/EvermoreReports" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="cfg-actions">
+                <button class="cfg-save" id="cfgSave" type="button">Save</button>
+                <span class="menu-status" id="cfgStatus"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="brand-odaclick">
+          <img src="assets/odaclick-dog.png" alt="Odaclick Game Studio" title="Odaclick Game Studio" />
+        </div>
+      </div>
+    </header>
+
+    <!-- ============ PERFORMANCE (protagonist) ============ -->
+    <div class="section-label">Performance <span class="rail-extra" id="phaseNote"></span></div>
+    <section class="perf-grid">
+      <div class="perf-left">
+        <div class="card tile fps-tile">
+          <div class="tile-label">FPS <span class="target-chip" id="targetChip">target 60</span></div>
+          <div class="fps-num" id="fpsNum">—<span class="unit">fps</span></div>
+          <div><span class="fps-status" id="fpsStatus"><span class="dot"></span><span id="fpsStatusWord">waiting…</span></span></div>
+          <div class="tile-div"></div>
+          <div class="framerow">
+            <div class="fstat">
+              <span class="fs-l">jank</span>
+              <span class="fs-v" id="jankV">—</span>
+            </div>
+            <div class="fstat">
+              <span class="fs-l">p90 frame</span>
+              <span class="fs-v" id="p90V">—</span>
+            </div>
+            <div class="fstat">
+              <span class="fs-l">p99 frame</span>
+              <span class="fs-v" id="p99V">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="card tile gpu-tile">
+          <div class="tile-label">GPU</div>
+          <div class="big-num" id="gpuNum">—<span class="unit">%</span></div>
+          <div class="bar"><i id="gpuBar"></i></div>
+          <div class="bar-sub"><span>utilization</span><span id="gpuSub"></span></div>
+        </div>
+      </div>
+      <div class="card tl-card">
+        <div class="panel-head">
+          <span class="card-title">Live timeline</span>
+          <span class="panel-sub">180 s window · real units per lane · shared crosshair · red bands = below target · click legend to toggle</span>
+        </div>
+        <div id="tlPerf"></div>
+      </div>
+    </section>
+
+    <!-- ============ MEMORY + SYSTEM ============ -->
+    <div class="section-label">Memory &amp; System</div>
+    <section class="row2">
+      <div class="card mem-card">
+        <div class="panel-head">
+          <span class="card-title">Memory</span>
+          <span class="panel-sub">PSS by category · app footprint vs device</span>
+        </div>
+        <div class="mem-body">
+          <div id="memPie"></div>
+          <div class="mem-stats">
+            <div class="mem-kpis">
+              <div class="fstat">
+                <span class="fs-l">PSS total</span>
+                <span class="fs-v" id="pssNum" style="font-size: 26px">—</span>
+              </div>
+              <div class="fstat">
+                <span class="fs-l">RSS</span>
+                <span class="fs-v" id="rssNum" style="font-size: 26px">—</span>
+              </div>
+            </div>
+            <div>
+              <div class="bar thin"><i id="ramAppBar" style="background: var(--mem-java)"></i></div>
+              <div class="bar-sub"><span>app of 8 GB</span><span id="ramAppSub">—</span></div>
+              <div class="bar thin"><i id="ramDevBar" style="background: var(--muted)"></i></div>
+              <div class="bar-sub"><span>device used</span><span id="ramDevSub">—</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-head" style="margin-top: 2px">
+          <span class="panel-sub">PSS trend · <span style="color: var(--s-temp)">●</span> GC</span>
+        </div>
+        <div id="memTrend"></div>
+      </div>
+
+      <div class="card sys-card">
+        <div class="panel-head">
+          <span class="card-title">System</span>
+          <span class="panel-sub">app vs device</span>
+        </div>
+        <div class="sys-grid">
+          <div class="sys-tile">
+            <div class="tile-label">CPU</div>
+            <div class="big-num" id="cpuNum">—<span class="unit">%</span></div>
+            <div class="sub-note" id="coreSub"></div>
+            <div class="bar"><i id="cpuBar"></i></div>
+            <div class="bar thin"><i id="cpuDevBar" style="background: var(--muted)"></i></div>
+            <div class="bar-sub"><span>device total</span><span id="cpuDevSub">—</span></div>
+          </div>
+          <div class="sys-tile">
+            <div class="tile-label">Temp</div>
+            <div class="big-num" id="tempNum">—<span class="unit">°C</span></div>
+            <div class="sub-note" id="tempTrendSub"></div>
+            <div class="bar"><i id="tempBar"></i></div>
+            <div class="bar-sub"><span>25 °C</span><span>50 °C</span></div>
+          </div>
+          <div class="sys-tile">
+            <div class="tile-label">Battery <span class="event-chip" id="chipCharging">⚡ CHARGING</span></div>
+            <div class="big-num" id="batNum">—<span class="unit">%</span></div>
+            <div class="sub-note" id="batSub"></div>
+            <div class="bar"><i id="batBar"></i></div>
+            <div class="bar-sub"><span>0</span><span>100</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ NETWORK ============ -->
+    <div class="section-label">Network</div>
+    <section class="card net">
+      <div class="net-stat net-rx">
+        <span class="lbl">↓ RX</span>
+        <span class="val" id="rxNow">— KB/s</span>
+        <span class="tot" id="rxTot">total —</span>
+      </div>
+      <div class="net-stat net-tx">
+        <span class="lbl">↑ TX</span>
+        <span class="val" id="txNow">— KB/s</span>
+        <span class="tot" id="txTot">total —</span>
+      </div>
+      <button class="insp-toggle" id="inspToggle" type="button" title="When on, the phone's traffic goes through the profiler (proxy + adb reverse) and requests appear below.">
+        🔎 Inspector <b id="inspState">OFF</b>
+      </button>
+      <div id="netSpark"></div>
+    </section>
+    <section class="card inspector" id="inspector" hidden>
+      <div class="insp-head">
+        <span class="insp-title">Network Inspector</span>
+        <span class="insp-sub">live requests · HTTPS = host only (payload needs CA) · HTTP = full URL</span>
+        <span class="insp-count"><b id="flowN">0</b> requests</span>
+      </div>
+      <div class="insp-scroll">
+        <table class="insp-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Method</th>
+              <th>Host</th>
+              <th>URL / target</th>
+              <th>Status</th>
+              <th>Bytes</th>
+            </tr>
+          </thead>
+          <tbody id="flowRows"></tbody>
+        </table>
+        <div class="insp-empty" id="flowEmpty">Waiting for app traffic…</div>
+      </div>
+    </section>
+
+    <!-- ============ LOGS ============ -->
+    <div class="section-label">App logs</div>
+    <section class="card logs" id="logsSection">
+      <button class="logs-head" id="logsToggle" type="button" title="Show / hide logs">
+        <span class="insp-title">Logs</span>
+        <span class="insp-sub">app logcat · crashes/ANR highlighted</span>
+        <span class="logs-counts">
+          <span><b id="logsTotal">0</b> logs</span>
+          <span id="logsMatched" hidden></span>
+          <span class="logs-badge badge-e" id="logsBadgeE">E 0</span>
+          <span class="logs-badge badge-w" id="logsBadgeW">W 0</span>
+          <span class="caret" id="logsCaret">▲</span>
+        </span>
+      </button>
+      <div class="logs-body" id="logsBody">
+        <div class="logs-controls">
+          <span id="logsChips">
+            <button class="chip log-chip-e active" data-chip="E" type="button">Error</button>
+            <button class="chip log-chip-w active" data-chip="W" type="button">Warn</button>
+            <button class="chip log-chip-i active" data-chip="I" type="button">Info</button>
+            <button class="chip log-chip-d active" data-chip="D" type="button">Debug+Verbose</button>
+          </span>
+          <input id="logsSearch" type="search" placeholder="Search in message and tag…" autocomplete="off" spellcheck="false" />
+          <span class="logs-range">
+            from <input id="logsFrom" type="datetime-local" /> to <input id="logsTo" type="datetime-local" />
+          </span>
+          <button class="chip" id="logsOrder" type="button" title="Time order">↓ old→new</button>
+          <button class="chip" id="logsPause" type="button" title="Pause auto-scroll">⏸ Pause</button>
+          <span class="logs-export" id="logsExport">
+            <button class="chip" data-export="filtered-txt" type="button" title="Export what's visible with the current filters (.txt)">⬇ filter .txt</button>
+            <button class="chip" data-export="filtered-jsonl" type="button" title="Export what's visible with the current filters (.jsonl)">⬇ filter .jsonl</button>
+            <button class="chip" data-export="session-txt" type="button" title="Export every log of the session (.txt)">⬇ session .txt</button>
+            <button class="chip" data-export="session-jsonl" type="button" title="Export every log of the session (.jsonl)">⬇ session .jsonl</button>
+            <span class="logs-export-status" id="logsExportStatus"></span>
+          </span>
+        </div>
+        <div class="logs-hidden" id="logsHidden" hidden></div>
+        <div class="logs-scroll-wrap">
+          <div class="logs-scroll" id="logsScroll">
+            <div id="logsList"></div>
+            <div class="logs-empty" id="logsEmpty">Waiting for app logs…</div>
+          </div>
+          <button class="logs-live" id="logsLive" type="button" hidden>▼ back to live</button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="credits">
+      Disposable prototype (ticket 031) — simulated data at 1 Hz · <b>Evermore Android Profiler</b> · Odaclick Game Studio
+    </footer>
+
+    <script src="vendor/echarts.min.js"></script>
+    <script src="sim.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

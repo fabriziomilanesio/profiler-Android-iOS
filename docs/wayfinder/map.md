@@ -159,6 +159,15 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   rápido (cats + FPS + RSS vivo por VmRSS) cada tick; carril lento (meminfo 15 s,
   thermal/battery/ps 10 s) con carry-forward; intervalo default auto por RAM (< 4 GB → 2 s,
   opción "Auto" en el panel).
+- [Prototipo del rediseño del dashboard](tickets/031-prototipo-redisenio-dashboard.md) —
+  `prototypes/redesign/index.html` (offline, sim con caída de FPS y crash guionados):
+  tiles con números grandes en vez de donut-gauges (FPS hero 84 px con semáforo +
+  jank/p90/p99), layout por temas con rails (Perf → Memory & System → Network → Logs),
+  mini-veredicto vivo en el header (espejo del 026), timeline en 2 carriles con unidades
+  reales (X compartido, bandas rojas + marcas CRASH), series default FPS+GPU+CPU, chips
+  GC/JANK flasheantes descartados, paleta de series validada (dataviz) sobre dark
+  default + light. Feedback HITL diferido a la mañana por pedido del usuario; itera
+  antes/durante el 032.
 
 ## Not yet specified
 
