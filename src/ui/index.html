@@ -747,51 +747,6 @@
       .cfg-save:hover {
         filter: brightness(1.08);
       }
-      .switch {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-        user-select: none;
-        justify-self: start;
-      }
-      .switch input {
-        position: absolute;
-        opacity: 0;
-        pointer-events: none;
-      }
-      .switch .slider {
-        width: 40px;
-        height: 22px;
-        border-radius: 999px;
-        background: var(--chip-bg);
-        border: 1px solid var(--line);
-        position: relative;
-        transition: background 0.15s ease;
-        flex: 0 0 auto;
-      }
-      .switch .slider::after {
-        content: '';
-        position: absolute;
-        top: 2px;
-        left: 2px;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--muted);
-        transition:
-          transform 0.15s ease,
-          background 0.15s ease;
-      }
-      .switch input:checked + .slider {
-        background: var(--accent);
-        border-color: var(--accent);
-      }
-      .switch input:checked + .slider::after {
-        transform: translateX(18px);
-        background: #fff;
-      }
-
       /* ================= PERFORMANCE (hero) ================= */
       .perf-grid {
         display: grid;
@@ -1033,15 +988,17 @@
       .mem-card {
         padding: 12px 16px 10px;
       }
+      /* Memoria protagonista (feedback HITL 2026-08-01): donut más grande y
+         KPIs PSS/RSS a 34 px — es LO que medimos, no un accesorio. */
       .mem-body {
         display: grid;
-        grid-template-columns: 230px minmax(0, 1fr);
-        gap: 10px;
+        grid-template-columns: 270px minmax(0, 1fr);
+        gap: 12px;
         align-items: center;
       }
       #memPie {
         width: 100%;
-        height: 210px;
+        height: 248px;
         min-width: 0;
       }
       .mem-stats {
@@ -1177,6 +1134,37 @@
       .insp-toggle:disabled {
         opacity: 0.5;
         cursor: wait;
+      }
+      /* Aviso del inspector (feedback HITL 2026-08-01): visible mientras está ON —
+         desenchufar el celu con el proxy puesto lo deja sin internet. */
+      .insp-warn {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--text);
+        background: color-mix(in srgb, var(--warn) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+        border-radius: 9px;
+        padding: 8px 12px;
+      }
+      .insp-warn b {
+        color: var(--warn);
+      }
+      .insp-warn .insp-warn-fix {
+        font-size: 10.5px;
+        color: var(--muted);
+      }
+      .insp-warn code {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 1px 5px;
+        white-space: nowrap;
       }
       .inspector {
         margin-top: 14px;
@@ -1690,12 +1678,8 @@
                 </select>
                 <label for="cfgFps">Target FPS</label>
                 <input id="cfgFps" type="number" min="1" max="240" step="1" inputmode="numeric" />
-                <label for="cfgTheme">Dark mode</label>
-                <label class="switch">
-                  <input type="checkbox" id="cfgTheme" checked />
-                  <span class="slider"></span>
-                  <span>🌙</span>
-                </label>
+                <!-- El tema se cambia SOLO con el toggle ☀️ del header (estaba duplicado acá;
+                     feedback HITL 2026-08-01) — sigue persistiendo vía /api/config. -->
                 <label for="cfgReports">Reports folder</label>
                 <input id="cfgReports" type="text" autocomplete="off" spellcheck="false" />
               </div>
@@ -1779,11 +1763,11 @@
             <div class="mem-kpis">
               <div class="fstat">
                 <span class="fs-l">PSS total</span>
-                <span class="fs-v" id="pssNum" style="font-size: 26px">—</span>
+                <span class="fs-v" id="pssNum" style="font-size: 34px">—</span>
               </div>
               <div class="fstat">
                 <span class="fs-l">RSS</span>
-                <span class="fs-v" id="rssNum" style="font-size: 26px">—</span>
+                <span class="fs-v" id="rssNum" style="font-size: 34px">—</span>
               </div>
             </div>
             <div>
@@ -1857,6 +1841,16 @@
       <div id="netSpark"></div>
       <div class="net-na" id="netNa" hidden>
         Network per-app: N/A on this device (netstats is bucketed, not realtime — deferred)
+      </div>
+      <div class="insp-warn" id="inspWarn" hidden>
+        <span
+          >⚠️ <b>The phone loses internet if unplugged while the inspector is ON.</b> Turn the
+          inspector off before disconnecting the USB cable.</span
+        >
+        <span class="insp-warn-fix"
+          >Already unplugged? Reconnect and run
+          <code>adb shell settings delete global http_proxy</code></span
+        >
       </div>
     </section>
     <section class="card inspector" id="inspector" hidden>

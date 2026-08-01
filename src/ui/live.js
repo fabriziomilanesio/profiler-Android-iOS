@@ -266,7 +266,6 @@
     cfgFilter: document.getElementById('cfgFilter'),
     cfgInterval: document.getElementById('cfgInterval'),
     cfgFps: document.getElementById('cfgFps'),
-    cfgTheme: document.getElementById('cfgTheme'),
     cfgReports: document.getElementById('cfgReports'),
     cfgSave: document.getElementById('cfgSave'),
     cfgStatus: document.getElementById('cfgStatus'),
@@ -413,7 +412,6 @@
     if (typeof effectiveIntervalMs === 'number') {
       menu.cfgInterval.options[0].textContent = 'Auto (' + effectiveIntervalMs / 1000 + ' s)'
     }
-    menu.cfgTheme.checked = cfg.theme === 'dark'
     menu.cfgReports.value = cfg.reportsDir
     menu.cfgFps.value = cfg.fpsTarget
     // el semáforo del donut usa el target al toque (aplica en caliente, ticket 025)
@@ -435,9 +433,9 @@
   }
 
   menu.cfgSave.addEventListener('click', function () {
+    // el tema NO viaja acá: lo maneja (y persiste) solo el toggle ☀️ del header
     var patch = {
       filterTerm: menu.cfgFilter.value.trim(),
-      theme: menu.cfgTheme.checked ? 'dark' : 'light',
       reportsDir: menu.cfgReports.value.trim(),
       // el server valida el rango (1–240); inválido ⇒ lo ignora y fillConfig
       // repone el valor vigente con la respuesta
@@ -454,7 +452,6 @@
       })
       .then(function (data) {
         fillConfig(data.config, data.effectiveIntervalMs)
-        ProfilerDashboard.setTheme(data.config.theme)
         // el chip del selector de apps refleja el término nuevo
         appSel.chip.textContent =
           data.config.filterTerm.charAt(0).toUpperCase() + data.config.filterTerm.slice(1)
@@ -487,9 +484,9 @@
     e.stopPropagation()
   })
 
-  // Tema persistido: aplicar el guardado al cargar. Dos controles equivalentes
-  // (rediseño 031/032): el toggle ☀️/🌙 del header y el switch de Configuración.
-  // Ambos aplican y persisten al instante (no requieren Guardar).
+  // Tema persistido: aplicar el guardado al cargar. ÚNICO control (feedback HITL
+  // 2026-08-01, antes había un switch duplicado en ☰): el toggle ☀️/🌙 del header,
+  // que aplica y persiste al instante vía /api/config (no requiere Guardar).
   void loadConfig(true)
   function persistTheme(theme) {
     ProfilerDashboard.setTheme(theme)
@@ -497,9 +494,6 @@
       function () {},
     )
   }
-  menu.cfgTheme.addEventListener('change', function () {
-    persistTheme(menu.cfgTheme.checked ? 'dark' : 'light')
-  })
   document.getElementById('themeToggle').addEventListener('click', function () {
     persistTheme(ProfilerDashboard.getTheme() === 'dark' ? 'light' : 'dark')
   })
@@ -523,6 +517,9 @@
     inspectorOn = on
     inspStateEl.textContent = on ? 'ON' : 'OFF'
     inspBtn.classList.toggle('on', on)
+    // aviso del proxy (feedback HITL 2026-08-01): con el inspector ON, desenchufar
+    // el celu lo deja sin internet — el aviso vive junto al toggle mientras esté ON
+    document.getElementById('inspWarn').hidden = !on
     if (on) {
       // mostrar la tabla ya (aunque todavía no haya flows) para que se vea que graba
       var section = document.getElementById('inspector')

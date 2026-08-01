@@ -40,6 +40,7 @@
       gpu: '#EB008B',
       cpu: '#8B6BE8',
       temp: '#C77F00',
+      mem: '#3D8FD6',
       memJava: '#EB008B',
       memGraphics: '#8B6BE8',
       memNative: '#00A89E',
@@ -68,6 +69,7 @@
       gpu: '#EB008B',
       cpu: '#7C5CE0',
       temp: '#B8860B',
+      mem: '#1E78C8',
       memJava: '#EB008B',
       memGraphics: '#7C5CE0',
       memNative: '#009E96',
@@ -139,10 +141,28 @@
   var gpuData = []
   var cpuData = []
   var cpuDevData = []
+  var pssTlData = [] // [ts, pssMb|null] — historia de RAM en el carril de FPS (eje der MB)
+  var tempTlData = [] // [ts, °C|null] — carril inferior, eje derecho °C (patrón del reporte 026)
   var tickStatus = [] // [ts, 'green'|'yellow'|'red'|null] → bandas rojas + veredicto
   var crashMarks = [] // ts de cada crash (live.js → noteCrash)
-  var legendSelected = { FPS: true, 'GPU %': true, 'CPU %': true, 'CPU device %': false }
+  var legendSelected = {
+    FPS: true,
+    'PSS MB': true,
+    'GPU %': true,
+    'CPU %': true,
+    'CPU device %': false,
+    'Temp °C': true,
+  }
   var fpsAxisMax = 40
+  // unidades reales por serie para el tooltip compartido (patrón del reporte 026)
+  var TL_UNITS = {
+    FPS: [' fps', 0],
+    'PSS MB': [' MB', 0],
+    'GPU %': ['%', 0],
+    'CPU %': ['%', 0],
+    'CPU device %': ['%', 0],
+    'Temp °C': [' °C', 1],
+  }
 
   // techo del carril de FPS: el target con headroom, o el máximo observado
   function computeFpsAxisMax() {
@@ -170,20 +190,34 @@
         textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 11.5 },
         inactiveColor: C.legendOff,
         selected: legendSelected,
-        data: ['FPS', 'GPU %', 'CPU %', 'CPU device %'],
+        data: ['FPS', 'PSS MB', 'GPU %', 'CPU %', 'CPU device %', 'Temp °C'],
       },
       tooltip: {
         trigger: 'axis',
         backgroundColor: C.card2,
         borderColor: C.line,
         textStyle: { color: C.text, fontFamily: FONT_BODY, fontSize: 12 },
-        valueFormatter: function (v) {
-          return v === null || v === undefined ? 'N/A' : Math.round(v)
+        formatter: function (params) {
+          if (!params.length) return ''
+          var lines = [echarts.time.format(params[0].value[0], '{HH}:{mm}:{ss}', false)]
+          params.forEach(function (p) {
+            var v = p.value[1]
+            var u = TL_UNITS[p.seriesName] || ['', 0]
+            lines.push(
+              p.marker +
+                ' ' +
+                p.seriesName +
+                ': <b>' +
+                (v === null || v === undefined ? 'N/A' : v.toFixed(u[1]) + u[0]) +
+                '</b>',
+            )
+          })
+          return lines.join('<br/>')
         },
       },
       grid: [
-        { left: 46, right: 16, top: 26, height: '46%' },
-        { left: 46, right: 16, top: '62%', bottom: 24 },
+        { left: 46, right: 48, top: 26, height: '46%' },
+        { left: 46, right: 48, top: '62%', bottom: 24 },
       ],
       xAxis: [
         {
@@ -227,6 +261,36 @@
           axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
           splitLine: { lineStyle: { color: C.split } },
         },
+        {
+          // eje derecho del carril de FPS: historia de RAM (PSS de la app, MB).
+          // scale:true (como el trend de la card): contra 0 una app de 600 MB
+          // sería una línea plana — acá importa la variación. Sin name: la
+          // unidad ya la lleva la leyenda ("PSS MB") y el name chocaba con ella.
+          type: 'value',
+          gridIndex: 0,
+          position: 'right',
+          scale: true,
+          minInterval: 1, // labels en MB enteros — sin "305, 305, 305" duplicados
+          axisLabel: {
+            color: C.muted,
+            fontFamily: FONT_BODY,
+            fontSize: 10,
+            formatter: function (v) {
+              return Math.round(v)
+            },
+          },
+          splitLine: { show: false },
+        },
+        {
+          // eje derecho del carril inferior: temperatura en °C — mismo patrón
+          // del chart de correlación del reporte (026). Sin name por lo mismo
+          // que el eje MB (la leyenda dice "Temp °C").
+          type: 'value',
+          gridIndex: 1,
+          position: 'right',
+          axisLabel: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
+          splitLine: { show: false },
+        },
       ],
       series: [
         {
@@ -243,6 +307,22 @@
           emphasis: { disabled: true },
           markLine: { silent: true, symbol: 'none', data: [] },
           markArea: { silent: true, itemStyle: { color: C.redBand }, data: [] },
+          data: [],
+        },
+        {
+          // historia de RAM (feedback HITL 2026-08-01): PSS de la app en el
+          // carril de FPS contra el eje derecho en MB — sin área para no
+          // ensuciar el carril; la card de Memory tiene el detalle.
+          name: 'PSS MB',
+          type: 'line',
+          xAxisIndex: 0,
+          yAxisIndex: 2,
+          showSymbol: false,
+          smooth: 0.25,
+          connectNulls: false,
+          lineStyle: { width: 1.8, color: C.mem },
+          itemStyle: { color: C.mem },
+          emphasis: { disabled: true },
           data: [],
         },
         {
@@ -282,6 +362,20 @@
           connectNulls: false,
           lineStyle: { width: 1.5, color: C.cpu, type: 'dashed', opacity: 0.45 },
           itemStyle: { color: C.cpu, opacity: 0.45 },
+          emphasis: { disabled: true },
+          data: [],
+        },
+        {
+          // la temperatura vuelve al timeline (feedback HITL 2026-08-01)
+          name: 'Temp °C',
+          type: 'line',
+          xAxisIndex: 1,
+          yAxisIndex: 3,
+          showSymbol: false,
+          smooth: 0.25,
+          connectNulls: false,
+          lineStyle: { width: 1.8, color: C.temp },
+          itemStyle: { color: C.temp },
           emphasis: { disabled: true },
           data: [],
         },
@@ -379,9 +473,11 @@
           markArea: { data: marks.areas },
           markLine: { silent: true, symbol: 'none', data: marks.lines },
         },
+        { data: pssTlData },
         { data: gpuData, markArea: { data: marks.areas } },
         { data: cpuData },
         { data: cpuDevData },
+        { data: tempTlData },
       ],
     }
     if (newMax !== fpsAxisMax) {
@@ -397,11 +493,15 @@
     gpuData.push([ts, s.gpu])
     cpuData.push([ts, s.cpu])
     cpuDevData.push([ts, s.deviceCpu === undefined ? null : s.deviceCpu])
+    pssTlData.push([ts, s.mem && s.mem.pss !== undefined ? s.mem.pss : null])
+    tempTlData.push([ts, s.tempC === undefined ? null : s.tempC])
     tickStatus.push([ts, fpsStatusOf(s.fps, fpsTarget)])
     var cutoff = ts - WINDOW_S * 1000
-    ;[fpsData, gpuData, cpuData, cpuDevData, tickStatus].forEach(function (arr) {
-      trimByTime(arr, cutoff)
-    })
+    ;[fpsData, gpuData, cpuData, cpuDevData, pssTlData, tempTlData, tickStatus].forEach(
+      function (arr) {
+        trimByTime(arr, cutoff)
+      },
+    )
     crashMarks = crashMarks.filter(function (t) {
       return t >= cutoff
     })
@@ -1099,6 +1199,8 @@
     gpuData.length = 0
     cpuData.length = 0
     cpuDevData.length = 0
+    pssTlData.length = 0
+    tempTlData.length = 0
     tickStatus.length = 0
     crashMarks.length = 0
     memTrendData.length = 0
@@ -1176,12 +1278,10 @@
     $('recTime').textContent = (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss
   }, 1000)
 
-  // ---------- theme (toggle del header + Configuración del ☰; persiste) ----------
+  // ---------- theme (único control: toggle ☀️ del header; persiste) ----------
   function applyTheme(next) {
     if (next !== 'light' && next !== 'dark') return
     $('themeToggle').textContent = next === 'dark' ? '☀️' : '🌙'
-    var cfgTheme = $('cfgTheme')
-    if (cfgTheme) cfgTheme.checked = next === 'dark'
     if (next === theme) return
     theme = next
     C = PALETTES[theme]
@@ -1194,14 +1294,31 @@
     }
   }
 
+  function resizeCharts() {
+    allCharts().forEach(function (c) {
+      c.resize()
+    })
+  }
+
   function init() {
     $('targetChip').textContent = 'target ' + fpsTarget
     buildCharts()
-    window.addEventListener('resize', function () {
-      allCharts().forEach(function (c) {
-        c.resize()
+    window.addEventListener('resize', resizeCharts)
+    // Los contenedores también cambian de ancho SIN resize de ventana (los KPIs
+    // de red se ensanchan con datos reales y el netSpark se achica): sin esto el
+    // canvas conserva el ancho del init y desborda la card (bug visto en la
+    // verificación del 2026-08-01). Un observer sobre los contenedores fijos.
+    if (typeof ResizeObserver !== 'undefined') {
+      var ro = new ResizeObserver(function () {
+        resizeCharts()
       })
-    })
+      ;['tlPerf', 'memPie', 'memTrend', 'netSpark', 'gGpu', 'gCpu', 'gTemp', 'gBat'].forEach(
+        function (id) {
+          var el = $(id)
+          if (el) ro.observe(el)
+        },
+      )
+    }
   }
 
   global.ProfilerDashboard = {
