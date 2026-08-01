@@ -12,7 +12,9 @@
  *    unidades reales por carril. Ventana 180 s. Serie "CPU device %" off default.
  *  - Memory: donut PSS + KPIs (PSS/RSS) + barras app/device + trend de PSS con
  *    puntos ámbar de GC (live.js los detecta en logcat → noteGc).
- *  - System: tiles CPU/Temp/Battery con número grande + barra por umbral.
+ *  - GPU + System (CPU/Temp/Battery): donut-gauges circulares ECharts — aro coloreado
+ *    por umbral (ok/warn/bad) con el número grande al centro; CPU con anillo interior
+ *    tenue del device. Restaurados del dashboard pre-rediseño (feedback HITL del 032).
  *  - Mini-veredicto vivo del header: fpsStatus(avg FPS 60 s) + % de ticks en
  *    verde (espejo del esquema del reporte 026); crashes → chip rojo (noteCrash);
  *    < 5 ticks con dato ⇒ WARMING UP.
@@ -84,6 +86,7 @@
   var C = PALETTES[theme]
 
   var FONT_BODY = "'Inter', system-ui, sans-serif"
+  var FONT_TITLE = "'Baloo 2', ui-rounded, system-ui, sans-serif"
 
   var WINDOW_S = 180 // ventana visible de la timeline (contrato 031)
   var VERDICT_S = 60 // ventana del mini-veredicto (espejo del reporte 026)
@@ -682,6 +685,166 @@
   }
 
   // =====================================================================
+  // Donut-gauges circulares — GPU / CPU / Temp / Battery (restaurados del
+  // dashboard pre-rediseño por feedback HITL del 032): aro de progreso
+  // coloreado por umbral (mismo semáforo ok/warn/bad de los tokens) con el
+  // número grande al centro; CPU lleva un anillo interior tenue con el total
+  // del device en la misma escala. Sin dato ⇒ aro en track + "—".
+  // =====================================================================
+  var gauges = null // { gpu, cpu, temp, bat } → cfg con .chart
+  var GAUGE_NA = '{na|—}'
+
+  // batería: umbrales inversos (poco = malo)
+  function battColor(v) {
+    return v < 15 ? C.bad : v < 30 ? C.warn : C.ok
+  }
+
+  function gaugeDefs() {
+    return {
+      gpu: {
+        el: 'gGpu',
+        min: 0,
+        max: 100,
+        color: function (v) {
+          return bandColor(v, 65, 85)
+        },
+        fmt: function (v) {
+          return v === null ? GAUGE_NA : Math.round(v) + '{u|%}'
+        },
+      },
+      cpu: {
+        el: 'gCpu',
+        min: 0,
+        max: 100,
+        device: true, // anillo interior: CPU total del device
+        color: function (v) {
+          return bandColor(v, 55, 75)
+        },
+        fmt: function (v) {
+          return v === null ? GAUGE_NA : Math.round(v) + '{u|%}'
+        },
+      },
+      temp: {
+        el: 'gTemp',
+        min: 25,
+        max: 50,
+        color: function (v) {
+          return bandColor(v, 38, 42)
+        },
+        fmt: function (v) {
+          return v === null ? GAUGE_NA : v.toFixed(1) + '{u|°C}'
+        },
+      },
+      bat: {
+        el: 'gBat',
+        min: 0,
+        max: 100,
+        color: battColor,
+        fmt: function (v) {
+          return v === null ? GAUGE_NA : Math.round(v) + '{u|%}'
+        },
+      },
+    }
+  }
+
+  function makeGauge(cfg) {
+    var chart = echarts.init($(cfg.el), null, { renderer: 'canvas' })
+    var series = [
+      {
+        type: 'gauge',
+        startAngle: 90,
+        endAngle: -270,
+        min: cfg.min,
+        max: cfg.max,
+        pointer: { show: false },
+        progress: {
+          show: true,
+          width: 11,
+          roundCap: true,
+          itemStyle: { color: C.ok, shadowColor: 'rgba(0,0,0,.25)', shadowBlur: 5 },
+        },
+        axisLine: { lineStyle: { width: 11, color: [[1, C.track]] } },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: { show: false },
+        anchor: { show: false },
+        title: { show: false },
+        detail: {
+          valueAnimation: true,
+          offsetCenter: [0, 0],
+          // sin dato todavía: "—" (updateGauge pisa el formatter con el valor real)
+          formatter: function () {
+            return cfg.fmt(null)
+          },
+          color: C.text,
+          fontFamily: FONT_TITLE,
+          fontWeight: 800,
+          fontSize: 27,
+          lineHeight: 30,
+          rich: {
+            u: {
+              color: C.muted,
+              fontSize: 12,
+              fontFamily: FONT_BODY,
+              fontWeight: 500,
+              padding: [8, 0, 0, 2],
+            },
+            na: { color: C.muted, fontSize: 22, fontFamily: FONT_BODY, fontWeight: 600 },
+          },
+        },
+        data: [{ value: cfg.min }],
+      },
+    ]
+    if (cfg.device) {
+      series.push({
+        type: 'gauge',
+        startAngle: 90,
+        endAngle: -270,
+        min: cfg.min,
+        max: cfg.max,
+        radius: '66%',
+        pointer: { show: false },
+        progress: { show: true, width: 4, roundCap: true, itemStyle: { color: C.legendOff } },
+        axisLine: { lineStyle: { width: 4, color: [[1, 'transparent']] } },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: { show: false },
+        anchor: { show: false },
+        title: { show: false },
+        detail: { show: false },
+        data: [{ value: cfg.min }],
+      })
+    }
+    chart.setOption({ series: series })
+    cfg.chart = chart
+    return cfg
+  }
+
+  function updateGauge(cfg, value, deviceValue) {
+    // null ⇒ aro al mínimo (queda el track gris) + "—" al centro
+    var series = [
+      {
+        data: [{ value: value === null ? cfg.min : value }],
+        progress: { itemStyle: { color: value === null ? C.track : cfg.color(value) } },
+        detail: {
+          formatter: function () {
+            return cfg.fmt(value)
+          },
+        },
+      },
+    ]
+    if (cfg.device) {
+      var dv = deviceValue === null || deviceValue === undefined ? cfg.min : deviceValue
+      series.push({ data: [{ value: dv }] })
+    }
+    cfg.chart.setOption({ series: series })
+  }
+
+  function gset(key, value, deviceValue) {
+    if (gauges && gauges[key]) updateGauge(gauges[key], value, deviceValue)
+  }
+
+  // =====================================================================
   // Tiles (DOM)
   // =====================================================================
   var STATUS_WORD = { green: 'on target', yellow: 'below target', red: 'way below target' }
@@ -728,53 +891,27 @@
         ? '—'
         : Math.round(fr.p99Ms) + '<span class="u">ms</span>'
 
-    // ---- GPU ----
-    $('gpuNum').innerHTML =
-      (s.gpu === null ? '—' : Math.round(s.gpu)) + '<span class="unit">%</span>'
-    var gpuBar = $('gpuBar')
-    gpuBar.style.width = (s.gpu === null ? 0 : s.gpu) + '%'
-    gpuBar.style.background = s.gpu === null ? 'var(--track)' : bandColor(s.gpu, 65, 85)
+    // ---- GPU (donut-gauge) ----
+    gset('gpu', s.gpu)
     $('gpuSub').textContent = s.gpu === null ? 'N/A' : ''
 
-    // ---- CPU ----
-    $('cpuNum').innerHTML =
-      (s.cpu === null ? '—' : Math.round(s.cpu)) + '<span class="unit">%</span>'
+    // ---- CPU (donut-gauge + anillo interior device) ----
+    var devCpu = s.deviceCpu === undefined ? null : s.deviceCpu
+    gset('cpu', s.cpu, devCpu)
     // share-of-device esconde un main thread clavado: mostrar la conversión al lado
     $('coreSub').textContent =
       s.cpu === null || !deviceCores ? '' : '≈ ' + Math.round(s.cpu * deviceCores) + '% of one core'
-    var cpuBar = $('cpuBar')
-    cpuBar.style.width = (s.cpu === null ? 0 : s.cpu) + '%'
-    cpuBar.style.background = s.cpu === null ? 'var(--track)' : bandColor(s.cpu, 55, 75)
-    var devCpu = s.deviceCpu === undefined ? null : s.deviceCpu
-    $('cpuDevBar').style.width = (devCpu === null ? 0 : devCpu) + '%'
     $('cpuDevSub').textContent = devCpu === null ? '—' : Math.round(devCpu) + '%'
 
-    // ---- Temp ----
-    $('tempNum').innerHTML =
-      (s.tempC === null ? '—' : s.tempC.toFixed(1)) + '<span class="unit">°C</span>'
-    var tempBar = $('tempBar')
-    var tPct = s.tempC === null ? 0 : Math.max(0, Math.min(100, ((s.tempC - 25) / 25) * 100))
-    tempBar.style.width = tPct + '%'
-    tempBar.style.background = s.tempC === null ? 'var(--track)' : bandColor(s.tempC, 38, 42)
+    // ---- Temp (donut-gauge 25–50 °C) ----
+    gset('temp', s.tempC)
     var batT = s.battery ? s.battery.tempC : null
     $('tempTrendSub').textContent =
       batT === null || batT === undefined ? '' : 'battery ' + batT.toFixed(1) + ' °C'
 
-    // ---- Battery ----
+    // ---- Battery (donut-gauge, umbrales inversos) ----
     var b = s.battery || {}
-    $('batNum').innerHTML =
-      (b.levelPct === null || b.levelPct === undefined ? '—' : Math.round(b.levelPct)) +
-      '<span class="unit">%</span>'
-    var batBar = $('batBar')
-    batBar.style.width = (b.levelPct || 0) + '%'
-    batBar.style.background =
-      b.levelPct === null || b.levelPct === undefined
-        ? 'var(--track)'
-        : b.levelPct < 15
-          ? C.bad
-          : b.levelPct < 30
-            ? C.warn
-            : C.ok
+    gset('bat', b.levelPct === undefined ? null : b.levelPct)
     $('chipCharging').classList.toggle('show', b.charging === true)
     $('batSub').textContent =
       b.charging === true ? 'plugged in' : b.charging === false ? 'on battery' : ''
@@ -857,7 +994,11 @@
   // Build / dispose / render
   // =====================================================================
   function allCharts() {
-    return [tlPerf, memPie, memTrend, netSpark].filter(Boolean)
+    var list = [tlPerf, memPie, memTrend, netSpark]
+    Object.keys(gauges || {}).forEach(function (k) {
+      list.push(gauges[k].chart)
+    })
+    return list.filter(Boolean)
   }
 
   function buildCharts() {
@@ -865,7 +1006,12 @@
     memPie = makeMemPie()
     memTrend = makeMemTrend()
     netSpark = makeNetSpark()
-    // re-inyectar buffers (cambio de tema)
+    gauges = {}
+    var defs = gaugeDefs()
+    Object.keys(defs).forEach(function (k) {
+      gauges[k] = makeGauge(defs[k])
+    })
+    // re-inyectar buffers (cambio de tema; los gauges los repinta renderTiles)
     repaintTl()
     repaintMemTrend()
     netSpark.setOption({ series: [{ data: netData[0] }, { data: netData[1] }] })
@@ -876,6 +1022,7 @@
       c.dispose()
     })
     tlPerf = memPie = memTrend = netSpark = null
+    gauges = null
   }
 
   var lastSample = null
@@ -993,21 +1140,16 @@
     setSem($('jankV'), null)
     $('p90V').textContent = '—'
     $('p99V').textContent = '—'
-    // tiles de GPU/CPU/Temp/Battery y textos de red: sin esto quedaban los
+    // gauges de GPU/CPU/Temp/Battery y textos de red: sin esto quedaban los
     // valores de la app/device anterior congelados hasta el próximo sample
-    $('gpuNum').innerHTML = '—<span class="unit">%</span>'
-    $('gpuBar').style.width = '0%'
+    gset('gpu', null)
+    gset('cpu', null, null)
+    gset('temp', null)
+    gset('bat', null)
     $('gpuSub').textContent = ''
-    $('cpuNum').innerHTML = '—<span class="unit">%</span>'
     $('coreSub').textContent = ''
-    $('cpuBar').style.width = '0%'
-    $('cpuDevBar').style.width = '0%'
     $('cpuDevSub').textContent = '—'
-    $('tempNum').innerHTML = '—<span class="unit">°C</span>'
-    $('tempBar').style.width = '0%'
     $('tempTrendSub').textContent = ''
-    $('batNum').innerHTML = '—<span class="unit">%</span>'
-    $('batBar').style.width = '0%'
     $('batSub').textContent = ''
     $('chipCharging').classList.remove('show')
     $('rxNow').textContent = '— KB/s'

@@ -75,3 +75,34 @@ datos del smoke; subagente **eyes: PASS en los tres** contra
 
 **Pendiente (fuera de alcance acá):** el feedback humano HITL sobre el rediseño quedó
 diferido a la mañana (override overnight del 031) — itera sobre esta implementación.
+
+## Iteración de feedback (2026-08-01)
+
+Feedback HITL del usuario sobre el rediseño: **"me sacaste los pie charts de
+temperatura y eso, no deberías haberlos sacado"** — pedía de vuelta los gauges
+circulares del dashboard viejo.
+
+**Restaurado:** los donut-gauges circulares ECharts para **GPU, CPU, Temp y
+Battery** (lenguaje visual del dashboard pre-rediseño: aro de progreso con el
+número grande al centro, coloreado por umbral) DENTRO del layout nuevo por
+secciones, reemplazando los tiles planos número+barra de esos cuatro. El gauge
+de CPU recupera además el anillo interior tenue con el CPU total del device.
+Colores por umbral con los mismos tokens ok/warn/bad de ambos temas (batería con
+umbrales inversos); sin dato ⇒ aro en track + "—". `resetSeries` limpia también
+los gauges (extensión del fix de eec564e), y el rebuild por cambio de tema los
+incluye. Sin libs nuevas ni archivos nuevos (mismo manifest de `embeddedUi.ts`).
+
+**Se mantiene todo lo demás del rediseño:** FPS hero con semáforo/pill/target/
+jank-p90-p99, mini-veredicto del header, timeline de dos carriles, panel de
+memoria (donut PSS + KPIs + trend con GC), network, panel de logs, dark default
+y los fixes de eec564e (resetSeries completo, deviceRamMb null-safe, redSpans
+con padding, scanLogSignals por gap).
+
+**Verificación:** `bun test` 344 pass · `tsc --noEmit` limpio · prettier limpio ·
+mirrors.test.ts pasa sin cambios. Evidencia visual contra el **dashboard real**
+en :4517 (Galaxy A15 físico con el juego corriendo) en
+`.logs/evidence/2026-08-01/032-gauges-feedback/` (`dark-1440.png`,
+`light-1440.png` + `evidence-report.json`): 0 errores de consola, 0 px de
+overflow, los 4 gauges con canvas renderizado; subagente **eyes: PASS 10/10 en
+ambos temas** (gauges presentes, centrados, legibles, umbrales coherentes,
+layout intacto).

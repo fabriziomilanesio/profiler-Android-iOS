@@ -3,7 +3,8 @@
   Evermore Android Profiler — LIVE dashboard (wayfinder tickets 021 → 032).
   Layout del rediseño aprobado en el prototipo del 031 (prototypes/redesign):
   secciones por tema con rails (Performance → Memory & System → Network → App logs),
-  tiles con números grandes (FPS hero con semáforo del 025 + jank/p90/p99 del 024),
+  FPS hero con semáforo del 025 + jank/p90/p99 del 024, donut-gauges circulares para
+  GPU/CPU/Temp/Battery (restaurados del dashboard pre-rediseño por feedback HITL),
   timeline de dos carriles con unidades reales y mini-veredicto vivo en el header.
   La fuente de datos es REAL: live.js (WebSocket) alimenta render.js; logs vía
   logsCore.js + logsPanel.js. Sin build step.
@@ -1097,6 +1098,16 @@
         min-height: 13px;
         font-variant-numeric: tabular-nums;
       }
+      /* Donut-gauges circulares (GPU/CPU/Temp/Battery) — restaurados del dashboard
+         pre-rediseño (feedback HITL del 032): aro por umbral + número al centro. */
+      .gauge-chart {
+        width: 100%;
+        height: 150px;
+        min-width: 0;
+      }
+      .sys-tile .gauge-chart {
+        height: 140px;
+      }
 
       /* ================= NETWORK ================= */
       .net {
@@ -1738,8 +1749,7 @@
         </div>
         <div class="card tile gpu-tile">
           <div class="tile-label">GPU</div>
-          <div class="big-num" id="gpuNum">—<span class="unit">%</span></div>
-          <div class="bar"><i id="gpuBar"></i></div>
+          <div class="gauge-chart" id="gGpu"></div>
           <div class="bar-sub"><span>utilization</span><span id="gpuSub"></span></div>
         </div>
       </div>
@@ -1800,27 +1810,24 @@
         <div class="sys-grid">
           <div class="sys-tile">
             <div class="tile-label">CPU</div>
-            <div class="big-num" id="cpuNum">—<span class="unit">%</span></div>
+            <div class="gauge-chart" id="gCpu"></div>
             <div class="sub-note" id="coreSub"></div>
-            <div class="bar"><i id="cpuBar"></i></div>
-            <div class="bar thin"><i id="cpuDevBar" style="background: var(--muted)"></i></div>
-            <div class="bar-sub"><span>device total</span><span id="cpuDevSub">—</span></div>
+            <div class="bar-sub">
+              <span>device total (inner ring)</span><span id="cpuDevSub">—</span>
+            </div>
           </div>
           <div class="sys-tile">
             <div class="tile-label">Temp</div>
-            <div class="big-num" id="tempNum">—<span class="unit">°C</span></div>
+            <div class="gauge-chart" id="gTemp"></div>
             <div class="sub-note" id="tempTrendSub"></div>
-            <div class="bar"><i id="tempBar"></i></div>
-            <div class="bar-sub"><span>25 °C</span><span>50 °C</span></div>
+            <div class="bar-sub"><span>ring 25 °C</span><span>50 °C</span></div>
           </div>
           <div class="sys-tile">
             <div class="tile-label">
               Battery <span class="event-chip" id="chipCharging">⚡ CHARGING</span>
             </div>
-            <div class="big-num" id="batNum">—<span class="unit">%</span></div>
+            <div class="gauge-chart" id="gBat"></div>
             <div class="sub-note" id="batSub"></div>
-            <div class="bar"><i id="batBar"></i></div>
-            <div class="bar-sub"><span>0</span><span>100</span></div>
           </div>
         </div>
       </div>
