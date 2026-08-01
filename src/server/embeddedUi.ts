@@ -12,6 +12,7 @@ import evermoreAppicon from '../ui/assets/evermore-appicon.png' with { type: 'fi
 import evermoreLogo from '../ui/assets/evermore-logo.png' with { type: 'file' }
 import odaclickDog from '../ui/assets/odaclick-dog.png' with { type: 'file' }
 import echarts from '../ui/vendor/echarts.min.js' with { type: 'file' }
+import motion from '../ui/vendor/motion.min.js' with { type: 'file' }
 import inter400 from '../ui/vendor/fonts/inter-latin-400-normal.woff2' with { type: 'file' }
 import inter500 from '../ui/vendor/fonts/inter-latin-500-normal.woff2' with { type: 'file' }
 import inter600 from '../ui/vendor/fonts/inter-latin-600-normal.woff2' with { type: 'file' }
@@ -34,6 +35,7 @@ export const EMBEDDED_UI: Record<string, string> = {
   'assets/evermore-logo.png': evermoreLogo,
   'assets/odaclick-dog.png': odaclickDog,
   'vendor/echarts.min.js': echarts,
+  'vendor/motion.min.js': motion,
   'vendor/fonts/inter-latin-400-normal.woff2': inter400,
   'vendor/fonts/inter-latin-500-normal.woff2': inter500,
   'vendor/fonts/inter-latin-600-normal.woff2': inter600,

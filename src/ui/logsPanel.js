@@ -163,6 +163,26 @@
 
   function updateLiveBtn() {
     if (isPaused()) {
+      // pop sutil SOLO al aparecer (Motion vendoreado; sin lib o con
+      // prefers-reduced-motion aparece sin animar)
+      if (
+        els.live.hidden &&
+        typeof window.Motion !== 'undefined' &&
+        !(
+          typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+        )
+      ) {
+        try {
+          window.Motion.animate(
+            els.live,
+            {
+              opacity: [0, 1],
+              transform: ['translateX(-50%) scale(0.85)', 'translateX(-50%) scale(1)'],
+            },
+            { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+          )
+        } catch (e) {}
+      }
       els.live.hidden = false
       els.live.textContent =
         (filter.order === 'desc' ? '▲' : '▼') +

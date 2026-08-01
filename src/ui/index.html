@@ -158,12 +158,14 @@
         min-width: 0;
       }
 
-      /* Section rails: uppercase label + brand tick + hairline (grafana-row style) */
+      /* Section rails: uppercase label + brand tick + hairline (grafana-row style).
+         Ritmo unificado (pasada de alineación 2026-08-01): 10px de aire entre el
+         rail y su contenido en TODAS las secciones. */
       .section-label {
         display: flex;
         align-items: center;
         gap: 10px;
-        margin: 18px 2px 8px;
+        margin: 20px 2px 10px;
         font-family: var(--font-title);
         font-weight: 700;
         font-size: 11.5px;
@@ -502,7 +504,7 @@
         display: block;
       }
 
-      /* Popovers (device / app / menu) */
+      /* Popovers (device / app) */
       .pop {
         position: absolute;
         top: calc(100% + 6px);
@@ -633,14 +635,37 @@
         color: var(--muted);
       }
 
-      /* ☰ menu */
+      /* ☰ menu — side drawer (feedback HITL 2026-08-01: era un dropdown; ahora
+         panel lateral full-height desde la derecha con backdrop; Motion anima el
+         slide-in y el fade — sin Motion aparece instantáneo, sin romper nada). */
       .menu-select {
         position: relative;
       }
-      .menu-pop {
-        width: 440px;
-        max-height: min(560px, 80vh);
-        overflow: auto;
+      .drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        background: rgba(6, 6, 12, 0.55);
+      }
+      .menu-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 81;
+        width: min(400px, calc(100vw - 24px));
+        background: var(--card);
+        border-left: 1px solid var(--line);
+        box-shadow: -18px 0 48px rgba(0, 0, 0, 0.4);
+        padding: 12px 16px 18px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+      @media (max-width: 480px) {
+        .menu-drawer {
+          width: 100vw;
+          border-left: none;
+        }
       }
       .menu-section {
         padding: 8px 4px 10px;
@@ -747,6 +772,53 @@
       .cfg-save:hover {
         filter: brightness(1.08);
       }
+      /* Switch de Dark mode (vive en ☰ Settings — feedback HITL 2026-08-01:
+         se revierte el toggle ☀️ siempre visible del header) */
+      .switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+        justify-self: start;
+      }
+      .switch input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .switch .slider {
+        width: 40px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--chip-bg);
+        border: 1px solid var(--line);
+        position: relative;
+        transition: background 0.15s ease;
+        flex: 0 0 auto;
+      }
+      .switch .slider::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition:
+          transform 0.15s ease,
+          background 0.15s ease;
+      }
+      .switch input:checked + .slider {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .switch input:checked + .slider::after {
+        transform: translateX(18px);
+        background: #fff;
+      }
+
       /* ================= PERFORMANCE (hero) ================= */
       .perf-grid {
         display: grid;
@@ -787,13 +859,28 @@
         padding: 2px 9px;
         white-space: nowrap;
       }
+      /* Hero de FPS centrado real (pasada de alineación 2026-08-01): número y
+         pill centrados H+V en el espacio entre el label y el divisor. */
+      .fps-tile {
+        display: flex;
+        flex-direction: column;
+      }
+      .fps-hero {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 10px 0 4px;
+      }
       .fps-num {
         font-family: var(--font-title);
         font-weight: 800;
         font-size: 84px;
         line-height: 1;
         letter-spacing: -0.01em;
-        margin: 8px 0 0;
+        margin: 0;
         font-variant-numeric: tabular-nums;
         color: var(--text);
         transition: color 0.3s ease;
@@ -819,7 +906,6 @@
         display: inline-flex;
         align-items: center;
         gap: 7px;
-        margin-top: 8px;
         font-family: var(--font-title);
         font-weight: 700;
         font-size: 12px;
@@ -870,6 +956,12 @@
         display: flex;
         gap: 18px;
         flex-wrap: wrap;
+      }
+      .fps-tile .framerow {
+        justify-content: space-evenly;
+      }
+      .fps-tile .fstat {
+        align-items: center;
       }
       .fstat {
         display: flex;
@@ -950,7 +1042,7 @@
       }
 
       .tl-card {
-        padding: 12px 14px 6px;
+        padding: 14px 14px 6px;
         display: flex;
         flex-direction: column;
       }
@@ -980,17 +1072,25 @@
       }
 
       /* ================= MEMORY + SYSTEM ================= */
+      /* Fila pareja (pasada de alineación 2026-08-01): las dos cards se estiran
+         a la misma altura (grid stretch) y AMBAS reparten su contenido en
+         columna — nada de aire muerto abajo; los centros de donut y gauges
+         quedan a la misma altura. */
       .row2 {
         display: grid;
         grid-template-columns: minmax(0, 11fr) minmax(0, 9fr);
         gap: 14px;
+        align-items: stretch;
       }
       .mem-card {
-        padding: 12px 16px 10px;
+        padding: 14px 16px 10px;
+        display: flex;
+        flex-direction: column;
       }
       /* Memoria protagonista (feedback HITL 2026-08-01): donut más grande y
          KPIs PSS/RSS a 34 px — es LO que medimos, no un accesorio. */
       .mem-body {
+        flex: 1 1 auto;
         display: grid;
         grid-template-columns: 270px minmax(0, 1fr);
         gap: 12px;
@@ -1011,6 +1111,11 @@
         display: flex;
         gap: 22px;
         flex-wrap: wrap;
+        align-items: baseline;
+      }
+      .mem-kpi {
+        font-size: 34px;
+        line-height: 1.15;
       }
       #memTrend {
         width: 100%;
@@ -1018,20 +1123,39 @@
         min-width: 0;
       }
       .sys-card {
-        padding: 12px 16px 14px;
+        padding: 14px 16px 10px;
+        display: flex;
+        flex-direction: column;
       }
       .sys-grid {
+        flex: 1 1 auto;
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px 20px;
+        gap: 8px 18px;
         margin-top: 4px;
       }
+      /* Cada gauge es una columna auto-contenida y centrada: título, aro+número,
+         sub-labels — los 3 tiles con las mismas baselines (subs ancladas abajo). */
       .sys-tile {
         min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
       }
       .sys-tile .tile-label {
-        justify-content: flex-start;
+        justify-content: center;
+        align-items: center;
         gap: 6px;
+        height: 18px;
+      }
+      .sys-subs {
+        margin-top: auto;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding-top: 6px;
       }
       .event-chip {
         font-size: 9.5px;
@@ -1062,8 +1186,19 @@
         height: 150px;
         min-width: 0;
       }
+      .gpu-tile {
+        display: flex;
+        flex-direction: column;
+      }
+      .gpu-tile .gauge-chart {
+        flex: 1 1 auto;
+        min-height: 150px;
+      }
+      .gpu-sub {
+        text-align: center;
+      }
       .sys-tile .gauge-chart {
-        height: 140px;
+        height: 190px;
       }
 
       /* ================= NETWORK ================= */
@@ -1072,7 +1207,7 @@
         grid-template-columns: auto auto auto minmax(0, 1fr);
         align-items: center;
         gap: 26px;
-        padding: 12px 20px;
+        padding: 14px 20px;
       }
       .net-stat {
         display: flex;
@@ -1109,6 +1244,9 @@
         min-width: 0;
       }
       .net-na {
+        /* fila informativa a lo ancho: auto-colocada en la col 1 estiraba la
+           columna de los KPIs a ~435 px y desalineaba la fila de red */
+        grid-column: 1 / -1;
         font-size: 11px;
         color: var(--muted);
         align-self: center;
@@ -1175,7 +1313,7 @@
         display: flex;
         align-items: baseline;
         gap: 12px;
-        padding: 12px 18px;
+        padding: 14px 18px;
         border-bottom: 1px solid var(--line);
         flex-wrap: wrap;
       }
@@ -1269,7 +1407,7 @@
         display: flex;
         align-items: baseline;
         gap: 12px;
-        padding: 12px 18px;
+        padding: 14px 18px;
         background: none;
         border: none;
         font: inherit;
@@ -1628,10 +1766,6 @@
           <span class="rec-time" id="recTime">00:00</span>
         </div>
 
-        <button class="icon-btn" id="themeToggle" type="button" title="Toggle light/dark">
-          ☀️
-        </button>
-
         <div class="menu-select" id="menuSelect">
           <button
             class="icon-btn"
@@ -1641,7 +1775,8 @@
           >
             ☰
           </button>
-          <div class="pop menu-pop" id="menuPop" hidden>
+          <div class="drawer-backdrop" id="menuBackdrop" hidden></div>
+          <div class="menu-drawer" id="menuPop" hidden>
             <div class="menu-section">
               <div class="menu-title">Export report</div>
               <div class="menu-row" id="exportRow">
@@ -1678,8 +1813,14 @@
                 </select>
                 <label for="cfgFps">Target FPS</label>
                 <input id="cfgFps" type="number" min="1" max="240" step="1" inputmode="numeric" />
-                <!-- El tema se cambia SOLO con el toggle ☀️ del header (estaba duplicado acá;
-                     feedback HITL 2026-08-01) — sigue persistiendo vía /api/config. -->
+                <!-- El tema vive acá (feedback HITL 2026-08-01, revierte el toggle ☀️
+                     del header): aplica al toque y persiste vía /api/config. -->
+                <label for="cfgTheme">Dark mode</label>
+                <label class="switch">
+                  <input type="checkbox" id="cfgTheme" checked />
+                  <span class="slider"></span>
+                  <span>🌙</span>
+                </label>
                 <label for="cfgReports">Reports folder</label>
                 <input id="cfgReports" type="text" autocomplete="off" spellcheck="false" />
               </div>
@@ -1709,8 +1850,8 @@
           <div class="tile-label">
             FPS <span class="target-chip" id="targetChip">target —</span>
           </div>
-          <div class="fps-num" id="fpsNum">—<span class="unit">fps</span></div>
-          <div>
+          <div class="fps-hero">
+            <div class="fps-num" id="fpsNum">—<span class="unit">fps</span></div>
             <span class="fps-status" id="fpsStatus"
               ><span class="dot"></span><span id="fpsStatusWord">waiting…</span></span
             >
@@ -1734,7 +1875,7 @@
         <div class="card tile gpu-tile">
           <div class="tile-label">GPU</div>
           <div class="gauge-chart" id="gGpu"></div>
-          <div class="bar-sub"><span>utilization</span><span id="gpuSub"></span></div>
+          <div class="sub-note gpu-sub">utilization <span id="gpuSub"></span></div>
         </div>
       </div>
       <div class="card tl-card">
@@ -1763,11 +1904,11 @@
             <div class="mem-kpis">
               <div class="fstat">
                 <span class="fs-l">PSS total</span>
-                <span class="fs-v" id="pssNum" style="font-size: 34px">—</span>
+                <span class="fs-v mem-kpi" id="pssNum">—</span>
               </div>
               <div class="fstat">
                 <span class="fs-l">RSS</span>
-                <span class="fs-v" id="rssNum" style="font-size: 34px">—</span>
+                <span class="fs-v mem-kpi" id="rssNum">—</span>
               </div>
             </div>
             <div>
@@ -1795,23 +1936,30 @@
           <div class="sys-tile">
             <div class="tile-label">CPU</div>
             <div class="gauge-chart" id="gCpu"></div>
-            <div class="sub-note" id="coreSub"></div>
-            <div class="bar-sub">
-              <span>device total (inner ring)</span><span id="cpuDevSub">—</span>
+            <div class="sys-subs">
+              <div class="sub-note" id="coreSub"></div>
+              <div class="sub-note">device total (inner ring) <span id="cpuDevSub">—</span></div>
             </div>
           </div>
           <div class="sys-tile">
             <div class="tile-label">Temp</div>
             <div class="gauge-chart" id="gTemp"></div>
-            <div class="sub-note" id="tempTrendSub"></div>
-            <div class="bar-sub"><span>ring 25 °C</span><span>50 °C</span></div>
+            <div class="sys-subs">
+              <div class="sub-note" id="tempTrendSub"></div>
+              <div class="sub-note">ring 25–50 °C</div>
+            </div>
           </div>
           <div class="sys-tile">
             <div class="tile-label">
               Battery <span class="event-chip" id="chipCharging">⚡ CHARGING</span>
             </div>
             <div class="gauge-chart" id="gBat"></div>
-            <div class="sub-note" id="batSub"></div>
+            <div class="sys-subs">
+              <div class="sub-note" id="batSub"></div>
+              <!-- consumo instantáneo (mA): dato real que además iguala la
+                   baseline inferior con los otros dos tiles -->
+              <div class="sub-note" id="batSub2"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1970,6 +2118,7 @@
     </footer>
 
     <script src="vendor/echarts.min.js"></script>
+    <script src="vendor/motion.min.js"></script>
     <script src="render.js"></script>
     <script src="logsCore.js"></script>
     <script src="logsPanel.js"></script>

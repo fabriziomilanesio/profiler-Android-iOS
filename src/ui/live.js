@@ -14,6 +14,26 @@
   var device = null
   var reconnectDelay = 1000
 
+  // --- Micro-animaciones (Motion vendoreado; feedback HITL 2026-08-01) ---
+  // Guardas: sin window.Motion (archivo faltante) o con prefers-reduced-motion
+  // todo funciona igual, sin animar.
+  var REDUCED_MOTION =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  function canAnimate() {
+    return !REDUCED_MOTION && typeof window.Motion !== 'undefined'
+  }
+  // fade+drop sutil de los popovers del header (device / app)
+  function animPopoverIn(el) {
+    if (!canAnimate() || !el) return
+    try {
+      window.Motion.animate(
+        el,
+        { opacity: [0, 1], transform: ['translateY(-6px)', 'translateY(0)'] },
+        { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+      )
+    } catch (e) {}
+  }
+
   // --- Selector de apps (dropdown del header) ---
   var appSel = {
     btn: document.getElementById('appPkgBtn'),
@@ -134,6 +154,7 @@
     e.stopPropagation()
     appSel.pop.hidden = !appSel.pop.hidden
     if (!appSel.pop.hidden) {
+      animPopoverIn(appSel.pop)
       loadPackages()
       appSel.search.focus()
     }
@@ -244,7 +265,10 @@
   devSel.btn.addEventListener('click', function (e) {
     e.stopPropagation()
     devSel.pop.hidden = !devSel.pop.hidden
-    if (!devSel.pop.hidden) loadDevices()
+    if (!devSel.pop.hidden) {
+      animPopoverIn(devSel.pop)
+      loadDevices()
+    }
   })
   devSel.refresh.addEventListener('click', function (e) {
     e.stopPropagation()
@@ -254,10 +278,12 @@
     e.stopPropagation()
   })
 
-  // --- Menú ☰: export de reportes, registros de sesiones y configuración ---
+  // --- Menú ☰: side drawer con export, registros de sesiones y configuración
+  // (feedback HITL 2026-08-01: era dropdown; ahora panel lateral + backdrop) ---
   var menu = {
     btn: document.getElementById('menuBtn'),
     pop: document.getElementById('menuPop'),
+    backdrop: document.getElementById('menuBackdrop'),
     exportRow: document.getElementById('exportRow'),
     exportStatus: document.getElementById('exportStatus'),
     sessList: document.getElementById('sessList'),
@@ -266,6 +292,7 @@
     cfgFilter: document.getElementById('cfgFilter'),
     cfgInterval: document.getElementById('cfgInterval'),
     cfgFps: document.getElementById('cfgFps'),
+    cfgTheme: document.getElementById('cfgTheme'),
     cfgReports: document.getElementById('cfgReports'),
     cfgSave: document.getElementById('cfgSave'),
     cfgStatus: document.getElementById('cfgStatus'),
@@ -407,6 +434,7 @@
 
   function fillConfig(cfg, effectiveIntervalMs) {
     menu.cfgFilter.value = cfg.filterTerm
+    menu.cfgTheme.checked = cfg.theme === 'dark'
     // auto (default): el server resuelve el intervalo según el device (gama baja → 2 s)
     menu.cfgInterval.value = cfg.intervalAuto ? 'auto' : String(cfg.intervalMs)
     if (typeof effectiveIntervalMs === 'number') {
@@ -433,9 +461,9 @@
   }
 
   menu.cfgSave.addEventListener('click', function () {
-    // el tema NO viaja acá: lo maneja (y persiste) solo el toggle ☀️ del header
     var patch = {
       filterTerm: menu.cfgFilter.value.trim(),
+      theme: menu.cfgTheme.checked ? 'dark' : 'light',
       reportsDir: menu.cfgReports.value.trim(),
       // el server valida el rango (1–240); inválido ⇒ lo ignora y fillConfig
       // repone el valor vigente con la respuesta
@@ -463,18 +491,57 @@
       })
   })
 
+  // Drawer: slide-in desde la derecha + fade del backdrop (Motion; sin Motion o
+  // con prefers-reduced-motion aparece/desaparece instantáneo).
+  function slideMenu(open, done) {
+    if (!canAnimate()) {
+      if (done) done()
+      return
+    }
+    try {
+      window.Motion.animate(
+        menu.pop,
+        {
+          transform: open
+            ? ['translateX(102%)', 'translateX(0%)']
+            : ['translateX(0%)', 'translateX(102%)'],
+        },
+        open
+          ? { type: 'spring', stiffness: 320, damping: 34 }
+          : { duration: 0.22, ease: [0.4, 0, 1, 1] },
+      )
+      var fade = window.Motion.animate(
+        menu.backdrop,
+        { opacity: open ? [0, 1] : [1, 0] },
+        { duration: open ? 0.25 : 0.2 },
+      )
+      if (done) fade.finished.then(done, done)
+    } catch (e) {
+      if (done) done()
+    }
+  }
+  function openMenuPop() {
+    if (!menu.pop.hidden) return
+    menu.pop.hidden = false
+    menu.backdrop.hidden = false
+    menu.pop.style.transform = '' // limpia un close interrumpido
+    slideMenu(true)
+    setStatus(menu.exportStatus, '')
+    setStatus(menu.cfgStatus, '')
+    loadSessions()
+    void loadConfig(false)
+  }
   function closeMenuPop() {
-    menu.pop.hidden = true
+    if (menu.pop.hidden) return
+    slideMenu(false, function () {
+      menu.pop.hidden = true
+      menu.backdrop.hidden = true
+    })
   }
   menu.btn.addEventListener('click', function (e) {
     e.stopPropagation()
-    menu.pop.hidden = !menu.pop.hidden
-    if (!menu.pop.hidden) {
-      setStatus(menu.exportStatus, '')
-      setStatus(menu.cfgStatus, '')
-      loadSessions()
-      void loadConfig(false)
-    }
+    if (menu.pop.hidden) openMenuPop()
+    else closeMenuPop()
   })
   menu.sessRefresh.addEventListener('click', function (e) {
     e.stopPropagation()
@@ -483,10 +550,11 @@
   menu.pop.addEventListener('click', function (e) {
     e.stopPropagation()
   })
+  // click en el backdrop: burbujea a document → closePops. Escape: idem.
 
-  // Tema persistido: aplicar el guardado al cargar. ÚNICO control (feedback HITL
-  // 2026-08-01, antes había un switch duplicado en ☰): el toggle ☀️/🌙 del header,
-  // que aplica y persiste al instante vía /api/config (no requiere Guardar).
+  // Tema persistido: aplicar el guardado al cargar. El control vive en ☰
+  // Settings (switch "Dark mode" — feedback HITL 2026-08-01, revierte el toggle
+  // ☀️ del header): aplica y persiste al instante vía /api/config (sin Guardar).
   void loadConfig(true)
   function persistTheme(theme) {
     ProfilerDashboard.setTheme(theme)
@@ -494,8 +562,8 @@
       function () {},
     )
   }
-  document.getElementById('themeToggle').addEventListener('click', function () {
-    persistTheme(ProfilerDashboard.getTheme() === 'dark' ? 'light' : 'dark')
+  menu.cfgTheme.addEventListener('change', function () {
+    persistTheme(menu.cfgTheme.checked ? 'dark' : 'light')
   })
 
   function closePops() {

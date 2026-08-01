@@ -102,6 +102,33 @@
   function $(id) {
     return document.getElementById(id)
   }
+
+  // ---- micro-animaciones (Motion vendoreado, feedback HITL 2026-08-01) ----
+  // Solo en CAMBIOS DE ESTADO (semáforo, chips que aparecen) — nunca por tick:
+  // el dashboard repinta cada 1–2 s y las animaciones no pueden robar CPU.
+  // Sin Motion (archivo faltante) o con prefers-reduced-motion: no-op.
+  var REDUCED_MOTION =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  function animPop(el) {
+    if (REDUCED_MOTION || !global.Motion || !el) return
+    try {
+      global.Motion.animate(
+        el,
+        { transform: ['scale(0.8)', 'scale(1)'], opacity: [0, 1] },
+        { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+      )
+    } catch (e) {}
+  }
+  function animPulse(el) {
+    if (REDUCED_MOTION || !global.Motion || !el) return
+    try {
+      global.Motion.animate(
+        el,
+        { transform: ['scale(0.96)', 'scale(1)'] },
+        { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+      )
+    } catch (e) {}
+  }
   // RAM adaptativa: las apps viven en MB; GB recién pasado 1 GiB
   function fmtMb(mb) {
     return mb >= 1024 ? (mb / 1024).toFixed(2) + ' GB' : Math.round(mb) + ' MB'
@@ -183,7 +210,9 @@
       axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: C.muted } },
       legend: {
         top: 0,
-        right: 4,
+        // 10 y no 4: empareja el margen visual derecho con el izquierdo (el ink
+        // más a la derecha del chart es la leyenda — hallazgo 6 de la auditoría)
+        right: 10,
         icon: 'roundRect',
         itemWidth: 14,
         itemHeight: 5,
@@ -529,11 +558,38 @@
     ]
   }
 
+  // Sin datos el donut NO muestra seis "0%" (hallazgo HITL 2026-08-01): un aro
+  // gris de track + "—" al centro, como los gauges. La leyenda sale sola (deriva
+  // de los names) y vuelve con el primer sample real.
+  var memHasData = false
+  function memPlaceholderData() {
+    return [
+      {
+        name: '',
+        value: 1,
+        itemStyle: { color: C.track },
+        label: { show: false },
+        labelLine: { show: false },
+        tooltip: { show: false },
+        emphasis: { disabled: true },
+      },
+    ]
+  }
+
   function makeMemPie() {
     var chart = echarts.init($('memPie'))
     chart.setOption({
       animationDurationUpdate: 800,
       animationEasingUpdate: 'cubicOut',
+      // "—" centrado en el aro cuando no hay datos (el centro del pie está al
+      // 44% de los 248 px del contenedor ⇒ ~96 px para centrar la tipografía)
+      title: {
+        show: !memHasData,
+        text: '—',
+        left: 'center',
+        top: 97,
+        textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 22, fontWeight: 600 },
+      },
       tooltip: {
         trigger: 'item',
         backgroundColor: C.card2,
@@ -543,23 +599,24 @@
           return p.name + ': <b>' + Math.round(p.value) + ' MB</b> (' + p.percent + '%)'
         },
       },
+      // sin type:'scroll': con 6 categorías la leyenda entra completa en dos
+      // filas como mucho — la paginación "1/2" era ruido (hallazgo HITL)
       legend: {
         bottom: 0,
         left: 'center',
-        type: 'scroll',
         icon: 'circle',
-        itemWidth: 8,
-        itemHeight: 8,
-        itemGap: 8,
-        textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10.5 },
-        pageIconColor: C.muted,
-        pageTextStyle: { color: C.muted },
+        itemWidth: 7,
+        itemHeight: 7,
+        itemGap: 6,
+        textStyle: { color: C.muted, fontFamily: FONT_BODY, fontSize: 10 },
       },
       series: [
         {
           type: 'pie',
           radius: ['52%', '76%'],
-          center: ['50%', '44%'],
+          // 45%: deja aire para la leyenda abajo y alinea el centro del donut
+          // con el de los gauges de System (misma altura de fila — hallazgo 1)
+          center: ['50%', '45%'],
           avoidLabelOverlap: true,
           minShowLabelAngle: 18,
           itemStyle: { borderColor: C.card, borderWidth: 2, borderRadius: 4 },
@@ -575,9 +632,11 @@
             textShadowBlur: 2,
           },
           labelLine: { show: false },
-          data: memMeta().map(function (m) {
-            return { name: m.name, value: 0, itemStyle: { color: m.color } }
-          }),
+          data: memHasData
+            ? memMeta().map(function (m) {
+                return { name: m.name, value: 0, itemStyle: { color: m.color } }
+              })
+            : memPlaceholderData(),
         },
       ],
     })
@@ -681,7 +740,9 @@
     }
     // donut (solo con dato; con la app muerta el pie conserva la última foto)
     if (memPie && s.mem && pss !== null && pss !== undefined) {
+      memHasData = true
       memPie.setOption({
+        title: { show: false },
         series: [
           {
             data: memMeta().map(function (m) {
@@ -778,8 +839,10 @@
       trimByTime(arr, cutoff)
     })
     if (netSpark) netSpark.setOption({ series: [{ data: netData[0] }, { data: netData[1] }] })
-    $('rxNow').textContent = '↓ ' + fmtKb(s.netRxKb || 0)
-    $('txNow').textContent = '↑ ' + fmtKb(s.netTxKb || 0)
+    // sin flecha en el valor: el label de arriba ya la lleva y el glyph ↓/↑
+    // desalineaba la baseline de los números (hallazgo 8 de la auditoría)
+    $('rxNow').textContent = fmtKb(s.netRxKb || 0)
+    $('txNow').textContent = fmtKb(s.netTxKb || 0)
     $('rxTot').textContent = 'total ' + fmtTotal(netTotalRx)
     $('txTot').textContent = 'total ' + fmtTotal(netTotalTx)
   }
@@ -799,6 +862,15 @@
     return v < 15 ? C.bad : v < 30 ? C.warn : C.ok
   }
 
+  // Centrado real del número en el aro (hallazgos 2/3 de la auditoría): la
+  // unidad a la derecha corría los dígitos ~7 px a la izquierda del centro
+  // (ECharts centra el BLOQUE número+unidad). El chunk {g|…} es un fantasma
+  // transparente del mismo ancho que la unidad, a la izquierda — balancea el
+  // bloque y los dígitos quedan concéntricos con el aro.
+  function gaugeFmtVal(text, unit) {
+    return '{g|' + unit + '}' + text + '{u|' + unit + '}'
+  }
+
   function gaugeDefs() {
     return {
       gpu: {
@@ -809,7 +881,7 @@
           return bandColor(v, 65, 85)
         },
         fmt: function (v) {
-          return v === null ? GAUGE_NA : Math.round(v) + '{u|%}'
+          return v === null ? GAUGE_NA : gaugeFmtVal(String(Math.round(v)), '%')
         },
       },
       cpu: {
@@ -821,7 +893,7 @@
           return bandColor(v, 55, 75)
         },
         fmt: function (v) {
-          return v === null ? GAUGE_NA : Math.round(v) + '{u|%}'
+          return v === null ? GAUGE_NA : gaugeFmtVal(String(Math.round(v)), '%')
         },
       },
       temp: {
@@ -832,7 +904,7 @@
           return bandColor(v, 38, 42)
         },
         fmt: function (v) {
-          return v === null ? GAUGE_NA : v.toFixed(1) + '{u|°C}'
+          return v === null ? GAUGE_NA : gaugeFmtVal(v.toFixed(1), '°C')
         },
       },
       bat: {
@@ -841,7 +913,7 @@
         max: 100,
         color: battColor,
         fmt: function (v) {
-          return v === null ? GAUGE_NA : Math.round(v) + '{u|%}'
+          return v === null ? GAUGE_NA : gaugeFmtVal(String(Math.round(v)), '%')
         },
       },
     }
@@ -889,6 +961,14 @@
               fontWeight: 500,
               padding: [8, 0, 0, 2],
             },
+            // fantasma que balancea la unidad (ver gaugeFmtVal)
+            g: {
+              color: 'rgba(0,0,0,0)',
+              fontSize: 12,
+              fontFamily: FONT_BODY,
+              fontWeight: 500,
+              padding: [8, 2, 0, 0],
+            },
             na: { color: C.muted, fontSize: 22, fontFamily: FONT_BODY, fontWeight: 600 },
           },
         },
@@ -921,12 +1001,16 @@
   }
 
   function updateGauge(cfg, value, deviceValue) {
-    // null ⇒ aro al mínimo (queda el track gris) + "—" al centro
+    // null ⇒ aro al mínimo (queda el track gris) + "—" al centro.
+    // Con valor: +3 px de offset vertical — los dígitos de Baloo dejan aire de
+    // descender abajo y el ink quedaba ~3 px arriba del centro óptico del aro;
+    // el "—" no lo necesita (su ink ya cae en el centro).
     var series = [
       {
         data: [{ value: value === null ? cfg.min : value }],
         progress: { itemStyle: { color: value === null ? C.track : cfg.color(value) } },
         detail: {
+          offsetCenter: value === null ? [0, 0] : [0, 3],
           formatter: function () {
             return cfg.fmt(value)
           },
@@ -949,6 +1033,7 @@
   // =====================================================================
   var STATUS_WORD = { green: 'on target', yellow: 'below target', red: 'way below target' }
   var appRunning = null // live.js → setAppRunning (pid null = app no corre)
+  var prevFpsSem = null // pulso del hero SOLO al cambiar el semáforo, no por tick
 
   function setSem(el, st) {
     el.classList.remove('sem-green', 'sem-yellow', 'sem-red')
@@ -961,6 +1046,10 @@
     var st = fpsStatusOf(s.fps, fpsTarget)
     fpsNum.innerHTML = (s.fps === null ? '—' : Math.round(s.fps)) + '<span class="unit">fps</span>'
     setSem(fpsNum, st)
+    if (st !== prevFpsSem) {
+      prevFpsSem = st
+      animPulse(fpsNum)
+    }
     var stEl = $('fpsStatus')
     setSem(stEl, st)
     $('fpsStatusWord').textContent =
@@ -1012,9 +1101,14 @@
     // ---- Battery (donut-gauge, umbrales inversos) ----
     var b = s.battery || {}
     gset('bat', b.levelPct === undefined ? null : b.levelPct)
-    $('chipCharging').classList.toggle('show', b.charging === true)
+    var chipCharging = $('chipCharging')
+    var wasCharging = chipCharging.classList.contains('show')
+    chipCharging.classList.toggle('show', b.charging === true)
+    if (!wasCharging && b.charging === true) animPop(chipCharging)
     $('batSub').textContent =
       b.charging === true ? 'plugged in' : b.charging === false ? 'on battery' : ''
+    $('batSub2').textContent =
+      b.mA === null || b.mA === undefined ? '' : 'draw ' + Math.round(b.mA) + ' mA'
   }
 
   // =====================================================================
@@ -1066,8 +1160,10 @@
     }
     var vc = $('verdictCrash')
     if (crashCount > 0) {
+      var wasHidden = vc.hidden
       vc.hidden = false
       vc.textContent = crashCount + ' crash' + (crashCount > 1 ? 'es' : '')
+      if (wasHidden) animPop(vc)
     } else {
       vc.hidden = true
     }
@@ -1127,8 +1223,25 @@
 
   var lastSample = null
 
+  // Modo espera congelado (feedback HITL 2026-08-01): sin device/app enganchada
+  // el server sigue emitiendo samples con TODOS los campos null — esos ticks no
+  // deben mover nada (ni timer, ni timeline, ni verdict). El dato decide: un
+  // sample con AL MENOS un campo real (p.ej. "app died" con métricas de device
+  // vivas) avanza como siempre; el all-null se descarta acá.
+  function sampleHasData(s) {
+    if (s.cpu !== null || s.deviceCpu !== null || s.gpu !== null || s.fps !== null) return true
+    if (s.tempC !== null || s.deviceRamUsedMb !== null) return true
+    if (s.netRxKb !== null || s.netTxKb !== null) return true
+    if (s.mem && (s.mem.pss !== null || s.mem.rss !== null)) return true
+    if (s.battery && (s.battery.levelPct !== null || s.battery.tempC !== null)) return true
+    if (s.frame && (s.frame.p50Ms !== null || s.frame.totalFrames !== null)) return true
+    return false
+  }
+
   function render(s) {
+    if (!sampleHasData(s)) return // waiting: todo queda donde estaba
     lastSample = s
+    lastSampleAt = Date.now() // el timer LIVE avanza solo con samples reales
     renderTiles(s)
     pushTl(s)
     renderMem(s)
@@ -1214,18 +1327,19 @@
     crashCount = 0
     lastSample = null
     appRunning = null
+    prevFpsSem = null
+    // timer LIVE: sesión nueva ⇒ desde cero, congelado hasta el primer sample
+    liveSeconds = 0
+    lastSampleAt = null
+    $('recTime').textContent = '00:00'
     repaintTl()
     repaintMemTrend()
     if (netSpark) netSpark.setOption({ series: [{ data: [] }, { data: [] }] })
+    memHasData = false
     if (memPie)
       memPie.setOption({
-        series: [
-          {
-            data: memMeta().map(function (m) {
-              return { name: m.name, value: 0, itemStyle: { color: m.color } }
-            }),
-          },
-        ],
+        title: { show: true },
+        series: [{ data: memPlaceholderData() }],
       })
     ;['pssNum', 'rssNum'].forEach(function (id) {
       $(id).textContent = '—'
@@ -1253,6 +1367,7 @@
     $('cpuDevSub').textContent = '—'
     $('tempTrendSub').textContent = ''
     $('batSub').textContent = ''
+    $('batSub2').textContent = ''
     $('chipCharging').classList.remove('show')
     $('rxNow').textContent = '— KB/s'
     $('txNow').textContent = '— KB/s'
@@ -1261,27 +1376,34 @@
     renderVerdict()
   }
 
-  // ---------- connection status ----------
-  var startTs = null
+  // ---------- connection status + LIVE timer ----------
+  // El timer corre SOLO mientras llegan samples (feedback HITL 2026-08-01): sin
+  // device o sin app enganchada el dashboard no mueve el tiempo — y el eje del
+  // timeline ya es data-driven (solo avanza en pushTl con cada sample), así que
+  // ambos se congelan y retoman juntos. Contador acumulado, no wall-clock desde
+  // un start fijo: una reconexión del WS no fabrica saltos de tiempo. "App
+  // died" con el server emitiendo samples null ⇒ siguen llegando samples ⇒
+  // avanza (el dato decide).
+  var liveSeconds = 0
+  var lastSampleAt = null
+  var SAMPLE_STALL_MS = 5000 // sin samples por 5 s ⇒ pausa (cubre sampling de 1–2 s)
   function setConnected(connected) {
     var badge = $('recBadge')
     var label = $('recLabel')
     badge.classList.toggle('offline', !connected)
     label.textContent = connected ? 'LIVE' : 'OFFLINE'
-    if (connected && startTs === null) startTs = Date.now()
   }
   setInterval(function () {
-    if (startTs === null) return
-    var s = Math.floor((Date.now() - startTs) / 1000)
-    var m = Math.floor(s / 60),
-      ss = s % 60
+    if (lastSampleAt === null || Date.now() - lastSampleAt > SAMPLE_STALL_MS) return
+    liveSeconds++
+    var m = Math.floor(liveSeconds / 60),
+      ss = liveSeconds % 60
     $('recTime').textContent = (m < 10 ? '0' : '') + m + ':' + (ss < 10 ? '0' : '') + ss
   }, 1000)
 
-  // ---------- theme (único control: toggle ☀️ del header; persiste) ----------
+  // ---------- theme (control: switch "Dark mode" del ☰; persiste) ----------
   function applyTheme(next) {
     if (next !== 'light' && next !== 'dark') return
-    $('themeToggle').textContent = next === 'dark' ? '☀️' : '🌙'
     if (next === theme) return
     theme = next
     C = PALETTES[theme]

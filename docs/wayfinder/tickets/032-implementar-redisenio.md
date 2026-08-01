@@ -153,3 +153,52 @@ sin datos por no haber device). Evidencia en
 en los 6 checkpoints** (cp1 mem+PSS, cp2 temp — FAIL intermedio por el choque
 name-de-eje/leyenda, corregido y re-verificado PASS —, cp3 aviso inspector
 10/10, cp4 settings sin switch, final light 1440 y mobile 390).
+
+### Tanda 3 — pasada de alineación + drawer + Motion (2026-08-01)
+
+Auditoría visual (eyes sobre screenshots reales) + captura del usuario con la
+sección Memory & System rota. **Pasada de alineación completa** (los 8 hallazgos
+de la auditoría + 5 de la captura, todos CORREGIDO por eyes en 2 iteraciones):
+fila Memory/System pareja sin aire muerto (cards flex column, gauges de System a
+190 px, subs ancladas abajo, centro del donut al 45% ≈ centro de los aros);
+tiles de System columnar auto-contenidos (título/aro/número/2 sub-líneas
+centradas con baseline común — Battery suma `draw −XXX mA` real); números
+concéntricos en los 4 gauges (chunk fantasma que balancea la unidad + offset
+óptico +3 px con valor); FPS hero centrado H+V (`.fps-hero` flex); KPIs PSS/RSS
+con clase común y baseline alineada; leyenda del timeline a `right:10` (margen
+derecho parejo); ritmo de secciones unificado (rail 10 px + padding top 14 en
+todas las cards); RX/TX sin flecha en el valor; donut sin datos = aro track +
+"—" (sin seis "0%") y leyenda plana sin paginación "1/2"; `.net-na` a ancho
+completo (estiraba la col de KPIs a ~435 px).
+
+**Además, tres cambios pedidos en la misma pasada:**
+
+1. **Tema revertido al ☰** (deshace el punto 4 de la tanda 2): fuera el toggle
+   ☀️ del header; vuelve el switch "Dark mode" en Settings (markup/CSS/listener
+   de `cfgTheme` restaurados de `6483d2c~1`), aplica en vivo y persiste vía
+   `/api/config` (verificado contra el server).
+2. **☰ como side drawer**: panel lateral fijo a la derecha, full-height
+   (min(400px, 100vw−24) / full-width ≤480px), con backdrop que cierra al click
+   y con Escape; mismo contenido (Export / Session records / Settings). Slide-in
+   spring + fade con Motion.
+3. **Modo espera congelado**: el server emite samples all-null sin device — ahora
+   `render()` los descarta (`sampleHasData`), así ni el timer LIVE ni el timeline
+   ni el verdict se mueven sin device/app (timer nuevo: contador acumulado
+   sample-driven, congelado a los 5 s sin samples, sin saltos al reconectar el
+   WS; "app died" con métricas de device vivas sigue avanzando — el dato decide).
+   Verificado: 00:00 fijo y 0 puntos en :4517; avanza normal con el smoke.
+
+**Lib nueva: `motion` 12.43.0** (motion.dev, vanilla — NO framer-motion/React),
+vendoreada en `src/ui/vendor/motion.min.js` (UMD → `window.Motion`) y sumada al
+manifest de `embeddedUi.ts`; registrada en `docs/references/libs.md` (Context7
+MCP no estaba cableado en la sesión — se usó npm + docs oficiales). Uso con buen
+gusto y solo en cambios de estado: drawer, popovers de device/app, pulso del
+hero al cambiar el semáforo, chips CHARGING/crash, botón "back to live" de
+logs. Guardas: sin `window.Motion` o con `prefers-reduced-motion` todo funciona
+sin animar; nada anima por tick ni toca los charts de ECharts.
+
+**Verificación:** `bun test` 344 pass · `tsc --noEmit` limpio · prettier limpio ·
+mirrors.test.ts intacto. Evidencia (5 checkpoints + probes de comportamiento:
+drawer Escape/backdrop, tema en vivo, timer congelado/avanzando) en
+`.logs/evidence/2026-08-01/032-alineacion/` con `evidence-report.json`; **eyes:
+todos los puntos A–P en PASS, sin regresiones nuevas** (iteración 2).
