@@ -1,10 +1,10 @@
 ---
 label: wayfinder:map
-title: Evermore Android Profiler
+title: Evermore Profiler
 status: open
 ---
 
-# Mapa: Evermore Android Profiler
+# Mapa: Evermore Profiler (ex Evermore Android Profiler)
 
 > Tracker local-markdown. Los tickets son archivos en [`tickets/`](tickets/) con frontmatter:
 > `status: open|closed`, `assignee` (vacío = sin reclamar), `blocked-by: [ids]`.
@@ -21,6 +21,12 @@ entre sesiones, y el harness e2e de 3 capas está verde en CI en Win/macOS/Linux
 Incluye un **inspector HTTP secundario** (URLs/status/tiempos/tamaños/headers/payloads del
 tráfico de la app) — es nuestra app propia y controlamos el build QA + el device, así que
 es viable; va como panel aparte, no compite con las métricas de recursos que son el core.
+
+**Iteración 3 (2026-08-10) — la tool deja de ser Android-only.** Perfila Android **e iOS**,
+desde host **Windows y macOS**, con paridad iOS **parcial y declarada**: en iOS se ven CPU,
+memoria, FPS, GPU%, batería, logs y crashes; frame-times/jank y temperatura de SoC salen
+N/A honesto. El reporte compara sesiones cross-plataforma sólo donde las métricas son
+realmente comparables, y explica dónde no lo son.
 
 ## Notes
 
@@ -53,6 +59,46 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   dura transversal: cero overhead nuevo en el device** — perf se deriva de dumps que ya
   se hacen; logcat se verifica en gama baja como en el 023. Ejecución dentro del mapa
   (como en la iteración 1): los tickets entregan código, no solo decisiones.
+- **Iteración 3 (grilling 2026-08-10): iOS + Windows.** Tickets 033–043. Decisiones
+  cerradas en el grilling, que los tickets NO re-abren:
+  - **Backend iOS = `pymobiledevice3`** (Python), porque los servicios de Instruments
+    (`sysmontap`, `graphics.opengl`) sólo son alcanzables por **RemoteXPC** desde iOS 17+
+    y es la única implementación madura. `appium-ios-device` (Node) se quedó en lockdown
+    plano. **Versión pineada**, nunca "la última".
+  - **El installer baja todo** (Python + `pymobiledevice3` + `wintun.dll`); el QA nunca ve
+    Python. El installer instala, **el preflight diagnostica**.
+  - **Privilegio sólo en install-time**: `remote tunneld` como servicio (Windows Service /
+    LaunchDaemon). El profiler corre sin privilegios y descubre devices por la API HTTP
+    local del daemon — mismo shape que `adb devices`, así que la UI no se entera.
+  - **Costura nueva en `MetricSource`, no en `AdbTransport`** (ver ticket 035). Android se
+    **envuelve sin tocar**: `AdbTransport`, `Sampler`, collectors y sus 344 tests quedan
+    intactos. Todo el riesgo queda en el código iOS nuevo.
+  - **Corte de métricas iOS v1**: entra CPU, memoria (footprint/resident), FPS, GPU% con
+    desglose, batería (nivel/temp de batería/amperaje), ficha, logs y crashes. Sale
+    frame-times/jank (N/A), temperatura de SoC (imposible) y red per-app.
+  - **`physFootprint` NO va en el campo `pss`** — campo nuevo. Un `null` es honesto; un
+    número con la etiqueta equivocada es un bug silencioso que sobrevive años.
+  - **`source: device | app` por métrica desde ahora**, para que el SDK Unity aterrice sin
+    migración de schema.
+  - **Orden**: spike de viabilidad primero (033), refactor después. Android hoy funciona y
+    nadie está bloqueado por la costura.
+- **Riesgos vivos de la iteración 3** — R1 el túnel puede no levantar en esa Windows contra
+  ese iPhone (lo mata el 033) · R3 `coreprofilesessiontap` puede no ceder nunca y dejar los
+  frame-times de iOS colgados del SDK Unity · **R4 RemoteXPC es protocolo privado: Apple lo
+  rompe, el mantenimiento es una suscripción anual**, no un costo de construcción ·
+  R5 (degradado) drift de versión de Python o pip caído pueden romper la instalación de una
+  forma que un binario congelado no rompería — sin proxy corporativo de por medio, el
+  preflight alcanza como red de contención.
+- **R2 cerrado (2026-08-10)**: el QA **tiene** permisos de administrador y las máquinas son
+  **personales**, no corporativas — sin trabas de política de IT ni proxy corporativo.
+  Y después el spike 033 lo volvió casi irrelevante: **el camino iOS no necesita
+  privilegios en absoluto**.
+- **R1 cerrado (2026-08-10)** por el spike 033: el túnel levanta sin root en iOS 26.5.2.
+  Queda pendiente la mitad Windows.
+- **Hardware de la iteración 3**: el iPhone es **personal** (iOS 18+), no de QA — el scrub
+  de PII de fixtures pasa a ser un **gate automatizado**, no un checklist (el manual ya
+  falló una vez: por eso existe `pre-publish-history`). La Windows disponible es de un
+  dev, no del QA.
 
 ## Decisions so far
 
@@ -178,14 +224,55 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
   typecheck + fmt verdes; eyes PASS en dark/light/mobile
   (`.logs/evidence/2026-07-31/032-redesign/`). HITL de la mañana itera sobre esto.
 
+- [Research del stack iOS — RemoteXPC, DTX y pymobiledevice3](tickets/044-research-stack-ios.md) —
+  [docs/research/ios-instruments-stack.md](../research/ios-instruments-stack.md), leído de
+  la fuente en el commit `e371828`. **Tres hallazgos que cambian decisiones del grilling:**
+  (1) **el túnel NO necesita root en iOS 17.4+** — `pymobiledevice3` levanta un túnel
+  userspace puro-Python solo, y su limitación (vive dentro del proceso) no nos afecta
+  porque spawneamos el proceso y leemos su stdout ⇒ **el servicio elevado del 041 pasa de
+  requisito a fallback**; (2) `wintun` viene dentro del `pip install`; (3) **`crash watch`
+  existe** ⇒ el problema de timing de crashes del 039 no existe. Además: el descriptor de
+  capacidades del 037 lo da el propio protocolo (`Sysmontap.create()` le pregunta al
+  device), todo sale como **JSON por línea** (lo consume el `streamLines` actual sin
+  cambios), y hay que descartar la primera muestra de `SystemCPUUsage` o el primer tick de
+  cada sesión miente. Lo que falta sólo se sabe con el device: las claves de
+  `graphics.opengl`.
+
+- [Spike de viabilidad iOS](tickets/033-spike-viabilidad-ios.md) — **VIABLE Y SIN
+  PRIVILEGIOS**, verificado contra iPhone15,3 · iOS 26.5.2 · `pymobiledevice3` 10.7.2 en
+  macOS. El túnel userspace levanta solo y sin root en la versión más nueva de iOS ⇒ **R1
+  muerto** y el servicio elevado del 041 **no hace falta**. `graphics.opengl` entregó sus
+  14 claves (FPS + GPU device/renderer/tiler + memoria de GPU — tabla en el 038), sysmontap
+  su lista completa de atributos, y batería/ficha/crash andan por lockdown. **Concurrencia
+  SÍ**: dos procesos con su propio túnel emiten en paralelo — una medición anterior dio
+  "no" y era artefacto de la ventana corta, que es la trampa central de este camino (los
+  túneles tardan decenas de segundos). Unidades resueltas: `Temperature` en centi-°C,
+  `CurrentCapacity` en %. Cuatro correcciones al research: iOS 26 **no** expone
+  `bundleIdentifier` (filtrar por `name`), `monitor process` necesita `--choose first`,
+  imprime JSON pretty y no JSON-lines, y con varios devices hay que fijar `--udid` siempre.
+  Falta la mitad **Windows**, y overhead/sesión larga/`cpuUsage` bajo carga se graduaron
+  al ticket 045 porque el juego no está instalado en el iPhone.
+
 ## Not yet specified
 
 - Umbrales de semáforo para métricas **no-FPS** (CPU/GPU/temp) — el esquema de FPS quedó
   decidido en el ticket 025 (target configurable, verde/amarillo/rojo); el resto se
   calibra con datos de sesiones reales de evermore, no a priori.
-- **SDK de logging dentro del juego Unity** (canal estructurado `source: 'game'` con
-  categorías y contexto de gameplay, montado sobre el esquema de log-entry del ticket 027) — decidido en el grilling 2026-07-31 que va _después_ de esta iteración; requiere
-  tocar evermorearcade y build nuevo.
+- **SDK dentro del juego Unity** — creció de alcance en el grilling 2026-08-10: además del
+  canal de logs `source: 'game'` (esquema del 027), es el **único camino cross-plataforma
+  para frame-times reales** (`FrameTimingManager`), **thermal state**
+  (`NSProcessInfo.thermalState`, el reemplazo honesto de la temperatura de SoC que iOS no
+  da) y composición de memoria desde la óptica de Unity. Un solo código C# para Android e
+  iOS. Va **después** del track iOS porque toca `evermorearcade/`, que es repo de rol —
+  le aplica el gate `architect-before-spec`, spec, ADR y ciclo de build; acoplarlo ataría
+  la entrega del profiler a la agenda del equipo del juego. El schema del 037 ya deja
+  `source: device | app` preparado para recibirlo sin migración. Pendiente de discutir con
+  el equipo del juego: viola de frente la restricción "cero overhead nuevo en el device"
+  de la iteración 2, y esa excepción (símbolo de compilación, stripped en release) merece
+  su propio grilling.
+- **Carril macOS-only sobre `xctrace`/Instruments** — Windows+iOS es requisito y `xctrace`
+  no existe ahí, así que quedó descartado como base. Pero en macOS podría dar métricas que
+  el camino DTX no da, sin protocolo propio. Revisar recién cuando el track iOS esté vivo.
 - Escenario de juego estandarizado como "benchmark run" de evermore (misma escena/duración)
   para que las comparaciones entre builds sean justas.
 - Soporte de GPU% para SoCs no-Qualcomm (Mali/Xclipse/PowerVR) — depende de lo que arroje
@@ -198,4 +285,14 @@ es viable; va como panel aparte, no compite con las métricas de recursos que so
 
 - **Comparación dual-live** (dos apps corriendo simultáneo lado a lado) — v1 compara
   sesiones grabadas; dos apps vivas en un device contaminan el benchmark.
+- **Temperatura de SoC en iOS** — no existe sin entitlements privados. No es un pendiente,
+  es un no. El sustituto honesto es el thermal state que reporte el SDK Unity.
+- **Reimplementar lockdown/DTX/RemoteXPC en TypeScript** — meses de trabajo sobre un
+  protocolo privado que Apple rompe cada año, y Bun ya falló una vez en TLS (ticket 019,
+  `SNICallback` no dispara). Se shell-outea a `pymobiledevice3`, igual que se shell-outea
+  a `adb`.
+- **Red per-app en iOS** — no hay equivalente de `/proc/net/dev` por app; fuera del corte
+  de la iteración 3.
+- **Vendorizar `pymobiledevice3` como binario congelado** (PyInstaller) — evaluado y
+  descartado en el grilling: el installer instala Python en su lugar. El costo es R5.
 - **Métricas root-only** — la tool asume device stock sin root.

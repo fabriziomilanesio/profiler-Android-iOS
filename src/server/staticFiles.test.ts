@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { resolveStaticFile } from './staticFiles'
+import { staticHeaders } from './liveServer'
 
 const ROOT = '/app/ui'
 
@@ -36,5 +37,19 @@ describe('resolveStaticFile', () => {
 
   test('extensión desconocida ⇒ octet-stream', () => {
     expect(resolveStaticFile(ROOT, '/file.xyz')?.contentType).toBe('application/octet-stream')
+  })
+})
+
+describe('staticHeaders', () => {
+  // Regresión: sin cache-control el browser se queda con el JS viejo. Se descubrió al
+  // agregar los devices iOS — /api/devices ya los devolvía y la UI mostraba la copia
+  // anterior, que ni sabía que existían.
+  test('sirve el dashboard sin cache', () => {
+    const h = staticHeaders('text/javascript; charset=utf-8')
+    expect(h['cache-control']).toContain('no-store')
+  })
+
+  test('conserva el content-type que resolvió el router', () => {
+    expect(staticHeaders('text/css')['content-type']).toBe('text/css')
   })
 })

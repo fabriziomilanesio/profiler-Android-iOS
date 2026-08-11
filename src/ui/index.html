@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Evermore Android Profiler — LIVE dashboard (wayfinder tickets 021 → 032).
+  Evermore Mobile Profiler — LIVE dashboard (wayfinder tickets 021 → 032).
   Layout del rediseño aprobado en el prototipo del 031 (prototypes/redesign):
   secciones por tema con rails (Performance → Memory & System → Network → App logs),
   FPS hero con semáforo del 025 + jank/p90/p99 del 024, donut-gauges circulares para
@@ -13,7 +13,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Evermore Android Profiler — live</title>
+    <title>Evermore Mobile Profiler — live</title>
     <link rel="icon" type="image/png" href="assets/evermore-appicon.png" />
     <style>
       /* ---- Vendored fonts (offline, system fallback) ---- */
@@ -133,6 +133,15 @@
 
       * {
         box-sizing: border-box;
+      }
+      /* El `hidden` de las capacidades tiene que ganarle al layout.
+         `Capabilities.apply()` esconde lo que la plataforma no mide poniendo el atributo
+         `hidden`, pero eso sólo trae `display:none` de la hoja del navegador — y cualquier
+         regla nuestra con `display:grid/flex` (`.net`, `.framerow`, `.bar`…) le gana por
+         especificidad. Resultado: en un iPhone, secciones como Network quedaban marcadas
+         como ocultas y se seguían viendo. */
+      [hidden] {
+        display: none !important;
       }
       html,
       body {
@@ -1702,7 +1711,7 @@
     <header>
       <div class="brand">
         <img src="assets/evermore-logo.png" alt="Evermore Arcade" />
-        <div class="brand-sub">Android Profiler</div>
+        <div class="brand-sub">Mobile Profiler</div>
       </div>
 
       <div class="device-card card" id="devSelect">
@@ -1716,7 +1725,7 @@
         </button>
         <div class="pop dev-pop" id="devPop" hidden>
           <div class="pop-controls">
-            <span class="pop-title">Connected devices (adb)</span>
+            <span class="pop-title">Connected devices (Android &amp; iOS)</span>
             <button class="chip" id="devRefresh" type="button">⟳ Refresh</button>
           </div>
           <ul class="pop-list" id="devList"></ul>
@@ -1856,8 +1865,8 @@
               ><span class="dot"></span><span id="fpsStatusWord">waiting…</span></span
             >
           </div>
-          <div class="tile-div"></div>
-          <div class="framerow">
+          <div class="tile-div" data-cap="frameTimes"></div>
+          <div class="framerow" data-cap="frameTimes">
             <div class="fstat">
               <span class="fs-l">jank</span>
               <span class="fs-v" id="jankV">—</span>
@@ -1899,11 +1908,11 @@
           <span class="panel-sub">PSS by category · app footprint vs device</span>
         </div>
         <div class="mem-body">
-          <div id="memPie"></div>
+          <div id="memPie" data-cap="memoryBreakdown"></div>
           <div class="mem-stats">
             <div class="mem-kpis">
               <div class="fstat">
-                <span class="fs-l">PSS total</span>
+                <span class="fs-l" id="pssLbl">PSS</span> total
                 <span class="fs-v mem-kpi" id="pssNum">—</span>
               </div>
               <div class="fstat">
@@ -1916,8 +1925,12 @@
               <div class="bar-sub">
                 <span id="ramAppLbl">app of device RAM</span><span id="ramAppSub">—</span>
               </div>
-              <div class="bar thin"><i id="ramDevBar" style="background: var(--muted)"></i></div>
-              <div class="bar-sub"><span>device used</span><span id="ramDevSub">—</span></div>
+              <div class="bar thin" data-cap="deviceMemory">
+                <i id="ramDevBar" style="background: var(--muted)"></i>
+              </div>
+              <div class="bar-sub" data-cap="deviceMemory">
+                <span>device used</span><span id="ramDevSub">—</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1938,13 +1951,17 @@
             <div class="gauge-chart" id="gCpu"></div>
             <div class="sys-subs">
               <div class="sub-note" id="coreSub"></div>
-              <div class="sub-note">device total (inner ring) <span id="cpuDevSub">—</span></div>
+              <div class="sub-note" data-cap="deviceCpu">
+                device total (inner ring) <span id="cpuDevSub">—</span>
+              </div>
             </div>
           </div>
-          <div class="sys-tile">
+          <div class="sys-tile" data-cap="temperature">
             <div class="tile-label">Temp</div>
             <div class="gauge-chart" id="gTemp"></div>
             <div class="sys-subs">
+              <!-- qué es cada anillo: con SoC + batería, el interior es la batería; en iOS,
+                   donde no hay SoC, el aro exterior ES la batería (lo aclara render.js). -->
               <div class="sub-note" id="tempTrendSub"></div>
               <div class="sub-note">ring 25–50 °C</div>
             </div>
@@ -1966,8 +1983,8 @@
     </section>
 
     <!-- ============ NETWORK ============ -->
-    <div class="section-label">Network</div>
-    <section class="card net">
+    <div class="section-label" data-cap="network">Network</div>
+    <section class="card net" data-cap="network">
       <div class="net-stat net-rx">
         <span class="lbl">↓ RX</span>
         <span class="val" id="rxNow">— KB/s</span>
@@ -2001,7 +2018,7 @@
         >
       </div>
     </section>
-    <section class="card inspector" id="inspector" hidden>
+    <section class="card inspector" id="inspector" data-cap="httpInspector" hidden>
       <div class="insp-head">
         <span class="insp-title">Network Inspector</span>
         <span class="insp-sub"
@@ -2028,8 +2045,8 @@
     </section>
 
     <!-- ============ LOGS (tickets 028/029) ============ -->
-    <div class="section-label">App logs</div>
-    <section class="card logs" id="logsSection">
+    <div class="section-label" data-cap="logs">App logs</div>
+    <section class="card logs" id="logsSection" data-cap="logs">
       <button class="logs-head" id="logsToggle" type="button" title="Show / hide logs">
         <span class="insp-title">Logs</span>
         <span class="insp-sub">app logcat · crashes/ANR highlighted</span>
@@ -2114,11 +2131,12 @@
     </section>
 
     <footer class="credits">
-      Live data from adb · <b>Evermore Android Profiler</b> · Odaclick Game Studio
+      Live data from Android &amp; iOS · <b>Evermore Mobile Profiler</b> · Odaclick Game Studio
     </footer>
 
     <script src="vendor/echarts.min.js"></script>
     <script src="vendor/motion.min.js"></script>
+    <script src="capabilities.js"></script>
     <script src="render.js"></script>
     <script src="logsCore.js"></script>
     <script src="logsPanel.js"></script>

@@ -522,7 +522,8 @@
     gpuData.push([ts, s.gpu])
     cpuData.push([ts, s.cpu])
     cpuDevData.push([ts, s.deviceCpu === undefined ? null : s.deviceCpu])
-    pssTlData.push([ts, s.mem && s.mem.pss !== undefined ? s.mem.pss : null])
+    // total de memoria de la app: PSS en Android, footprint en iOS (ver appMemTotal)
+    pssTlData.push([ts, appMemTotal(s.mem)])
     tempTlData.push([ts, s.tempC === undefined ? null : s.tempC])
     tickStatus.push([ts, fpsStatusOf(s.fps, fpsTarget)])
     var cutoff = ts - WINDOW_S * 1000
@@ -706,9 +707,26 @@
     if (memTrend) memTrend.setOption({ series: [{ data: memTrendData }, { data: gcDots }] })
   }
 
+  /**
+   * Total de memoria de la app, venga de donde venga.
+   *
+   * Android lo reporta como PSS (prorratea la memoria compartida) e iOS como physFootprint
+   * (lo que cuenta jetsam para matar la app). Son definiciones distintas — por eso el
+   * schema los tiene en campos separados y la etiqueta del tile cambia por plataforma
+   * (Capabilities.memoryLabel) — pero los dos responden la misma pregunta: cuánta memoria
+   * está usando esta app. Leer sólo `pss` dejaba TODA la sección de memoria vacía en
+   * iPhone: los números en "—" y el trend sin una sola línea, con el dato llegando.
+   */
+  function appMemTotal(mem) {
+    if (!mem) return null
+    if (mem.pss !== null && mem.pss !== undefined) return mem.pss
+    if (mem.footprint !== null && mem.footprint !== undefined) return mem.footprint
+    return null
+  }
+
   function renderMem(s) {
     var ts = s.ts || Date.now()
-    var pss = s.mem ? s.mem.pss : null
+    var pss = appMemTotal(s.mem)
     if (pss !== null && pss !== undefined) lastPss = pss
     // KPIs
     $('pssNum').textContent = pss === null || pss === undefined ? '—' : fmtMb(pss)
@@ -888,7 +906,7 @@
         el: 'gCpu',
         min: 0,
         max: 100,
-        device: true, // anillo interior: CPU total del device
+        innerRing: true, // CPU total del device
         color: function (v) {
           return bandColor(v, 55, 75)
         },
@@ -900,6 +918,10 @@
         el: 'gTemp',
         min: 25,
         max: 50,
+        // Segunda temperatura en el anillo interior: en Android el aro es el SoC y adentro
+        // va la batería. En iOS no hay SoC, así que el aro ES la batería y el anillo queda
+        // vacío — el mismo tile sirve para las dos plataformas sin cambiar de forma.
+        innerRing: true,
         color: function (v) {
           return bandColor(v, 38, 42)
         },
@@ -975,7 +997,7 @@
         data: [{ value: cfg.min }],
       },
     ]
-    if (cfg.device) {
+    if (cfg.innerRing) {
       series.push({
         type: 'gauge',
         startAngle: 90,
@@ -1000,7 +1022,7 @@
     return cfg
   }
 
-  function updateGauge(cfg, value, deviceValue) {
+  function updateGauge(cfg, value, innerValue) {
     // null ⇒ aro al mínimo (queda el track gris) + "—" al centro.
     // Con valor: +3 px de offset vertical — los dígitos de Baloo dejan aire de
     // descender abajo y el ink quedaba ~3 px arriba del centro óptico del aro;
@@ -1017,15 +1039,17 @@
         },
       },
     ]
-    if (cfg.device) {
-      var dv = deviceValue === null || deviceValue === undefined ? cfg.min : deviceValue
-      series.push({ data: [{ value: dv }] })
+    if (cfg.innerRing) {
+      // Sin segundo valor el anillo interior queda en el mínimo, o sea invisible: es lo
+      // que pasa con la temperatura en iOS, donde sólo existe la de batería.
+      var iv = innerValue === null || innerValue === undefined ? cfg.min : innerValue
+      series.push({ data: [{ value: iv }] })
     }
     cfg.chart.setOption({ series: series })
   }
 
-  function gset(key, value, deviceValue) {
-    if (gauges && gauges[key]) updateGauge(gauges[key], value, deviceValue)
+  function gset(key, value, innerValue) {
+    if (gauges && gauges[key]) updateGauge(gauges[key], value, innerValue)
   }
 
   // =====================================================================
@@ -1092,11 +1116,24 @@
       s.cpu === null || !deviceCores ? '' : '≈ ' + Math.round(s.cpu * deviceCores) + '% of one core'
     $('cpuDevSub').textContent = devCpu === null ? '—' : Math.round(devCpu) + '%'
 
-    // ---- Temp (donut-gauge 25–50 °C) ----
-    gset('temp', s.tempC)
-    var batT = s.battery ? s.battery.tempC : null
-    $('tempTrendSub').textContent =
-      batT === null || batT === undefined ? '' : 'battery ' + batT.toFixed(1) + ' °C'
+    // ---- Temp (donut-gauge 25–50 °C, hasta dos anillos) ----
+    // Android mide dos temperaturas (SoC y batería) e iOS sólo la de batería. El aro
+    // exterior toma siempre la más representativa que exista — SoC si está, batería si no —
+    // y cuando hay LAS DOS, la de batería va en el anillo interior. Así el tile mide lo
+    // mismo en ambas plataformas y nunca se descarta una temperatura real.
+    var socT = s.tempC === undefined ? null : s.tempC
+    var batT = s.battery && s.battery.tempC !== undefined ? s.battery.tempC : null
+    var bothTemps = socT !== null && batT !== null
+    gset('temp', socT !== null ? socT : batT, bothTemps ? batT : null)
+    // El sub aclara qué es cada anillo: sin esto, en iOS el número del aro se leería como
+    // temperatura del SoC, que es justamente la que iOS no puede dar.
+    $('tempTrendSub').textContent = bothTemps
+      ? 'battery (inner ring) ' + batT.toFixed(1) + ' °C'
+      : socT !== null
+        ? ''
+        : batT !== null
+          ? 'battery temperature'
+          : ''
 
     // ---- Battery (donut-gauge, umbrales inversos) ----
     var b = s.battery || {}
@@ -1266,13 +1303,24 @@
 
   // ---------- ficha del device ----------
   function setDevice(info, pkg) {
-    var name = [info.manufacturer, info.model].filter(Boolean).join(' ') || info.serial
+    // En iOS el modelo llega como ProductType ("iPhone15,3"), que es el identificador
+    // interno de Apple: preciso pero ilegible. Se traduce al nombre comercial cuando se
+    // conoce, y si no se muestra el identificador tal cual — mejor un id crudo que un
+    // nombre inventado.
+    var model =
+      typeof Capabilities !== 'undefined' ? Capabilities.modelName(info.model) : info.model
+    var name = [info.manufacturer, model].filter(Boolean).join(' ') || info.serial
     $('devName').textContent = name
     var specs = []
-    if (info.androidRelease)
+    if (info.androidRelease) {
+      // El schema tiene UN campo de versión de SO para las dos plataformas (renombrarlo
+      // obligaría a migrar las sesiones grabadas); la etiqueta la pone la UI.
+      var osName =
+        typeof Capabilities !== 'undefined' ? Capabilities.osLabel(info.platform) : 'Android'
       specs.push(
-        'Android ' + info.androidRelease + (info.apiLevel ? ' (API ' + info.apiLevel + ')' : ''),
+        osName + ' ' + info.androidRelease + (info.apiLevel ? ' (API ' + info.apiLevel + ')' : ''),
       )
+    }
     // device nuevo sin ramTotalMb ⇒ null (las barras de RAM degradan a valor
     // absoluto); nunca queda colgada la RAM total del device anterior
     deviceRamMb = info.ramTotalMb || null
@@ -1360,7 +1408,7 @@
     // valores de la app/device anterior congelados hasta el próximo sample
     gset('gpu', null)
     gset('cpu', null, null)
-    gset('temp', null)
+    gset('temp', null, null)
     gset('bat', null)
     $('gpuSub').textContent = ''
     $('coreSub').textContent = ''

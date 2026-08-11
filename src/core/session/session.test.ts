@@ -27,6 +27,8 @@ function sample(t: number, over: Partial<Sample> = {}): Sample {
     tempC: 33,
     mem: {
       pss: 900 + t,
+      footprint: null,
+      compressed: null,
       rss: null,
       java: 300,
       native: 400,

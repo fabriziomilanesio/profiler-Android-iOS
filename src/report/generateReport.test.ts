@@ -24,6 +24,8 @@ function sample(t: number): Sample {
     tempC: 33,
     mem: {
       pss: 900,
+      footprint: null,
+      compressed: null,
       rss: null,
       java: 300,
       native: 400,

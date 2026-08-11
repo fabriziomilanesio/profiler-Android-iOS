@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Gate de PII (ticket 036). Corre sobre lo STAGED y frena el commit si detecta PII sin
+# redactar: UDID, ECID, serial, IMEI, ICCID, teléfono, MAC, nombre del device (iOS) y el
+# checklist de Android (ro.serialno, subscriberId, wifiNetworkKey, ro.boot.em.did/kg.ap).
+#
+# Por qué existe: el checklist manual del README de fixtures falló una vez y obligó a
+# squashear la historia del repo. La rama `pre-publish-history` todavía conserva el serial
+# real del Galaxy A15 sin redactar y no se puede pushear a ningún remoto.
+#
+# Instalación:  bun run hooks:install     (setea core.hooksPath a .githooks)
+# Bypass:       git commit --no-verify    (usalo sólo si sabés exactamente por qué)
+
+set -euo pipefail
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "pre-commit: bun no está en el PATH — se saltea el gate de PII" >&2
+  exit 0
+fi
+
+exec bun run scripts/scrub-fixtures.ts --check --staged

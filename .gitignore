@@ -9,3 +9,9 @@ coverage/
 *.har
 # capturas de device sin redactar: scrubear antes de mover a fixtures/
 fixtures/**/raw/
+
+# capturas crudas de spikes: PII sin redactar (UDID, ECID, IMEI, teléfono)
+.tmp/
+
+# venv suelto de pruebas locales (el gestionado vive en ~/.evermore-profiler/pmd3-venv)
+.venv-ios/

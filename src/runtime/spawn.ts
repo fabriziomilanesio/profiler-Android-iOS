@@ -11,11 +11,16 @@ export interface RunResult {
 
 export interface RunOptions {
   timeoutMs?: number
+  /** Env del proceso hijo (el transporte iOS fija PYMOBILEDEVICE3_UDID por acá). */
+  env?: NodeJS.ProcessEnv
 }
 
 export function run(command: string, args: string[], options: RunOptions = {}): Promise<RunResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(options.env ? { env: options.env } : {}),
+    })
     let stdout = ''
     let stderr = ''
     let settled = false
@@ -48,13 +53,25 @@ export function run(command: string, args: string[], options: RunOptions = {}): 
 }
 
 /** Lanza un proceso de larga vida y entrega su stdout línea a línea. Devuelve un stop(). */
+export interface StreamOptions {
+  /**
+   * Env del proceso hijo. Lo usa el transporte iOS: `pymobiledevice3` elige el device por
+   * `PYMOBILEDEVICE3_UDID`, y con dos devices conectados aborta si no se lo fijás.
+   */
+  env?: NodeJS.ProcessEnv
+}
+
 export function streamLines(
   command: string,
   args: string[],
   onLine: (line: string) => void,
   onExit?: (err: Error | null) => void,
+  options: StreamOptions = {},
 ): () => void {
-  const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(command, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    ...(options.env ? { env: options.env } : {}),
+  })
   let buffer = ''
   // ídem run(): logcat a chorro corta chunks en cualquier byte; decodificar en
   // modo stream evita partir un carácter UTF-8 multi-byte entre dos chunks

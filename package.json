@@ -1,5 +1,5 @@
 {
-  "name": "@odaclick/evermore-android-profiler",
+  "name": "@odaclick/evermore-mobile-profiler",
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
@@ -14,6 +14,9 @@
     "typecheck": "tsc --noEmit",
     "fmt": "prettier --write src scripts docs README.md",
     "fmt:check": "prettier --check src scripts docs README.md",
+    "hooks:install": "bun run scripts/install-hooks.ts",
+    "scrub": "bun run scripts/scrub-fixtures.ts",
+    "scrub:check": "bun run scripts/scrub-fixtures.ts --check --staged",
     "build": "bun build --compile src/cli.ts --outfile dist/profiler",
     "build:win": "bun build --compile --target=bun-windows-x64 src/cli.ts --outfile dist/profiler.exe"
   },

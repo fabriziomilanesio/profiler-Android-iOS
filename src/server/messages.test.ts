@@ -32,6 +32,8 @@ describe('protocolo WS', () => {
       tempC: 30.9,
       mem: {
         pss: 905,
+        footprint: null,
+        compressed: null,
         rss: null,
         java: 12,
         native: 60,

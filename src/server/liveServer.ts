@@ -6,12 +6,18 @@
 // src/runtime/httpServer (Bun aislado). Opcionalmente appendea los Samples a un JSONL.
 import { appendFileSync } from 'node:fs'
 import { readFileSync } from 'node:fs'
-import type { AdbTransport } from '../core/adb/AdbTransport'
+import type { AdbDevice, AdbTransport } from '../core/adb/AdbTransport'
+import type { IosTransport } from '../core/ios/IosTransport'
+import { IosMetricSource } from '../core/ios/IosMetricSource'
+import { IosLogCapture } from '../core/ios/IosLogCapture'
+import { capabilitiesFor, type Capabilities } from '../core/platform'
+import { iosDeviceInfo, resolveIosProcess } from '../core/ios/deviceInfo'
 import type { DeviceInfo, Sample } from '../core/schema'
 import { Sampler, resolvePid } from '../core/sampler/sampler'
 import { parseDeviceInfo } from '../core/collectors/deviceInfo'
 import { listPackages } from '../core/adb/listPackages'
 import { isValidPackageName } from '../core/adb/packageName'
+import { isValidBundleId } from '../core/ios/bundleId'
 import {
   autoIntervalMs,
   defaultAppStoreData,
@@ -56,6 +62,19 @@ import { run } from '../runtime/spawn'
 
 export interface LiveServerOptions {
   transport: AdbTransport
+  /**
+   * Fuente de devices iOS (ticket 035). Opcional a propósito: sin ella el server se
+   * comporta exactamente como antes, y así el camino Android — el que hoy funciona — no
+   * depende de que Python esté instalado.
+   */
+  // `isAvailable` va aparte y opcional: el watcher lo usa para no arrancar un proceso
+  // Python cada pocos segundos en una máquina que sólo perfila Android, pero los mocks de
+  // los tests no tienen por qué implementarlo.
+  iosTransport?: Pick<
+    IosTransport,
+    'devices' | 'stream' | 'processes' | 'systemInfo' | 'apps' | 'appExecutable'
+  > &
+    Partial<Pick<IosTransport, 'isAvailable'>>
   /** serial inicial; sin serial arranca en modo espera y se engancha al primer device. */
   serial?: string
   packageName: string
@@ -80,10 +99,30 @@ export interface LiveServerOptions {
   }
   /** intervalo del watcher de devices en modo espera (default 2000 ms). */
   devicePollMs?: number
+  /**
+   * Cadencia del poll de iOS dentro del watcher (default 6000 ms). Va aparte del de
+   * Android porque cada consulta arranca un proceso Python de ~1.2 s; los tests lo bajan.
+   */
+  iosDevicePollMs?: number
   /** directorio del historial de sesiones (JSONL). Sin él, no se persiste en disco. */
   sessionsDir?: string
   /** cadencia del batch de logs al WS en ms (default 250; tests lo bajan). */
   logFlushMs?: number
+}
+
+/**
+ * El dashboard se sirve SIN cache (ticket 035).
+ *
+ * Sin estas cabeceras el browser aplica cache heurístico sobre el JS/CSS: se edita
+ * `src/ui/`, se refresca, y sigue corriendo la copia vieja. Nos pasó justo al agregar
+ * los devices iOS a la lista — el server ya los devolvía y la UI no los mostraba.
+ * Es un server local de una tool de desarrollo: no hay nada que ganar cacheando.
+ */
+export function staticHeaders(contentType: string): Record<string, string> {
+  return {
+    'content-type': contentType,
+    'cache-control': 'no-store, must-revalidate',
+  }
 }
 
 /** Si el batch pendiente supera esto, se flushea ya (no esperar el timer). */
@@ -154,6 +193,19 @@ export class LiveServer {
   private pendingWsLogs: LogEntry[] = []
   private pendingSinkLogs: LogEntry[] = []
   private logFlushTimer: ReturnType<typeof setInterval> | null = null
+  /** fuente de métricas iOS; no-null ⇒ el device activo es un iPhone (ticket 038). */
+  private iosSource: IosMetricSource | null = null
+  /** poll del proceso de la app en iOS (análogo de refreshPid en Android). */
+  private iosProcessWatch: ReturnType<typeof setInterval> | null = null
+  /** captura de syslog en iOS (ticket 039); alimenta el MISMO ring y panel que logcat. */
+  private iosLogCapture: IosLogCapture | null = null
+  /**
+   * CFBundleExecutable de la app iOS elegida — el nombre EXACTO de su proceso. Se cachea
+   * porque el watch corre cada 5 s y resolverlo cuesta un `apps query` por vuelta.
+   */
+  private iosExecutable: string | null = null
+  /** capacidades del device activo — la UI esconde lo que no existe en la plataforma. */
+  private capabilities: Capabilities = capabilitiesFor('android')
 
   constructor(private readonly opts: LiveServerOptions) {
     this.serial = opts.serial ?? null
@@ -259,14 +311,14 @@ export class LiveServer {
         if (!resolved) return new Response('Not found', { status: 404 })
         try {
           const body = readFileSync(resolved.path)
-          return new Response(body, { headers: { 'content-type': resolved.contentType } })
+          return new Response(body, { headers: staticHeaders(resolved.contentType) })
         } catch {
           // Binario compilado: src/ui no existe en disco — servir el asset embebido.
           const embedded = EMBEDDED_UI[resolved.rel]
           if (!embedded) return new Response('Not found', { status: 404 })
           try {
             const body = readFileSync(embedded)
-            return new Response(body, { headers: { 'content-type': resolved.contentType } })
+            return new Response(body, { headers: staticHeaders(resolved.contentType) })
           } catch {
             return new Response('Not found', { status: 404 })
           }
@@ -274,7 +326,7 @@ export class LiveServer {
       },
       onOpen: (client: WsClient) => {
         // Al conectar: mandar la ficha del device y la app profileada actual.
-        if (this.device) client.send(deviceMessage(this.device))
+        if (this.device) client.send(deviceMessage(this.device, this.capabilities))
         if (this.appStatus) client.send(appMessage(this.appStatus))
       },
     })
@@ -326,29 +378,51 @@ export class LiveServer {
   }
 
   /**
-   * Polea `adb devices` hasta encontrar un device autorizado y se engancha
-   * (mismo camino que POST /api/device). Corre solo mientras no hay serial activo.
+   * Polea las DOS plataformas hasta encontrar un device usable y se engancha (mismo
+   * camino que POST /api/device). Corre solo mientras no hay serial activo.
+   *
+   * Las dos fuentes se consultan a ritmos distintos a propósito. `adb devices` es una
+   * llamada al daemon ya corriendo (milisegundos), pero cada consulta de iOS lanza un
+   * proceso Python que tarda ~1.2 s: al ritmo de Android tendríamos un intérprete
+   * arrancando y muriendo el 60% del tiempo, para un modo espera que puede durar horas.
+   * Android se pregunta en cada tick; iOS, cada `iosPollMs`.
+   *
+   * Que una plataforma falle (adb caído, pymobiledevice3 ausente) nunca impide enganchar
+   * un device de la otra: el modo espera es justamente donde el QA todavía no instaló todo.
    */
   private startDeviceWatch(): void {
     const pollMs = this.opts.devicePollMs ?? 2000
+    const iosPollMs = this.opts.iosDevicePollMs ?? 6000
+    let lastIosPoll = 0
+    let lastIosDevices: AdbDevice[] = []
+    // ¿Vale la pena preguntarle a iOS? En una máquina Android sin Python, cada consulta es
+    // un proceso que arranca sólo para fallar. Se pregunta UNA vez y, si no está el
+    // toolchain, el watcher se queda con adb — exactamente el comportamiento de antes.
+    let iosUsable: boolean | null = null
     this.deviceWatch = setInterval(() => {
       void (async () => {
         if (this.serial || this.switching) return
-        let candidates: Awaited<ReturnType<AdbTransport['devices']>> = []
-        try {
-          candidates = await this.opts.transport.devices()
-        } catch {
-          return // adb caído: reintentar en el próximo poll
+        const android = await this.opts.transport.devices().catch(() => [] as AdbDevice[])
+        // iOS a su propio ritmo; entre consultas vale la última respuesta conocida.
+        const now = Date.now()
+        if (iosUsable === null && this.opts.iosTransport?.isAvailable) {
+          iosUsable = await this.opts.iosTransport.isAvailable().catch(() => false)
         }
-        const target = candidates.find((d) => d.state === 'device')
+        if (this.opts.iosTransport && iosUsable !== false && now - lastIosPoll >= iosPollMs) {
+          lastIosPoll = now
+          lastIosDevices = await this.opts.iosTransport.devices().catch(() => [] as AdbDevice[])
+        }
+        const target = [...android, ...lastIosDevices].find((d) => d.state === 'device')
         if (!target) return
         this.switching = true
         try {
-          await this.switchDevice(target.serial)
+          if (target.platform === 'ios') await this.switchToIosDevice(target)
+          else await this.switchDevice(target.serial)
           if (this.deviceWatch) clearInterval(this.deviceWatch)
           this.deviceWatch = null
         } catch {
           this.serial = null // attach fallido (¿lo desenchufaron?): seguir esperando
+          lastIosDevices = [] // no reintentar contra una foto vieja del mismo device
         } finally {
           this.switching = false
         }
@@ -590,29 +664,37 @@ export class LiveServer {
       // idempotente — solo re-arma el stream cuando el pid realmente cambió
       if (sampler.processId > 0) this.logCapture?.setPid(sampler.processId)
       const sample = await sampler.sampleOnce()
-      // Registrar en el buffer (export en vivo) y en el historial en disco — solo con
-      // la app viva. Con el proceso muerto el dashboard sigue en vivo (broadcast),
-      // pero no se persisten horas de ticks null: quedan los eventos died/restarted.
-      if (this.appStatus && this.serial && !this.appDead) {
-        const entry = { sample, pkg: this.appStatus.packageName, serial: this.serial }
-        this.buffer.push(entry)
-        this.sessionLog?.appendSample(entry)
-      }
-      const msg = sampleMessage(sample)
-      this.server?.broadcast(msg)
-      if (this.opts.jsonlPath) {
-        try {
-          appendFileSync(this.opts.jsonlPath, JSON.stringify(sample) + '\n')
-        } catch {
-          /* no romper el loop por un fallo de escritura */
-        }
-      }
-      this.opts.onSample?.(sample)
+      this.pushSample(sample)
     } catch {
       /* un tick que explota no debe matar el loop */
     } finally {
       this.ticking = false
     }
+  }
+
+  /**
+   * Camino común de un Sample, venga del Sampler de Android o del IosMetricSource
+   * (ticket 038): persistir, broadcastear y notificar. Que las dos plataformas pasen por
+   * acá es lo que hace que sesiones, reporte y dashboard se reusen sin tocar nada.
+   */
+  private pushSample(sample: Sample): void {
+    // Registrar en el buffer (export en vivo) y en el historial en disco — solo con
+    // la app viva. Con el proceso muerto el dashboard sigue en vivo (broadcast),
+    // pero no se persisten horas de ticks null: quedan los eventos died/restarted.
+    if (this.appStatus && this.serial && !this.appDead) {
+      const entry = { sample, pkg: this.appStatus.packageName, serial: this.serial }
+      this.buffer.push(entry)
+      this.sessionLog?.appendSample(entry)
+    }
+    this.server?.broadcast(sampleMessage(sample))
+    if (this.opts.jsonlPath) {
+      try {
+        appendFileSync(this.opts.jsonlPath, JSON.stringify(sample) + '\n')
+      } catch {
+        /* no romper el loop por un fallo de escritura */
+      }
+    }
+    this.opts.onSample?.(sample)
   }
 
   /**
@@ -655,12 +737,25 @@ export class LiveServer {
     }
   }
 
-  /** GET /api/packages[?system=1] — instaladas + ranking de uso + término del chip. */
+  /**
+   * GET /api/packages[?system=1] — instaladas + ranking de uso + término del chip.
+   *
+   * Rutea por plataforma: con un iPhone enganchado, `pm list packages` se ejecutaba por
+   * adb contra un serial que adb no conoce, fallaba y devolvía lista vacía — el selector
+   * quedaba mudo y, sin app elegida, el canal de sysmon por proceso nunca se enganchaba,
+   * así que CPU y memoria de la app salían null. Las apps de iOS salen por lockdown.
+   */
   private async handleListPackages(url: URL): Promise<Response> {
     const includeSystem = url.searchParams.get('system') === '1'
-    const installed = this.serial
-      ? await listPackages(this.opts.transport, this.serial, { includeSystem })
-      : []
+    let installed: string[] = []
+    if (this.serial) {
+      installed =
+        this.device?.platform === 'ios'
+          ? ((await this.opts.iosTransport?.apps(this.serial, { includeSystem })) ?? []).map(
+              (a) => a.id,
+            )
+          : await listPackages(this.opts.transport, this.serial, { includeSystem })
+    }
     const store = this.opts.appStore?.data ?? defaultAppStoreData()
     const body = {
       packages: rankPackages(installed, store.usage),
@@ -685,8 +780,17 @@ export class LiveServer {
     } catch {
       return Response.json({ error: 'body inválido' }, { status: 400 })
     }
-    // input hostil: viaja interpolado a `adb shell` (pidof/monkey/dumpsys)
-    if (typeof pkg !== 'string' || !isValidPackageName(pkg)) {
+    // Input hostil: en Android viaja interpolado a `adb shell` (pidof/monkey/dumpsys), así
+    // que la validación es estricta. En iOS la forma es otra — los bundle ids admiten
+    // guiones (`LB-Software.PhotoEraser`) y el validador de Android los rechazaba con 400,
+    // dejando esas apps imposibles de elegir desde el dashboard.
+    if (typeof pkg !== 'string') {
+      return Response.json({ error: 'package inválido' }, { status: 400 })
+    }
+    const appId: string = pkg
+    const validId =
+      this.device?.platform === 'ios' ? isValidBundleId(appId) : isValidPackageName(appId)
+    if (!validId) {
       return Response.json({ error: 'package inválido' }, { status: 400 })
     }
     if (!this.serial) {
@@ -697,7 +801,7 @@ export class LiveServer {
     }
     this.switching = true
     try {
-      const status = await this.switchApp(pkg)
+      const status = await this.switchApp(appId)
       return Response.json({ ok: true, app: status })
     } catch (err) {
       return Response.json({ error: String(err) }, { status: 500 })
@@ -717,6 +821,11 @@ export class LiveServer {
     const { transport } = this.opts
     const serial = this.serial
     if (!serial) throw new Error('switchApp sin device activo')
+    // Un iPhone no entiende nada de lo que sigue (pidof, monkey, Sampler sobre adb): tiene
+    // su propio camino. Sin esto, elegir una app en iOS devolvía 200 con pid null y
+    // launched true — el dashboard mostraba la app elegida pero el canal de sysmon seguía
+    // apuntando a la anterior, así que CPU y memoria nunca cambiaban.
+    if (this.device?.platform === 'ios') return this.switchIosApp(pkg, recordUsage)
     const old = this.sampler
     this.sampler = null // los ticks pasan a no-op mientras dura el switch
     await old?.dispose()
@@ -752,15 +861,75 @@ export class LiveServer {
     return this.appStatus
   }
 
-  /** GET /api/devices — lista `adb devices` en el momento (refresh = re-pedir esto). */
-  private async handleListDevices(): Promise<Response> {
-    let devices: Awaited<ReturnType<AdbTransport['devices']>> = []
-    try {
-      devices = await this.opts.transport.devices()
-    } catch {
-      /* adb caído ⇒ lista vacía; el dashboard muestra el error */
+  /**
+   * Cambia la app profileada en un iPhone. Gemelo de `switchApp` para iOS.
+   *
+   * Diferencias con Android que justifican un camino propio:
+   *  - No hay `pidof`: el proceso se resuelve contra la lista real del device.
+   *  - No se LANZA la app. En Android `monkey` la abre sin conocer la activity; el
+   *    equivalente iOS (`ProcessControl.launch` por DVT) exige levantar el túnel — decenas
+   *    de segundos — para algo que el QA hace con un toque en el teléfono. Si la app está
+   *    cerrada se engancha igual y el watch la toma cuando aparezca.
+   *  - El nombre del proceso sale del CFBundleExecutable, no de adivinar sobre el bundle id.
+   */
+  private async switchIosApp(pkg: string, recordUsage: boolean): Promise<AppStatus> {
+    const serial = this.serial
+    const transport = this.opts.iosTransport
+    if (!serial) throw new Error('switchIosApp sin device activo')
+
+    // El ejecutable se resuelve UNA vez por app y queda cacheado: el watch de procesos
+    // corre cada 5 s y no puede pagar un `apps query` en cada vuelta.
+    this.iosExecutable = (await transport?.appExecutable?.(serial, pkg).catch(() => null)) ?? null
+    const processes = (await transport?.processes?.(serial).catch(() => [])) ?? []
+    const proc = resolveIosProcess(processes, pkg, this.iosExecutable)
+
+    this.appStatus = { packageName: pkg, pid: proc?.pid ?? null, launched: false }
+    this.appDead = proc === null
+    this.deadTicks = 0
+    if (recordUsage) this.opts.appStore?.select(pkg)
+
+    // Re-apuntar los canales vivos en vez de recrear la fuente: el stream de graphics es
+    // del device (no cambia con la app) y volver a levantarlo costaría el handshake.
+    if (proc !== null) this.iosSource?.setProcessName(proc.name)
+
+    // El syslog SÍ se re-arma: su `--process-name` filtra EN EL DEVICE y quedó fijado con
+    // la app anterior. Sólo cambiar el pid del lado del host dejaba el panel de logs vacío
+    // — el teléfono seguía mandando (o filtrando) las líneas de la app de antes.
+    if (transport?.stream) {
+      this.iosLogCapture?.stop()
+      this.iosLogCapture = new IosLogCapture({
+        transport: { stream: transport.stream.bind(transport) },
+        serial,
+        pid: proc?.pid ?? null,
+        processName: proc?.name ?? null,
+        onEntries: (entries) => {
+          for (const e of entries) this.onLogEntry(e)
+        },
+      })
+      this.iosLogCapture.start()
     }
-    return Response.json({ devices, current: this.serial })
+
+    const ev = { ts: Date.now(), kind: 'app' as const, pkg, serial }
+    this.buffer.addEvent(ev)
+    this.sessionLog?.appendEvent(ev)
+    this.server?.broadcast(appMessage(this.appStatus))
+    return this.appStatus
+  }
+
+  /**
+   * GET /api/devices — lista unificada Android + iOS (ticket 035).
+   *
+   * Las dos fuentes son independientes y se consultan en paralelo: que falte
+   * `pymobiledevice3`, o que adb esté caído, nunca puede vaciar la lista de la otra
+   * plataforma. Los iOS llegan con `platform: 'ios'`; los de adb no traen el campo y la
+   * UI los asume Android.
+   */
+  private async handleListDevices(): Promise<Response> {
+    const [android, ios] = await Promise.all([
+      this.opts.transport.devices().catch(() => [] as AdbDevice[]),
+      this.opts.iosTransport?.devices().catch(() => [] as AdbDevice[]) ?? Promise.resolve([]),
+    ])
+    return Response.json({ devices: [...android, ...ios], current: this.serial })
   }
 
   /** POST /api/device {"serial": "..."} — cambia el device profileado en caliente. */
@@ -788,6 +957,16 @@ export class LiveServer {
       const devices = await this.opts.transport.devices()
       const target = devices.find((d) => d.serial === serial)
       if (!target) {
+        // Puede ser un iPhone: no está en `adb devices` pero sí en usbmux (ticket 038).
+        const iosDevices = (await this.opts.iosTransport?.devices().catch(() => [])) ?? []
+        const iosTarget = iosDevices.find((d) => d.serial === serial)
+        if (iosTarget) {
+          if (serial === this.serial) {
+            return Response.json({ ok: true, device: this.device, app: this.appStatus })
+          }
+          const result = await this.switchToIosDevice(iosTarget)
+          return Response.json({ ok: true, ...result })
+        }
         return Response.json({ error: 'device no conectado' }, { status: 404 })
       }
       if (target.state !== 'device') {
@@ -810,6 +989,135 @@ export class LiveServer {
    * la ficha, recablea el inspector al nuevo y re-engancha la app actual
    * (lanzándola si está cerrada). El dashboard recibe {device} y luego {app}.
    */
+  /**
+   * Engancha un iPhone (tickets 035/038).
+   *
+   * Corta todo lo de Android — Sampler, logcat, inspector — y arranca el
+   * `IosMetricSource`, que emite los MISMOS `Sample` por el mismo camino
+   * (`pushSample`), así sesiones, reporte y dashboard se reusan sin tocar nada.
+   *
+   * El nombre del proceso NO se adivina desde el bundle id: se resuelve contra la lista
+   * real de procesos del device (ver `resolveIosProcess`). Si la app está cerrada, el
+   * device igual se engancha y las métricas de proceso quedan null hasta que se abra —
+   * mismo comportamiento que Android con la app muerta.
+   */
+  private async switchToIosDevice(
+    device: AdbDevice,
+  ): Promise<{ device: DeviceInfo; app: AppStatus }> {
+    const pkg = this.appStatus?.packageName ?? this.opts.packageName
+    if (this.inspector) await this.stopInspector()
+    this.logCapture?.stop()
+    this.logCapture = null
+    const oldSampler = this.sampler
+    this.sampler = null
+    await oldSampler?.dispose()
+    this.iosSource?.stop()
+    this.iosSource = null
+    this.iosLogCapture?.stop()
+    this.iosLogCapture = null
+    if (this.iosProcessWatch) clearInterval(this.iosProcessWatch)
+    this.iosProcessWatch = null
+    if (this.timer) {
+      clearInterval(this.timer)
+      this.timer = null
+    }
+
+    this.serial = device.serial
+    this.capabilities = capabilitiesFor('ios')
+    // --inspect pudo haber quedado prendido de un device Android anterior: en iOS la
+    // intención se descarta, no queda "pendiente" esperando volver a Android.
+    this.inspectorEnabled = false
+    this.device = iosDeviceInfo(device)
+    this.server?.broadcast(deviceMessage(this.device, this.capabilities))
+
+    // RAM total del device: sin ella las barras de memoria no tienen denominador. Se pide
+    // una sola vez (no cambia) y en paralelo, para no demorar el enganche del dashboard.
+    void this.opts.iosTransport
+      ?.systemInfo?.(device.serial)
+      .then((sys) => {
+        if (this.device === null || this.device.serial !== device.serial) return
+        this.device = { ...this.device, ramTotalMb: sys.ramTotalMb, cores: sys.cores }
+        this.applyInterval()
+        this.server?.broadcast(deviceMessage(this.device, this.capabilities))
+        this.sessionLog?.appendDevice(this.device)
+      })
+      .catch(() => {
+        /* sin RAM total el dashboard degrada a valores absolutos, no rompe */
+      })
+
+    const transport = this.opts.iosTransport
+    // Ejecutable primero: es lo que hace que el proceso se encuentre de verdad (el bundle
+    // id solo no alcanza — `com.github.stormbreaker.prod` corre como `GitHub`).
+    this.iosExecutable =
+      (await transport?.appExecutable?.(device.serial, pkg).catch(() => null)) ?? null
+    const processes = (await transport?.processes?.(device.serial).catch(() => [])) ?? []
+    const proc = resolveIosProcess(processes, pkg, this.iosExecutable)
+    this.appStatus = { packageName: pkg, pid: proc?.pid ?? null, launched: false }
+    this.appDead = proc === null
+    this.server?.broadcast(appMessage(this.appStatus))
+
+    const ev = { ts: Date.now(), kind: 'device' as const, pkg, serial: device.serial }
+    this.buffer.addEvent(ev)
+    this.sessionLog?.appendEvent(ev)
+    this.sessionLog?.appendDevice(this.device)
+
+    if (transport?.stream) {
+      // Arranca SIEMPRE, con la app abierta o cerrada: FPS y GPU son del compositor del
+      // device, no del proceso. Con la app cerrada el dashboard sigue vivo y las métricas
+      // de proceso quedan null — igual que Android con el proceso muerto.
+      this.iosSource = new IosMetricSource({
+        transport: { stream: transport.stream.bind(transport) },
+        serial: device.serial,
+        ...(proc !== null ? { processName: proc.name } : {}),
+        intervalMs: this.intervalMs,
+        onSample: (sample) => this.pushSample(sample),
+      })
+      this.iosSource.start()
+      // Los logs entran al mismo ring y panel que los de logcat: el LogEntry del ticket
+      // 027 nació genérico justamente para esto.
+      this.iosLogCapture = new IosLogCapture({
+        transport: { stream: transport.stream.bind(transport) },
+        serial: device.serial,
+        pid: proc?.pid ?? null,
+        processName: proc?.name ?? null,
+        onEntries: (entries) => {
+          for (const e of entries) this.onLogEntry(e)
+        },
+      })
+      this.iosLogCapture.start()
+      this.startIosProcessWatch()
+    }
+    return { device: this.device, app: this.appStatus }
+  }
+
+  /**
+   * Equivalente iOS de `refreshPid()`: poléa la lista de procesos y engancha el canal de
+   * sysmon cuando la app aparece (o cambia de pid). Va en su propio timer y no en el tick
+   * porque `processes ps` es un comando lockdown completo — no algo que se pague a 1 Hz.
+   */
+  private startIosProcessWatch(): void {
+    if (this.iosProcessWatch) clearInterval(this.iosProcessWatch)
+    const poll = async (): Promise<void> => {
+      const transport = this.opts.iosTransport
+      const serial = this.serial
+      if (!transport?.processes || !serial || !this.iosSource) return
+      const pkg = this.appStatus?.packageName ?? this.opts.packageName
+      const processes = await transport.processes(serial).catch(() => [])
+      const proc = resolveIosProcess(processes, pkg, this.iosExecutable)
+      this.trackAppLife(proc !== null)
+      if (proc === null) return
+      this.iosSource.setProcessName(proc.name)
+      // filtrar por pid del lado del host: cambiar de pid es asignar una variable, no
+      // relanzar el stream (que en iOS costaría el handshake del túnel entero)
+      this.iosLogCapture?.setPid(proc.pid)
+      if (this.appStatus && this.appStatus.pid !== proc.pid) {
+        this.appStatus = { ...this.appStatus, pid: proc.pid }
+        this.server?.broadcast(appMessage(this.appStatus))
+      }
+    }
+    this.iosProcessWatch = setInterval(() => void poll(), 5000)
+  }
+
   private async switchDevice(serial: string): Promise<{ device: DeviceInfo; app: AppStatus }> {
     const pkg = this.appStatus?.packageName ?? this.opts.packageName
     // el proxy del inspector quedó seteado en el device viejo: restaurar ANTES de soltarlo
@@ -821,10 +1129,20 @@ export class LiveServer {
     this.sampler = null
     await old?.dispose()
 
+    // volver a Android desde un iPhone: cortar la fuente iOS y restaurar el loop propio
+    this.iosSource?.stop()
+    this.iosSource = null
+    this.iosLogCapture?.stop()
+    this.iosLogCapture = null
+    if (this.iosProcessWatch) clearInterval(this.iosProcessWatch)
+    this.iosProcessWatch = null
+    this.capabilities = capabilitiesFor('android')
+    if (!this.timer) this.startTimer()
+
     this.serial = serial
     this.device = await captureDeviceInfo(this.opts.transport, serial)
     this.applyInterval() // la RAM del device nuevo puede cambiar el intervalo auto
-    this.server?.broadcast(deviceMessage(this.device))
+    this.server?.broadcast(deviceMessage(this.device, this.capabilities))
     const ev = { ts: Date.now(), kind: 'device' as const, pkg, serial }
     this.buffer.addEvent(ev)
     this.sessionLog?.appendEvent(ev)
@@ -979,6 +1297,21 @@ export class LiveServer {
     if (typeof enabled !== 'boolean') {
       return Response.json({ error: 'enabled debe ser boolean' }, { status: 400 })
     }
+    // Guarda del lado del SERVER, no sólo de la UI: en iOS el inspector no se puede
+    // ofrecer. En Android la tool setea el proxy del device sola
+    // (`settings put global http_proxy`) y lo restaura al salir; iOS no tiene ese
+    // equivalente — hay que configurar el proxy de la Wi-Fi a mano y confiar la CA en
+    // Ajustes. Un toggle que promete algo que no puede cumplir es peor que no estar.
+    if (!this.capabilities.httpInspector) {
+      return Response.json(
+        {
+          error:
+            'el inspector HTTP no está disponible en iOS: el proxy del device y la confianza de la CA se configuran a mano en Ajustes',
+          platform: this.device?.platform ?? 'ios',
+        },
+        { status: 501 },
+      )
+    }
     if (this.switching || this.inspectorBusy) {
       return Response.json({ error: 'operación en curso' }, { status: 409 })
     }
@@ -1043,6 +1376,14 @@ export class LiveServer {
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer)
     if (this.deviceWatch) clearInterval(this.deviceWatch)
+    // Sin esto quedan procesos de pymobiledevice3 huérfanos con su túnel abierto: el
+    // dashboard se cierra y el iPhone sigue con dos sesiones de Instruments colgadas.
+    if (this.iosProcessWatch) clearInterval(this.iosProcessWatch)
+    this.iosProcessWatch = null
+    this.iosSource?.stop()
+    this.iosSource = null
+    this.iosLogCapture?.stop()
+    this.iosLogCapture = null
     this.deviceWatch = null
     if (this.logFlushTimer) clearInterval(this.logFlushTimer)
     this.logFlushTimer = null

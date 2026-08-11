@@ -8,6 +8,12 @@ export interface AdbDevice {
   state: string
   /** resto de la línea de `adb devices -l` (model:, product:, etc.) */
   description: string
+  /**
+   * Plataforma del device (ticket 035). Ausente = 'android': los devices que vienen de
+   * `adb devices` no lo setean, así que las sesiones y los tests viejos no cambian.
+   * Los iPhone entran por `src/core/ios/` con este campo en 'ios'.
+   */
+  platform?: 'android' | 'ios'
 }
 
 export interface ShellResult {

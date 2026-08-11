@@ -48,6 +48,10 @@ export function parseMeminfo(raw: string): MemSample {
 
   return {
     pss: toMb(pssKb),
+    // Campos iOS: null en el camino Android por definición (ver schema.ts — el footprint
+    // NO es PSS y no se mezclan).
+    footprint: null,
+    compressed: null,
     rss: null, // RSS no sale de dumpsys: lo aporta el sampler desde /proc/<pid>/status
     java: toMb(javaKb),
     native: toMb(nativeKb),
@@ -58,7 +62,18 @@ export function parseMeminfo(raw: string): MemSample {
   }
 }
 
-const MEM_KEYS = ['pss', 'rss', 'java', 'native', 'graphics', 'code', 'stack', 'other'] as const
+const MEM_KEYS = [
+  'pss',
+  'footprint',
+  'compressed',
+  'rss',
+  'java',
+  'native',
+  'graphics',
+  'code',
+  'stack',
+  'other',
+] as const
 
 /**
  * Suma los VmRSS (kB → MB) de una salida que puede concatenar varios

@@ -8,6 +8,19 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { isValidPackageName } from './adb/packageName'
+import { isValidBundleId } from './ios/bundleId'
+
+/**
+ * ¿Es un identificador de app válido, de cualquiera de las dos plataformas?
+ *
+ * El store no sabe de qué device viene cada entrada del ranking (guarda apps de todos los
+ * teléfonos que se usaron), así que acepta ambas formas. Con la validación de Android sola,
+ * un bundle id con guión se descartaba en silencio al releer el archivo: la app elegida
+ * desaparecía del ranking en el siguiente arranque.
+ */
+function isValidAppId(id: string): boolean {
+  return isValidPackageName(id) || isValidBundleId(id)
+}
 
 export interface AppStoreData {
   /** último package profileado; el CLI arranca con este si no pasás --package. */
@@ -94,10 +107,10 @@ export function parseAppStore(json: string): AppStoreData {
   if (typeof raw !== 'object' || raw === null) return d
   const o = raw as Record<string, unknown>
   // el archivo es editable a mano: cada campo se valida por separado
-  if (typeof o['last'] === 'string' && isValidPackageName(o['last'])) d.last = o['last']
+  if (typeof o['last'] === 'string' && isValidAppId(o['last'])) d.last = o['last']
   if (typeof o['usage'] === 'object' && o['usage'] !== null) {
     for (const [pkg, count] of Object.entries(o['usage'] as Record<string, unknown>)) {
-      if (isValidPackageName(pkg) && typeof count === 'number' && count > 0) {
+      if (isValidAppId(pkg) && typeof count === 'number' && count > 0) {
         d.usage[pkg] = Math.floor(count)
       }
     }

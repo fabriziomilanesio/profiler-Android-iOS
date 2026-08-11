@@ -215,9 +215,14 @@
       // "model:SM_A155M product:a15ub ..." → SM A155M
       var modelMatch = (d.description || '').match(/model:(\S+)/)
       var label = modelMatch ? modelMatch[1].replace(/_/g, ' ') : d.serial
+      var isIos = d.platform === 'ios'
       var name = document.createElement('span')
       name.className = 'dev-item-name'
-      name.textContent = (isCurrent ? '✓ ' : '') + label
+      // El iPhone entra a la MISMA lista que los Android (ticket 035); la plataforma es
+      // sólo una etiqueta. La versión de iOS va al label porque en iOS es lo que importa.
+      var iosVer = (d.description || '').match(/ios:(\S+)/)
+      name.textContent =
+        (isCurrent ? '✓ ' : '') + label + (isIos ? ' · iOS ' + (iosVer ? iosVer[1] : '?') : '')
       var serial = document.createElement('span')
       serial.className = 'dev-serial'
       serial.textContent = d.serial
@@ -726,6 +731,14 @@
           LogsPanel.clear()
         }
         device = msg.device
+        // Capacidades de la plataforma (ticket 040): se esconde lo que en este device NO
+        // EXISTE (temperatura de SoC en iOS, torta de memoria, frame-times, red, logs).
+        // Lo que existe pero falló este tick sigue mostrándose en N/A.
+        if (typeof Capabilities !== 'undefined') {
+          Capabilities.apply(document, msg.capabilities)
+          var pssLbl = document.getElementById('pssLbl')
+          if (pssLbl) pssLbl.textContent = Capabilities.memoryLabel(device.platform)
+        }
         // el package lo anuncia el server con {type:"app"} — acá solo la ficha
         ProfilerDashboard.setDevice(device, pkg)
       } else if (msg.type === 'sample') {

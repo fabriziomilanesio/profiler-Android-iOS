@@ -1,0 +1,40 @@
+Monitoring pid=63819, ppid=1, name=EvermoreArcade
+{
+    "cpuUsage": 48.819229784359784,
+    "memCompressed": 607797248,
+    "memResidentSize": 309248000,
+    "name": "EvermoreArcade",
+    "physFootprint": 1071188016,
+    "pid": 63819,
+    "powerScore": 72.07562227173288,
+    "threadCount": 78,
+    "timestamp": "2026-08-10T19:48:42.418547+00:00"
+}
+{
+    "cpuUsage": 45.63594998424637,
+    "memCompressed": 607797248,
+    "memResidentSize": 309248000,
+    "name": "EvermoreArcade",
+    "physFootprint": 1072367664,
+    "pid": 63819,
+    "powerScore": 71.67769891986654,
+    "threadCount": 78,
+    "timestamp": "2026-08-10T19:48:43.354480+00:00"
+}
+{
+    "cpuUsage": 52.03780705352059,
+    "memCompressed": 607764480,
+    "memResidentSize": 309329920,
+    "name": "EvermoreArcade",
+    "physFootprint": 1073170480,
+    "pid": 63819,
+    "powerScore": 67.24570254482613,
+    "threadCount": 79,
+    "timestamp": "2026-08-10T19:48:44.705617+00:00"
+}
+{
+    "cpuUsage": 51.94079741053332,
+    "memCompressed": 607535104,
+    "memResidentSize": 309575680,
+    "name": "EvermoreArcade",
+    "physFootprint": 1073186864,

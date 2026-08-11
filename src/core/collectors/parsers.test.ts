@@ -177,6 +177,8 @@ describe('parseDeviceMemUsedMb (/proc/meminfo → RAM usada del device)', () => 
 describe('mergeMemSamples (agregación multi-proceso)', () => {
   const base = {
     pss: null,
+    footprint: null,
+    compressed: null,
     rss: null,
     java: null,
     native: null,
@@ -188,8 +190,8 @@ describe('mergeMemSamples (agregación multi-proceso)', () => {
 
   test('suma por categoría los no-null', () => {
     const merged = mergeMemSamples([
-      { ...base, pss: 100, java: 10, graphics: 50 },
-      { ...base, pss: 40, java: 5, native: 8 },
+      { ...base, pss: 100, footprint: null, compressed: null, java: 10, graphics: 50 },
+      { ...base, pss: 40, footprint: null, compressed: null, java: 5, native: 8 },
     ])
     expect(merged.pss).toBe(140)
     expect(merged.java).toBe(15)

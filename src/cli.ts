@@ -10,6 +10,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RealAdbTransport } from './core/adb/RealAdbTransport'
+import { IosTransport } from './core/ios/IosTransport'
 import { discoverAdb } from './core/preflight/discoverAdb'
 import { installPlatformTools, realInstallDeps } from './core/preflight/installPlatformTools'
 import { Preflight, type PreflightReport } from './core/preflight/preflight'
@@ -185,6 +186,9 @@ async function runLive(
 
   const server = new LiveServer({
     transport,
+    // Fuente de devices iOS (ticket 035). Se construye siempre: si no hay Python o
+    // pymobiledevice3, devices() devuelve [] y el dashboard queda igual que antes.
+    iosTransport: new IosTransport(),
     serial,
     packageName,
     uiRoot: uiRoot(),
@@ -252,7 +256,7 @@ async function runLive(
 }
 
 async function main(): Promise<void> {
-  console.log('Evermore Android Profiler v0.1.0')
+  console.log('Evermore Mobile Profiler v0.1.0')
   const args = parseArgs(process.argv.slice(2))
 
   // Auto-resume: sin --package se profilea la última app usada (AppStore);

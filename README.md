@@ -1,7 +1,7 @@
-# Evermore Android Profiler
+# Evermore Mobile Profiler
 
-Herramienta cross-platform (Windows/macOS/Linux) para **profilear apps Android en vivo vía
-ADB**. Pensada para las apps de Evermore pero sirve para cualquiera: levantás el dashboard
+Herramienta cross-platform (Windows/macOS/Linux) para **profilear apps móviles en vivo:
+Android vía ADB e iOS vía pymobiledevice3**. Pensada para las apps de Evermore pero sirve para cualquiera: levantás el dashboard
 (con o sin teléfono conectado — se engancha solo cuando aparece), elegís **device** y **app**
 desde selectores en el dashboard (las apps filtradas por "evermore" por default), ves las
 métricas en tiempo real, inspeccionás el tráfico de red, y (próximamente) grabás sesiones y
@@ -70,8 +70,8 @@ y al conectarlo aceptá el diálogo "¿Permitir depuración USB?" marcando "Perm
 curl -fsSL https://bun.sh/install | bash        # macOS: también `brew install oven-sh/bun/bun`
 
 # 2. Clonar e instalar deps:
-git clone git@github.com:Odaclick/evermore-android-profiler.git
-cd evermore-android-profiler
+git clone git@github.com:Odaclick/evermore-mobile-profiler.git
+cd evermore-mobile-profiler
 bun install
 
 # 3. Arrancar — abre el dashboard solo en el browser:
@@ -118,8 +118,8 @@ No hace falta Node, npm, ni instalar nada en el device.
 ## Instalación
 
 ```bash
-git clone git@github.com:Odaclick/evermore-android-profiler.git
-cd evermore-android-profiler
+git clone git@github.com:Odaclick/evermore-mobile-profiler.git
+cd evermore-mobile-profiler
 bun install
 ```
 
@@ -216,11 +216,12 @@ formato PE válido; falta validarlo corriendo en un Windows real.
 ## Desarrollo
 
 ```bash
-bun test            # 147 tests (parsers contra fixtures reales + lógica core + API del server)
+bun test            # 365 tests (parsers contra fixtures reales + lógica core + API del server)
 bun run typecheck   # tsc estricto
 bun run fmt         # prettier
 bun run build       # ejecutable self-contained (dist/profiler) para este OS
 bun run build:win   # dist/profiler.exe (cross-compile bun-windows-x64)
+bun run hooks:install   # gate de PII en pre-commit (correlo una vez al clonar)
 ```
 
 Capturar fixtures de un device nuevo (para soportar otro modelo/SoC):
@@ -228,6 +229,33 @@ Capturar fixtures de un device nuevo (para soportar otro modelo/SoC):
 ```bash
 bun run scripts/capture-fixtures.ts   # guía la captura mientras jugás ~30 s
 ```
+
+### Gate de PII (obligatorio antes de commitear capturas)
+
+Las capturas crudas traen PII: en Android serial, `subscriberId`, SSID; en iOS además
+UDID, ECID, IMEI, ICCID, teléfono y el nombre del device. **El checklist manual ya falló
+una vez** y obligó a squashear la historia del repo, así que ahora es un gate:
+
+```bash
+bun run hooks:install                       # una vez: instala el pre-commit
+bun run scrub <path>                        # redacta in-place (recursivo)
+bun run scripts/scrub-fixtures.ts --check <path>   # sólo reporta; sale 1 si hay PII
+```
+
+El hook corre sobre lo staged y frena el commit. Los placeholders son estables dentro de
+una corrida (`<REDACTED:UDID#1>`), así que una captura repartida en varios archivos sigue
+cruzando bien.
+
+### Spike de iOS (en curso — ver `docs/wayfinder/`)
+
+```bash
+bash scripts/spike-ios.sh                   # macOS/Linux, con el iPhone enchufado
+bash scripts/spike-ios.sh --install         # crea el venv gestionado con pymobiledevice3
+powershell -ExecutionPolicy Bypass -File scripts\smoke-windows.ps1   # validación de Windows
+```
+
+La salida cruda va a `.tmp/` (gitignoreado) porque tiene PII. Detalle del stack iOS en
+[`docs/research/ios-instruments-stack.md`](docs/research/ios-instruments-stack.md).
 
 ## Arquitectura (resumen)
 

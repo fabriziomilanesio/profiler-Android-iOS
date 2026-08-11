@@ -5,6 +5,7 @@
 import indexHtml from '../ui/index.html' with { type: 'file' }
 import renderJs from '../ui/render.js' with { type: 'file' }
 import liveJs from '../ui/live.js' with { type: 'file' }
+import capabilitiesJs from '../ui/capabilities.js' with { type: 'file' }
 import logsCoreJs from '../ui/logsCore.js' with { type: 'file' }
 import logsPanelJs from '../ui/logsPanel.js' with { type: 'file' }
 import odaclickLogo from '../ui/assets/odaclick-logo.png' with { type: 'file' }
@@ -28,6 +29,7 @@ export const EMBEDDED_UI: Record<string, string> = {
   'index.html': indexHtml as unknown as string,
   'render.js': renderJs,
   'live.js': liveJs,
+  'capabilities.js': capabilitiesJs,
   'logsCore.js': logsCoreJs,
   'logsPanel.js': logsPanelJs,
   'assets/odaclick-logo.png': odaclickLogo,

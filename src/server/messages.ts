@@ -5,6 +5,7 @@
 // mensaje (un logcat a chorro no debe generar un mensaje WS por línea). El
 // bootstrap del panel (últimas N) va por GET /api/logs.
 import type { DeviceInfo, Sample } from '../core/schema'
+import type { Capabilities } from '../core/platform'
 import type { LogEntry } from '../core/logs/logEntry'
 import type { InspectorFlow } from './inspectorProxy'
 
@@ -18,14 +19,19 @@ export interface AppStatus {
 }
 
 export type ServerMessage =
-  | { type: 'device'; device: DeviceInfo }
+  | { type: 'device'; device: DeviceInfo; capabilities?: Capabilities }
   | { type: 'sample'; sample: Sample }
   | { type: 'flow'; flow: InspectorFlow }
   | { type: 'app'; app: AppStatus }
   | { type: 'logs'; entries: LogEntry[] }
 
-export function deviceMessage(device: DeviceInfo): string {
-  return JSON.stringify({ type: 'device', device } satisfies ServerMessage)
+/**
+ * Ficha del device + qué puede medir esta plataforma (ticket 037). La UI usa las
+ * capacidades para ESCONDER lo que no existe en el device — un tile permanentemente
+ * vacío se lee como "está roto", que es peor que no mostrarlo.
+ */
+export function deviceMessage(device: DeviceInfo, capabilities?: Capabilities): string {
+  return JSON.stringify({ type: 'device', device, capabilities } satisfies ServerMessage)
 }
 
 export function sampleMessage(sample: Sample): string {

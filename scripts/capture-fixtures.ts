@@ -149,7 +149,7 @@ async function waitForAppPid(
 }
 
 async function main(): Promise<void> {
-  console.log('Evermore Android Profiler — captura de fixtures (ticket 001)')
+  console.log('Evermore Mobile Profiler — captura de fixtures (Android) (ticket 001)')
   const args = parseArgs(process.argv.slice(2))
 
   // ── 1. Preflight (misma cadena que el CLI: adb → device → app instalada) ──

@@ -5,6 +5,19 @@
 // métrica en este device marca su campo (o sub-campo) null; el UI lo dibuja como
 // N/A. Nunca se usa 0 para "no disponible" (0 es un valor legítimo).
 
+/** Plataforma del device profileado (ticket 037). */
+export type Platform = 'android' | 'ios'
+
+/**
+ * De dónde salió una métrica (ticket 037).
+ *
+ * Hoy todo es 'device' (lo reporta el SO). Cuando aterrice el SDK Unity, las métricas que
+ * reporte el juego llegan con 'app' y los frame-times de iOS pasan de null a valor real
+ * SIN migración de schema ni cambios en el reporte — que además podrá decir honestamente
+ * si un FPS lo midió el compositor o el juego, que no son el mismo número.
+ */
+export type MetricSourceKind = 'device' | 'app'
+
 /** Composición de memoria (PSS por categoría, en MB). null = categoría no reportada. */
 export interface MemBreakdown {
   /** Java Heap (App Summary) */
@@ -23,8 +36,18 @@ export interface MemBreakdown {
 
 /** Muestra de memoria: total PSS + breakdown. */
 export interface MemSample {
-  /** TOTAL PSS del App Summary, en MB */
+  /**
+   * TOTAL PSS del App Summary, en MB. **Android únicamente.**
+   * En iOS queda null a propósito: `physFootprint` NO va acá. PSS prorratea la memoria
+   * compartida entre procesos; el footprint de iOS no prorratea nada e incluye páginas
+   * comprimidas. Un número con la etiqueta equivocada es un bug silencioso que sobrevive
+   * años — quien lea el JSONL de una sesión iOS y vea `pss` va a asumir semántica Android.
+   */
   pss: number | null
+  /** iOS: `physFootprint` en MB — lo que Apple le cobra a la app (y lo que mira el jetsam). */
+  footprint: number | null
+  /** iOS: `memCompressed` en MB — páginas comprimidas, ya incluidas en el footprint. */
+  compressed: number | null
   /**
    * RSS en MB desde /proc/<pid>/status (VmRSS, main + hijos). A diferencia del
    * resto (carril lento, dumpsys meminfo cada ~15 s), se refresca en cada tick:
@@ -114,6 +137,12 @@ export interface Sample {
 /** Ficha del device, capturada una vez al conectar. */
 export interface DeviceInfo {
   serial: string
+  /**
+   * Plataforma del device (ticket 037). Ausente = 'android': las sesiones grabadas antes
+   * de la iteración 3 no lo tienen y tienen que seguir abriendo igual, como se hizo con
+   * `refreshHz` en el ticket 024.
+   */
+  platform?: Platform
   /** ro.product.model (ej. SM-A155M) */
   model: string | null
   /** ro.product.manufacturer (ej. samsung) */

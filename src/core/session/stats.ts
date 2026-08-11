@@ -73,7 +73,12 @@ export interface ReportSeriesPoint {
   deviceCpu: number | null
   deviceRamMb: number | null
   // el reporte grafica la composición PSS; ni el total (va en ramMb) ni el RSS vivo
-  mem: Omit<MemSample, 'pss' | 'rss'>
+  /**
+   * Sólo las categorías de la torta (Android). `footprint`/`compressed` de iOS NO entran
+   * acá a propósito: no son categorías de una composición, son totales con otra
+   * definición — graficarlos como porciones sería inventar una torta que no existe.
+   */
+  mem: Pick<MemSample, 'java' | 'native' | 'graphics' | 'code' | 'stack' | 'other'>
   battery: { level: number | null; tempC: number | null; mA: number | null }
   netRxKb: number | null
   netTxKb: number | null

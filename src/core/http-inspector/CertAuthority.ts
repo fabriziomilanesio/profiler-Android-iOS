@@ -19,7 +19,7 @@ export interface CertPair {
 const CA_SUBJECT = [
   { name: 'commonName', value: 'Evermore Profiler CA' },
   { name: 'organizationName', value: 'Odaclick' },
-  { shortName: 'OU', value: 'Evermore Android Profiler' },
+  { shortName: 'OU', value: 'Evermore Mobile Profiler' },
 ]
 
 /** 10 años: la CA se instala una vez por device y sirve para siempre. */

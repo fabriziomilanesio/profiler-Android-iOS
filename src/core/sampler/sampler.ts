@@ -140,6 +140,8 @@ interface ProcSnapshot {
 
 const NULL_MEM: MemSample = {
   pss: null,
+  footprint: null,
+  compressed: null,
   rss: null,
   java: null,
   native: null,
