@@ -1,16 +1,48 @@
 # Evermore Mobile Profiler
 
 Herramienta cross-platform (Windows/macOS/Linux) para **profilear apps móviles en vivo:
-Android vía ADB e iOS vía pymobiledevice3**. Pensada para las apps de Evermore pero sirve para cualquiera: levantás el dashboard
-(con o sin teléfono conectado — se engancha solo cuando aparece), elegís **device** y **app**
-desde selectores en el dashboard (las apps filtradas por "evermore" por default), ves las
-métricas en tiempo real, inspeccionás el tráfico de red, y (próximamente) grabás sesiones y
-exportás reportes de comparación.
+Android vía ADB e iOS vía pymobiledevice3**. Pensada para las apps de Evermore pero sirve para
+cualquiera: levantás el dashboard (con o sin teléfono conectado — se engancha solo cuando
+aparece), elegís **device** y **app** desde selectores en el dashboard (las apps filtradas por
+"evermore" por default), ves las métricas en tiempo real, inspeccionás el tráfico de red,
+grabás sesiones y exportás reportes HTML de comparación.
+
+Un solo dashboard para las dos plataformas: **no hay que decirle qué enchufaste**. Los
+teléfonos aparecen en una lista única con su plataforma, y el profiler adapta lo que mide y
+lo que muestra a lo que ese device puede dar.
 
 **Métricas en vivo:** CPU % de la app (share-of-device, con conversión "≈ X% de un core") ·
 CPU % total del device · RAM de la app (PSS + composición; suma procesos hijos `pkg:*` si los
 hay) · RAM usada total del device · FPS (Unity, vía SurfaceFlinger) · temperatura · GPU % ·
 batería (nivel/temp/mA) · red (KB/s) · inspector de requests HTTP.
+
+### Qué mide cada plataforma
+
+El dashboard es **uno solo**: enchufás lo que sea y él detecta qué es. Lo que cambia es qué
+puede medirse, y eso **no se disimula** — lo que la plataforma no da, el dashboard lo esconde
+(un tile que nunca se va a llenar sólo genera la pregunta "¿está roto?"), mientras que lo que
+existe pero falló en este tick se muestra en N/A.
+
+| Métrica                       | Android                            | iOS                                                                             |
+| ----------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- |
+| FPS                           | ✅ SurfaceFlinger (capa de la app) | ✅ CoreAnimation (**del compositor**)                                           |
+| Frame-times p50/p90/p99, jank | ✅ histograma present2present      | ❌ no existe el histograma                                                      |
+| CPU de la app                 | ✅ `/proc/<pid>/stat`              | ✅ sysmontap                                                                    |
+| CPU del device                | ✅ `/proc/stat`                    | ❌ fuera del v1 (sería un comando por tick)                                     |
+| Memoria de la app             | ✅ **PSS** + java/native/graphics  | ✅ **footprint** + comprimida + RSS                                             |
+| RAM usada del device          | ✅                                 | ❌ (sí la RAM **total**, para las barras)                                       |
+| GPU                           | ✅ % de uso                        | ✅ % + desglose renderer/tiler                                                  |
+| Temperatura                   | ✅ SoC **y** batería               | ✅ sólo batería (el SoC necesita entitlements privados)                         |
+| Batería (nivel/mA/carga)      | ✅                                 | ✅                                                                              |
+| Red                           | ✅ device-wide                     | ❌ fuera del v1                                                                 |
+| Logs de la app + crashes      | ✅ logcat                          | ✅ syslog (⚠️ iOS suspende las apps en background: sólo emiten en primer plano) |
+| Inspector HTTP                | ✅ proxy cableado por la tool      | ❌ no se puede automatizar el proxy en iOS                                      |
+
+> **Cuidado al comparar plataformas.** El FPS de Android sale de la capa de **la app** y el de
+> iOS del compositor del **sistema**; la memoria es PSS (prorratea lo compartido) contra
+> footprint (lo que cuenta jetsam). Son números que responden preguntas parecidas pero no son
+> intercambiables — el reporte deja comparar sesiones de distinta plataforma, con la
+> advertencia a la vista.
 
 > **Convenciones de medición.** El CPU de la app es _share-of-device_ (0–100% del teléfono
 > entero, ya normalizado por cores): un thread saturando 1 de 8 cores marca 12.5%, no 100% —
@@ -52,16 +84,24 @@ los últimos 60 s + % de ticks en verde; los crashes de la sesión suman un chip
 
 1. **Descargá el proyecto**: en GitHub, botón verde **Code → Download ZIP**, y descomprimilo
    (o `git clone` si sabés usarlo).
-2. **Doble click en `INSTALAR.bat`** — instala solo todo lo necesario (Bun y adb, paquetes
-   oficiales vía winget) y deja el proyecto listo. Se corre **una sola vez**; si algo ya
-   estaba instalado, lo saltea.
+2. **Doble click en `INSTALAR.bat`** — instala solo todo lo necesario y deja el proyecto
+   listo. Se corre **una sola vez**; lo que ya esté instalado lo saltea. Para Android: Bun y
+   adb. Para iPhone/iPad, además: Python, `pymobiledevice3` (en un entorno propio, sin tocar
+   el Python del sistema) y la app **Apple Devices** de la Microsoft Store, que trae el
+   servicio con el que Windows habla con los iPhone. **Todo el bloque de iOS es opcional**:
+   si algo de eso falla, Android sigue funcionando igual.
 3. **Doble click en `INICIAR.bat`** — el dashboard se abre solo en el navegador. Conectá el
-   teléfono por USB y listo (no importa el orden: el dashboard lo detecta solo cuando
-   aparece).
+   teléfono por USB y listo (no importa el orden ni la marca: el dashboard detecta solo lo
+   que enchufes, Android o iPhone).
 
-En el teléfono, una sola vez: activá **Depuración USB** (Ajustes → Acerca del teléfono →
+**En un Android**, una sola vez: activá **Depuración USB** (Ajustes → Acerca del teléfono →
 tocá 7 veces "Número de compilación" → volvé → Opciones de desarrollador → Depuración USB)
 y al conectarlo aceptá el diálogo "¿Permitir depuración USB?" marcando "Permitir siempre".
+
+**En un iPhone/iPad**, una sola vez: conectalo por USB, desbloqueá la pantalla y tocá
+**"Confiar"** en el diálogo que aparece en el teléfono. Si no aparece, abrí una vez la app
+_Apple Devices_ en la PC y volvé a enchufarlo. **No hace falta Mac, ni jailbreak, ni permisos
+de administrador**: el túnel con el iPhone se levanta en modo usuario.
 
 ## macOS / Linux — instalación normal
 
@@ -111,6 +151,30 @@ pasos 1 y 2 solo):
 
 No hace falta Node, npm, ni instalar nada en el device.
 
+### Requisitos extra para iPhone / iPad (opcional)
+
+Sólo si vas a perfilar iOS. Nada de esto afecta al camino Android: si falta, los iPhone
+simplemente no se detectan y el resto anda igual.
+
+1. **Python 3.9+** y **`pymobiledevice3`**. En Windows lo resuelve `INSTALAR.bat` (crea un
+   entorno propio en `~/.evermore-profiler/pmd3-venv` para no ensuciar el Python del
+   sistema). A mano: `python -m venv <ruta> && <ruta>/bin/python -m pip install pymobiledevice3`.
+   El CLI lo descubre solo: `EVERMORE_PROFILER_PYTHON` → venv gestionado → `python`/`python3`
+   del PATH.
+2. **El servicio usbmux de Apple** — el equivalente de adb para iOS, y la única pieza que no
+   se puede empaquetar (viene firmada por Apple):
+   - **Windows**: app **Apple Devices** de la Microsoft Store
+     (`winget install --id 9NP83LWLPZ9K --source msstore`) o iTunes. Hay que **abrirla una
+     vez**: instalar el paquete no alcanza, el servicio arranca recién cuando se abre la app.
+   - **macOS**: ya viene con el sistema.
+   - **Linux**: `usbmuxd`.
+3. Un **iPhone/iPad con iOS 17.4+** desbloqueado y con **"Confiar en este equipo"** aceptado.
+   Verificado contra un iPhone 15,3 con iOS 26.5.2 en Windows 11.
+
+> **Sin admin y sin Mac.** Los servicios de desarrollo de iOS 17+ exigen un túnel; desde
+> 17.4 se levanta en modo usuario dentro del propio proceso, así que no hace falta ni
+> `sudo`/UAC ni el daemon `tunneld`.
+
 > **Ejecutable standalone**: si usás un binario compilado (`dist/profiler` /
 > `dist/profiler.exe`, ver [Builds](#builds-ejecutables-standalone)), **tampoco hace falta
 > Bun** — el runtime y el dashboard van embebidos. Solo queda adb como dependencia.
@@ -145,20 +209,26 @@ encuentra adb.
 dashboard levanta en **modo espera** y se engancha solo al primer device autorizado que
 aparezca (badge `esperando device…`); enchufá el teléfono y empieza a streamear.
 
-**Selector de device**: la ficha del device en el header es clickeable — lista los devices de
-`adb devices` en el momento, con botón **⟳ Refrescar** (enchufaste otro teléfono con el
-dashboard abierto → Refrescar y aparece). Los `unauthorized`/`offline` se ven pero no son
-elegibles. Al cambiar de device, la ficha, el sampler y el inspector se recablean en caliente
-y la app actual se re-engancha en el nuevo device.
+**Selector de device**: la ficha del device en el header es clickeable — lista **en una sola
+lista los Android y los iPhone** conectados en el momento, cada uno con su plataforma, y un
+botón **⟳ Refrescar**. La plataforma no se adivina: viene como dato de cada device y define
+qué backend se usa. Los `unauthorized`/`offline` (y los iPhone sin "Confiar" aceptado) se ven
+pero no son elegibles. Al cambiar de device, la ficha, el sampler, los logs y el inspector se
+recablean en caliente y la app actual se re-engancha en el device nuevo.
 
 **Selector de apps**: no hace falta pasar `--package`. Sin flag, arranca con la **última app
 usada** (primera vez: `com.evermore.oda.qa`) y desde el dashboard cambiás en caliente con el
-dropdown del header: lista las apps instaladas del device (`pm list packages -3`, con toggle
-para ver las de sistema), **filtradas por el chip "Evermore"** por default, ordenadas por las
-más usadas; el buscador apaga el chip y busca sobre todas. Si la app elegida está cerrada, el
-profiler la **lanza solo** (badge `🚀 launched`). La selección se persiste en
-`~/.config/evermore-profiler/apps.json` (última app, contadores de uso y el término del chip,
-editable a mano).
+dropdown del header: lista las apps instaladas del device — `pm list packages -3` en Android,
+las apps de usuario por lockdown en iOS —, con toggle para ver las de sistema, **filtradas por
+el chip "Evermore"** por default y ordenadas por las más usadas; el buscador apaga el chip y
+busca sobre todas. La selección se persiste en `~/.config/evermore-profiler/config.json`
+(última app, contadores de uso y el término del chip, editable a mano).
+
+> **Diferencia en iOS**: si la app elegida está cerrada, en Android el profiler la **lanza
+> solo** (badge `🚀 launched`); en iOS **no la lanza** — hacerlo exige levantar el túnel de
+> desarrollo, decenas de segundos, para algo que se resuelve con un toque en la pantalla. El
+> device se engancha igual, las métricas del sistema siguen midiéndose y el proceso de la app
+> se toma solo en cuanto la abrís.
 
 Flags: `--package <pkg>` (fuerza una app, pisa el auto-resume) · `--port <n>` (default 4517) ·
 `--inspect` (inspector HTTP) · `--no-open` (no abrir el browser) · `--adb <ruta>` ·
@@ -216,7 +286,7 @@ formato PE válido; falta validarlo corriendo en un Windows real.
 ## Desarrollo
 
 ```bash
-bun test            # 365 tests (parsers contra fixtures reales + lógica core + API del server)
+bun test            # 481 tests (parsers contra fixtures reales + lógica core + API del server)
 bun run typecheck   # tsc estricto
 bun run fmt         # prettier
 bun run build       # ejecutable self-contained (dist/profiler) para este OS
@@ -246,12 +316,16 @@ El hook corre sobre lo staged y frena el commit. Los placeholders son estables d
 una corrida (`<REDACTED:UDID#1>`), así que una captura repartida en varios archivos sigue
 cruzando bien.
 
-### Spike de iOS (en curso — ver `docs/wayfinder/`)
+### Harnesses con device real
+
+El camino iOS está integrado en el dashboard; estos scripts sirven para validarlo end-to-end
+en una máquina nueva (y para diagnosticar cuando un teléfono no aparece):
 
 ```bash
 bash scripts/spike-ios.sh                   # macOS/Linux, con el iPhone enchufado
 bash scripts/spike-ios.sh --install         # crea el venv gestionado con pymobiledevice3
-powershell -ExecutionPolicy Bypass -File scripts\smoke-windows.ps1   # validación de Windows
+powershell -ExecutionPolicy Bypass -File scripts\spike-ios.ps1      # el mismo, en Windows
+powershell -ExecutionPolicy Bypass -File scripts\smoke-windows.ps1  # camino Android en Windows
 ```
 
 La salida cruda va a `.tmp/` (gitignoreado) porque tiene PII. Detalle del stack iOS en
@@ -261,6 +335,14 @@ La salida cruda va a `.tmp/` (gitignoreado) porque tiene PII. Detalle del stack 
 
 - `src/core/adb/` — **costura `AdbTransport`**: todo acceso a adb pasa por acá (producción =
   adb real, tests = stub). Nada del resto conoce el binario adb.
+- `src/core/ios/` — la costura gemela para iOS: **`IosTransport`** es la única puerta a
+  `pymobiledevice3` (nada afuera sabe que hay un Python), y `IosMetricSource` produce los
+  **mismos `Sample`** que el sampler de Android, así que sesiones, veredicto, reporte, server
+  y UI se reusan sin tocarse. Los streams se abren una vez y viven toda la sesión: levantar el
+  túnel cuesta decenas de segundos, así que un comando por tick sería impagable.
+- `src/core/platform.ts` — **capacidades por plataforma**: qué puede medirse en cada una y
+  qué series son comparables entre sí. Es lo que el dashboard usa para esconder lo que no
+  existe (distinto de N/A, que es "existe pero falló este tick").
 - `src/core/collectors/` — un parser puro por métrica (string crudo → dato), testeado contra
   fixtures reales en `fixtures/`.
 - `src/core/sampler/` — loop de sampling en dos carriles: rápido por tick (cats de
@@ -280,8 +362,13 @@ La salida cruda va a `.tmp/` (gitignoreado) porque tiene PII. Detalle del stack 
 ## Estado y qué falta
 
 Ver el mapa en [`docs/wayfinder/map.md`](docs/wayfinder/map.md). El monitor en vivo y el
-inspector de red **funcionan**. Pendiente: grabación de sesiones + historial, export de
-reportes HTML de comparación, MITM para payloads HTTPS, y CI en 3 OS.
+inspector de red **funcionan**, y el camino iOS está integrado end-to-end: lista unificada de
+devices, selector de apps, métricas, logs y capacidades por plataforma, verificado en Windows
+11 contra un iPhone 15,3 con iOS 26.5.2.
+
+Pendiente: MITM para payloads HTTPS, CI en 3 OS, frame-times en iOS (requiere
+`coreprofilesessiontap` — ticket 043, sin compromiso), y las métricas de device en iOS (CPU
+total y RAM usada: existen, pero hoy costarían un comando por tick).
 
 ## Notas
 
@@ -293,3 +380,11 @@ reportes HTML de comparación, MITM para payloads HTTPS, y CI en 3 OS.
   foreground ≈ el tráfico de la app.
 - El proxy del inspector se **restaura** al cortar con Ctrl-C. Si la tool muere de golpe con
   el proxy puesto, limpialo con: `adb shell settings delete global http_proxy`.
+- **Logs en iOS**: iOS suspende las apps en segundo plano — no ejecutan código, así que no
+  logean. Si el panel de logs está vacío con la app minimizada, no está roto: traé la app al
+  frente. (El canal en sí entrega ~20.000 líneas por minuto sin filtrar; por eso el filtro por
+  proceso se aplica **en el device**, no en la PC.)
+- **Si no aparece un iPhone**: revisá en orden que el teléfono esté desbloqueado y con
+  "Confiar" aceptado, que la app _Apple Devices_ haya sido abierta al menos una vez (es lo que
+  levanta el servicio) y que `INSTALAR.bat` haya reportado `ok pymobiledevice3` y
+  `ok usbmux de Apple`. El harness `scripts\spike-ios.ps1` diagnostica los tres pasos.
