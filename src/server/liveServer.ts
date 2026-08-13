@@ -55,7 +55,9 @@ import {
   flowMessage,
   appMessage,
   logsMessage,
+  connectionMessage,
   type AppStatus,
+  type ConnectionState,
 } from './messages'
 import { InspectorProxy } from './inspectorProxy'
 import { run } from '../runtime/spawn'
@@ -108,6 +110,15 @@ export interface LiveServerOptions {
   sessionsDir?: string
   /** cadencia del batch de logs al WS en ms (default 250; tests lo bajan). */
   logFlushMs?: number
+  /**
+   * Ventana de gracia iOS antes de dar el device por perdido (default 3000 ms). Un
+   * microcorte del túnel no debe costar un teardown más un handshake de decenas de segundos.
+   */
+  iosGraceMs?: number
+  /** Frescura máxima de un canal iOS antes de que su valor salga null (default 3000 ms). */
+  iosStaleMs?: number
+  /** Cadencia del watch de procesos iOS (default 5000 ms; los tests lo bajan). */
+  iosProcessPollMs?: number
 }
 
 /**
@@ -206,11 +217,29 @@ export class LiveServer {
   private iosExecutable: string | null = null
   /** capacidades del device activo — la UI esconde lo que no existe en la plataforma. */
   private capabilities: Capabilities = capabilitiesFor('android')
+  /**
+   * Estado del vínculo con el device (ticket 046). Arranca en `lost` cuando no hay serial:
+   * el modo espera ES no tener device, y el dashboard debe decirlo desde el primer frame.
+   */
+  private connState: ConnectionState
+  /**
+   * Ventana de gracia en curso (iOS). El token se cancela si el canal vital revive o si
+   * alguien cambia de device/app a mano, así una ventana vieja no tira un device nuevo.
+   */
+  private iosGrace: { cancelled: boolean } | null = null
 
   constructor(private readonly opts: LiveServerOptions) {
     this.serial = opts.serial ?? null
     this.intervalMs = this.resolveIntervalMs()
     this.inspectorEnabled = opts.inspectHttp ?? false
+    this.connState = this.serial === null ? 'lost' : 'connected'
+  }
+
+  /** Transición de estado del vínculo: sólo avisa al dashboard cuando de verdad cambió. */
+  private setConnState(state: ConnectionState): void {
+    if (this.connState === state) return
+    this.connState = state
+    this.server?.broadcast(connectionMessage(state, this.serial))
   }
 
   private config(): AppStoreData {
@@ -328,6 +357,9 @@ export class LiveServer {
         // Al conectar: mandar la ficha del device y la app profileada actual.
         if (this.device) client.send(deviceMessage(this.device, this.capabilities))
         if (this.appStatus) client.send(appMessage(this.appStatus))
+        // …y el estado del cable. La ficha de arriba es del ÚLTIMO device conocido: sin
+        // esto, un dashboard abierto con el teléfono desenchufado pinta un device fantasma.
+        client.send(connectionMessage(this.connState, this.serial))
       },
     })
 
@@ -880,7 +912,9 @@ export class LiveServer {
     // El ejecutable se resuelve UNA vez por app y queda cacheado: el watch de procesos
     // corre cada 5 s y no puede pagar un `apps query` en cada vuelta.
     this.iosExecutable = (await transport?.appExecutable?.(serial, pkg).catch(() => null)) ?? null
-    const processes = (await transport?.processes?.(serial).catch(() => [])) ?? []
+    // `null` (no se pudo preguntar) y `[]` (no está corriendo) coinciden acá: en ambos casos
+    // la app queda sin proceso enganchado y el watch la toma cuando aparezca.
+    const processes = (await transport?.processes?.(serial).catch(() => null)) ?? []
     const proc = resolveIosProcess(processes, pkg, this.iosExecutable)
 
     this.appStatus = { packageName: pkg, pid: proc?.pid ?? null, launched: false }
@@ -1011,12 +1045,7 @@ export class LiveServer {
     const oldSampler = this.sampler
     this.sampler = null
     await oldSampler?.dispose()
-    this.iosSource?.stop()
-    this.iosSource = null
-    this.iosLogCapture?.stop()
-    this.iosLogCapture = null
-    if (this.iosProcessWatch) clearInterval(this.iosProcessWatch)
-    this.iosProcessWatch = null
+    this.teardownIos()
     if (this.timer) {
       clearInterval(this.timer)
       this.timer = null
@@ -1050,7 +1079,9 @@ export class LiveServer {
     // id solo no alcanza — `com.github.stormbreaker.prod` corre como `GitHub`).
     this.iosExecutable =
       (await transport?.appExecutable?.(device.serial, pkg).catch(() => null)) ?? null
-    const processes = (await transport?.processes?.(device.serial).catch(() => [])) ?? []
+    // acá `null` (no se pudo preguntar) y `[]` (la app no corre) llevan al mismo lado: sin
+    // proceso enganchado. La distinción importa en el watch, que es quien declara muertes.
+    const processes = (await transport?.processes?.(device.serial).catch(() => null)) ?? []
     const proc = resolveIosProcess(processes, pkg, this.iosExecutable)
     this.appStatus = { packageName: pkg, pid: proc?.pid ?? null, launched: false }
     this.appDead = proc === null
@@ -1071,6 +1102,12 @@ export class LiveServer {
         ...(proc !== null ? { processName: proc.name } : {}),
         intervalMs: this.intervalMs,
         onSample: (sample) => this.pushSample(sample),
+        ...(this.opts.iosStaleMs !== undefined ? { staleMs: this.opts.iosStaleMs } : {}),
+        // graphics es el canal vital: FPS y GPU son la razón de ser del profiler. Si se
+        // cae, no se degrada — se abre la ventana de gracia y, si no vuelve, se rehace el
+        // enganche entero (decisión del grilling 2026-08-13).
+        onVitalDown: () => this.startIosGrace(),
+        onVitalUp: () => this.cancelIosGrace(true),
       })
       this.iosSource.start()
       // Los logs entran al mismo ring y panel que los de logcat: el LogEntry del ticket
@@ -1087,6 +1124,7 @@ export class LiveServer {
       this.iosLogCapture.start()
       this.startIosProcessWatch()
     }
+    this.setConnState('connected')
     return { device: this.device, app: this.appStatus }
   }
 
@@ -1100,13 +1138,26 @@ export class LiveServer {
     const poll = async (): Promise<void> => {
       const transport = this.opts.iosTransport
       const serial = this.serial
-      if (!transport?.processes || !serial || !this.iosSource) return
+      const source = this.iosSource
+      if (!transport?.processes || !serial || !source) return
       const pkg = this.appStatus?.packageName ?? this.opts.packageName
-      const processes = await transport.processes(serial).catch(() => [])
+      const processes = await transport.processes(serial).catch(() => null)
+      // `processes ps` tarda hasta 30 s: en ese hueco el device se pudo perder y el
+      // teardown ya soltó la fuente. Verificado contra el iPhone real — matar el canal
+      // vital tiraba el server entero con "null is not an object" y por eso NADA
+      // reconectaba. Chequear antes del await no alcanza: hay que revalidar después.
+      if (this.iosSource !== source || this.serial !== serial) return
+      // `null` = no pudimos preguntar (device desenchufado, lockdown caído). Antes esto
+      // caía a `[]` y a los 3 polls declaraba muerta a la app: cada desconexión dejaba un
+      // `app-died` falso en el historial. `trackAppLife(null)` ya sabe no concluir nada.
+      if (processes === null) {
+        this.trackAppLife(null)
+        return
+      }
       const proc = resolveIosProcess(processes, pkg, this.iosExecutable)
       this.trackAppLife(proc !== null)
       if (proc === null) return
-      this.iosSource.setProcessName(proc.name)
+      source.setProcessName(proc.name)
       // filtrar por pid del lado del host: cambiar de pid es asignar una variable, no
       // relanzar el stream (que en iOS costaría el handshake del túnel entero)
       this.iosLogCapture?.setPid(proc.pid)
@@ -1115,7 +1166,89 @@ export class LiveServer {
         this.server?.broadcast(appMessage(this.appStatus))
       }
     }
-    this.iosProcessWatch = setInterval(() => void poll(), 5000)
+    // `.catch` obligatorio: el CLI mata el proceso ante un unhandledRejection, así que una
+    // excepción en el watch no debe poder tumbar el server (nos pasó, ver arriba).
+    this.iosProcessWatch = setInterval(
+      () => void poll().catch(() => {}),
+      this.opts.iosProcessPollMs ?? 5000,
+    )
+  }
+
+  /**
+   * El canal vital (graphics) se cayó: ventana de gracia antes de soltar el device
+   * (ticket 046).
+   *
+   * No se destruye nada todavía — un microcorte del túnel costaría el teardown más un
+   * handshake de decenas de segundos para volver. Mientras corre la ventana, los valores
+   * del canal ya salen null por su TTL, así que el dashboard no muestra nada viejo.
+   *
+   * El árbitro (`usbmux list`) se sondea EN SECUENCIA porque cada sonda es un proceso
+   * Python de ~1,2 s. Su aporte es cortar la espera cuando el device efectivamente se fue:
+   * si sigue en el bus, se agota la ventana igual, porque sin graphics no hay sesión.
+   */
+  private startIosGrace(): void {
+    if (this.iosGrace) return
+    const token = { cancelled: false }
+    this.iosGrace = token
+    this.setConnState('reconnecting')
+    const deadline = Date.now() + (this.opts.iosGraceMs ?? 3000)
+    void (async () => {
+      while (!token.cancelled && Date.now() < deadline) {
+        const devices = (await this.opts.iosTransport?.devices().catch(() => [])) ?? []
+        if (token.cancelled) return
+        const present = devices.some((d) => d.serial === this.serial && d.state === 'device')
+        if (!present) break // el device no está: no hay nada que esperar
+        // respiro entre sondas: contra el device real cada una ya tarda ~1,2 s, pero un
+        // transporte instantáneo (tests) haría girar este loop sin freno
+        await new Promise((r) => setTimeout(r, Math.min(500, Math.max(0, deadline - Date.now()))))
+      }
+      if (token.cancelled) return
+      this.iosGrace = null
+      this.loseIosDevice()
+    })().catch(() => {
+      // mismo motivo que el watch de procesos: un throw acá llegaría a unhandledRejection
+      // y el CLI baja el server — justo cuando lo que hace falta es que siga para reconectar
+      this.iosGrace = null
+    })
+  }
+
+  /** Cancela la ventana en curso (el canal volvió, o el usuario cambió de device/app). */
+  private cancelIosGrace(recovered: boolean): void {
+    if (this.iosGrace) this.iosGrace.cancelled = true
+    this.iosGrace = null
+    if (recovered) this.setConnState('connected')
+  }
+
+  /**
+   * Se acabó la gracia: soltar el iPhone y volver al modo espera.
+   *
+   * El re-enganche NO tiene camino propio — se revive `startDeviceWatch()`, que engancha
+   * por el mismo `switchToIosDevice` del arranque. Con el device suelto no hay timer de
+   * sampling ni streams vivos, así que el dashboard deja de recibir samples: el hueco es
+   * real, no una fila de valores viejos.
+   */
+  private loseIosDevice(): void {
+    this.teardownIos()
+    this.serial = null
+    this.iosExecutable = null
+    this.appDead = true
+    if (this.appStatus && this.appStatus.pid !== null) {
+      this.appStatus = { ...this.appStatus, pid: null }
+      this.server?.broadcast(appMessage(this.appStatus))
+    }
+    this.setConnState('lost')
+    if (!this.deviceWatch) this.startDeviceWatch()
+  }
+
+  /** Corta los cuatro procesos pmd3 y el watch de procesos. Idempotente. */
+  private teardownIos(): void {
+    this.cancelIosGrace(false)
+    this.iosSource?.stop()
+    this.iosSource = null
+    this.iosLogCapture?.stop()
+    this.iosLogCapture = null
+    if (this.iosProcessWatch) clearInterval(this.iosProcessWatch)
+    this.iosProcessWatch = null
   }
 
   private async switchDevice(serial: string): Promise<{ device: DeviceInfo; app: AppStatus }> {
@@ -1130,12 +1263,7 @@ export class LiveServer {
     await old?.dispose()
 
     // volver a Android desde un iPhone: cortar la fuente iOS y restaurar el loop propio
-    this.iosSource?.stop()
-    this.iosSource = null
-    this.iosLogCapture?.stop()
-    this.iosLogCapture = null
-    if (this.iosProcessWatch) clearInterval(this.iosProcessWatch)
-    this.iosProcessWatch = null
+    this.teardownIos()
     this.capabilities = capabilitiesFor('android')
     if (!this.timer) this.startTimer()
 
@@ -1150,6 +1278,7 @@ export class LiveServer {
     // en modo espera con el inspector prendido nunca llegó a arrancar: acá se cablea
     if (this.inspectorEnabled) await this.startInspector()
     const app = await this.switchApp(pkg, false)
+    this.setConnState('connected')
     return { device: this.device, app }
   }
 
@@ -1378,12 +1507,8 @@ export class LiveServer {
     if (this.deviceWatch) clearInterval(this.deviceWatch)
     // Sin esto quedan procesos de pymobiledevice3 huérfanos con su túnel abierto: el
     // dashboard se cierra y el iPhone sigue con dos sesiones de Instruments colgadas.
-    if (this.iosProcessWatch) clearInterval(this.iosProcessWatch)
-    this.iosProcessWatch = null
-    this.iosSource?.stop()
-    this.iosSource = null
-    this.iosLogCapture?.stop()
-    this.iosLogCapture = null
+    // Cancela además la ventana de gracia, que si no seguiría sondeando después del cierre.
+    this.teardownIos()
     this.deviceWatch = null
     if (this.logFlushTimer) clearInterval(this.logFlushTimer)
     this.logFlushTimer = null

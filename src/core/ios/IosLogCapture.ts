@@ -20,6 +20,7 @@
 import type { LogEntry } from '../logs/logEntry'
 import type { IosTransport } from './IosTransport'
 import { isFromPid, parseSyslogLine } from './parseSyslog'
+import { ResilientStream } from './resilientStream'
 
 export interface IosLogCaptureOptions {
   transport: Pick<IosTransport, 'stream'>
@@ -29,10 +30,12 @@ export interface IosLogCaptureOptions {
   pid?: number | null
   /** nombre de proceso para filtrar EN EL DEVICE; sin él se trae el syslog entero. */
   processName?: string | null
+  /** escalera de reintento del stream (los tests la bajan a milisegundos). */
+  backoffMs?: number[]
 }
 
 export class IosLogCapture {
-  private stop_: (() => void) | null = null
+  private stream: ResilientStream | null = null
   private pid: number | null
 
   constructor(private readonly opts: IosLogCaptureOptions) {
@@ -45,18 +48,26 @@ export class IosLogCapture {
       name !== undefined && name !== null && name !== ''
         ? ['syslog', 'live', '--process-name', name]
         : ['syslog', 'live']
-    this.stop_ = this.opts.transport.stream(
-      this.opts.serial,
-      args,
-      (line) => {
-        const entry = parseSyslogLine(line)
-        if (entry === null) return
-        if (!isFromPid(entry, this.pid)) return
-        this.opts.onEntries([entry])
-      },
-      // El stream muere solo si el device se desconecta; el server re-arma al reenganchar.
-      undefined,
-    )
+    // `syslog` es LOCKDOWN: no paga el handshake del túnel, así que si su proceso muere se
+    // repone solo con backoff (ticket 046). Antes, un syslog caído dejaba el panel de logs
+    // mudo hasta el próximo enganche del device.
+    this.stream = new ResilientStream({
+      ...(this.opts.backoffMs !== undefined ? { backoffMs: this.opts.backoffMs } : {}),
+      start: (onExit) =>
+        this.opts.transport.stream(
+          this.opts.serial,
+          args,
+          (line) => {
+            const entry = parseSyslogLine(line)
+            if (entry === null) return
+            this.stream?.noteData()
+            if (!isFromPid(entry, this.pid)) return
+            this.opts.onEntries([entry])
+          },
+          onExit,
+        ),
+    })
+    this.stream.start()
   }
 
   /**
@@ -71,7 +82,7 @@ export class IosLogCapture {
   }
 
   stop(): void {
-    this.stop_?.()
-    this.stop_ = null
+    this.stream?.stop()
+    this.stream = null
   }
 }

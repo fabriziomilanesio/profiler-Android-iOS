@@ -15,3 +15,10 @@ fixtures/**/raw/
 
 # venv suelto de pruebas locales (el gestionado vive en ~/.evermore-profiler/pmd3-venv)
 .venv-ios/
+
+# artefactos del e2e (traces y reporte HTML de Playwright)
+test-results/
+playwright-report/
+
+# el repo usa bun.lock; npm se cuela al instalar browsers de Playwright
+package-lock.json

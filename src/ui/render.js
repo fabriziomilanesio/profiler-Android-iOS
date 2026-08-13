@@ -1435,11 +1435,39 @@
   var liveSeconds = 0
   var lastSampleAt = null
   var SAMPLE_STALL_MS = 5000 // sin samples por 5 s ⇒ pausa (cubre sampling de 1–2 s)
-  function setConnected(connected) {
+  // Dos vínculos distintos, un solo badge (ticket 046): el WS (¿está el server?) y el
+  // device (¿está el teléfono?). Se pinta el peor de los dos, porque sin server no se
+  // sabe nada del device.
+  var wsConnected = false
+  var deviceState = 'connected'
+  function paintBadge() {
     var badge = $('recBadge')
     var label = $('recLabel')
-    badge.classList.toggle('offline', !connected)
-    label.textContent = connected ? 'LIVE' : 'OFFLINE'
+    var text = 'LIVE'
+    var offline = false
+    var warn = false
+    if (!wsConnected) {
+      text = 'OFFLINE'
+      offline = true
+    } else if (deviceState === 'lost') {
+      text = 'NO DEVICE'
+      offline = true
+    } else if (deviceState === 'reconnecting') {
+      text = 'RECONNECTING'
+      warn = true
+    }
+    badge.classList.toggle('offline', offline)
+    badge.classList.toggle('warn', warn)
+    label.textContent = text
+  }
+  function setConnected(connected) {
+    wsConnected = connected
+    paintBadge()
+  }
+  /** Estado del cable con el device: 'connected' | 'reconnecting' | 'lost'. */
+  function setDeviceState(state) {
+    deviceState = state
+    paintBadge()
   }
   setInterval(function () {
     if (lastSampleAt === null || Date.now() - lastSampleAt > SAMPLE_STALL_MS) return
@@ -1496,6 +1524,7 @@
     render: render,
     setDevice: setDevice,
     setConnected: setConnected,
+    setDeviceState: setDeviceState,
     setAppRunning: setAppRunning,
     resetSeries: resetSeries,
     setTheme: applyTheme,

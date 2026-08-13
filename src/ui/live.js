@@ -750,6 +750,11 @@
       } else if (msg.type === 'logs') {
         scanLogSignals(msg.entries)
         LogsPanel.onLogs(msg.entries)
+      } else if (msg.type === 'connection') {
+        // Estado del CABLE con el device, no del WS (ticket 046). Llega en cada transición
+        // y también al abrir, porque la ficha {type:'device'} es del último device conocido
+        // y sin esto un dashboard abierto tarde pintaría un teléfono que no está.
+        ProfilerDashboard.setDeviceState(msg.state)
       }
     })
 

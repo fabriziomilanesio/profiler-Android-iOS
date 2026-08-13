@@ -18,12 +18,24 @@ export interface AppStatus {
   launched: boolean
 }
 
+/**
+ * Estado del vínculo con el device (ticket 046). Es del CABLE, no del WebSocket: el
+ * dashboard ya sabe solo si perdió al server (el WS se cae), pero no tenía forma de saber
+ * si el server perdió al teléfono.
+ *
+ *  - `connected`    — hay device y sus canales entregan.
+ *  - `reconnecting` — el canal vital se cayó; ventana de gracia, todavía no se soltó nada.
+ *  - `lost`         — no hay device; el watcher está esperando que vuelva.
+ */
+export type ConnectionState = 'connected' | 'reconnecting' | 'lost'
+
 export type ServerMessage =
   | { type: 'device'; device: DeviceInfo; capabilities?: Capabilities }
   | { type: 'sample'; sample: Sample }
   | { type: 'flow'; flow: InspectorFlow }
   | { type: 'app'; app: AppStatus }
   | { type: 'logs'; entries: LogEntry[] }
+  | { type: 'connection'; state: ConnectionState; serial: string | null }
 
 /**
  * Ficha del device + qué puede medir esta plataforma (ticket 037). La UI usa las
@@ -44,6 +56,15 @@ export function flowMessage(flow: InspectorFlow): string {
 
 export function appMessage(app: AppStatus): string {
   return JSON.stringify({ type: 'app', app } satisfies ServerMessage)
+}
+
+/**
+ * Se emite en cada transición Y en `onOpen`: un dashboard que se abre con el device caído
+ * recibe igual la ficha del último device conocido, así que sin este mensaje pintaría un
+ * teléfono que no está.
+ */
+export function connectionMessage(state: ConnectionState, serial: string | null): string {
+  return JSON.stringify({ type: 'connection', state, serial } satisfies ServerMessage)
 }
 
 export function logsMessage(entries: LogEntry[]): string {

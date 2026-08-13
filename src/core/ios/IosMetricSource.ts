@@ -11,6 +11,7 @@
 // tarda decenas de segundos. Abrir un proceso por tick sería pagar ese handshake cada vez.
 import type { Sample } from '../schema'
 import type { IosTransport } from './IosTransport'
+import { ResilientStream } from './resilientStream'
 import { parseGraphicsLine, type IosGraphicsSample } from './parseGraphics'
 import { SysmonAssembler, type IosProcessSample } from './parseSysmon'
 import { parseBatteryLine } from './parseBattery'
@@ -29,6 +30,36 @@ export interface IosMetricSourceOptions {
   onSample: (s: Sample) => void
   /** ms entre Samples emitidos (default 1000, igual que Android). */
   intervalMs?: number
+  /**
+   * Ventana de frescura por canal (ticket 046): un valor más viejo que esto sale `null` en
+   * el Sample en vez de repetirse. Default 3000 ms = 3× la cadencia de graphics (1 Hz).
+   */
+  staleMs?: number
+  /**
+   * El canal VITAL (graphics) se cayó: o murió su hijo, o dejó de entregar hace `staleMs`.
+   * El server lo usa para arrancar la ventana de gracia y, si no vuelve, rehacer el
+   * enganche entero. FPS y GPU son la razón de ser del profiler: sin ese canal no hay
+   * sesión que valga, así que no se degrada en silencio como los otros.
+   */
+  onVitalDown?: () => void
+  /** El canal vital volvió a entregar (cancela la ventana de gracia del server). */
+  onVitalUp?: () => void
+  /** clock inyectable (tests); default Date.now. */
+  now?: () => number
+  /** escalera de reintento del canal de batería (los tests la bajan a milisegundos). */
+  backoffMs?: number[]
+}
+
+/**
+ * Último valor recibido por un canal, con el instante en que llegó.
+ *
+ * El timestamp es la mitad importante: sin él, un canal mudo (túnel degradado, hijo vivo
+ * que dejó de escribir) seguía repitiendo su último valor con un `ts` fresco cada segundo
+ * — dato viejo disfrazado de medición nueva, que además se persistía y llegaba al reporte.
+ */
+interface Fresh<T> {
+  value: T
+  at: number
 }
 
 /**
@@ -39,22 +70,39 @@ export interface IosMetricSourceOptions {
  * ventanas por canal y no aporta nada a 1 Hz.
  */
 interface LastValues {
-  graphics: IosGraphicsSample | null
-  process: IosProcessSample | null
-  battery: BatterySample | null
+  graphics: Fresh<IosGraphicsSample> | null
+  process: Fresh<IosProcessSample> | null
+  battery: Fresh<BatterySample> | null
 }
+
+/** ms de frescura por defecto: 3× la cadencia de graphics (1 Hz). */
+export const DEFAULT_STALE_MS = 3000
 
 export class IosMetricSource {
   private stopGraphics: (() => void) | null = null
   private stopSysmon: (() => void) | null = null
-  private stopBattery: (() => void) | null = null
+  /** canal de batería, con reintento propio (lockdown: reponerlo es barato). */
+  private battery: ResilientStream | null = null
   private timer: ReturnType<typeof setInterval> | null = null
   private readonly assembler = new SysmonAssembler()
   private readonly last: LastValues = { graphics: null, process: null, battery: null }
   private processName: string | null = null
   private t = 0
+  private readonly staleMs: number
+  private readonly now: () => number
+  /** el canal vital ya se dio por caído (no volver a avisar hasta que reviva). */
+  private vitalDown = false
+  /** el hijo de sysmon sigue vivo; si murió hay que re-armar aunque el nombre no cambie. */
+  private sysmonAlive = false
+  /** stop() ya corrió: los onExit que provoca son esperados, no una caída. */
+  private stopped = false
+  /** generación del stream de sysmon: el onExit del hijo viejo no habla por el nuevo. */
+  private sysmonGen = 0
 
-  constructor(private readonly opts: IosMetricSourceOptions) {}
+  constructor(private readonly opts: IosMetricSourceOptions) {
+    this.staleMs = opts.staleMs ?? DEFAULT_STALE_MS
+    this.now = opts.now ?? Date.now
+  }
 
   start(): void {
     const { transport, serial } = this.opts
@@ -62,17 +110,39 @@ export class IosMetricSource {
     // Canal de gráficos: FPS y GPU son del compositor del device, no del proceso. Arranca
     // siempre, incluso con la app cerrada — igual que el dashboard de Android sigue
     // tickeando con el proceso muerto.
-    this.stopGraphics = transport.stream(serial, ['developer', 'dvt', 'graphics'], (line) => {
-      const s = parseGraphicsLine(line)
-      if (s !== null) this.last.graphics = s
-    })
+    this.stopGraphics = transport.stream(
+      serial,
+      ['developer', 'dvt', 'graphics'],
+      (line) => {
+        const s = parseGraphicsLine(line)
+        if (s === null) return
+        this.last.graphics = { value: s, at: this.now() }
+        this.markVitalUp()
+      },
+      // Hijo muerto: no vuelve solo y no hay TTL que esperar — el server se entera ya.
+      () => this.markVitalDown(),
+    )
 
     // Batería: canal LOCKDOWN, no DTX — no depende del túnel ni del proceso de la app,
-    // así que arranca siempre y es de los más baratos del stack.
-    this.stopBattery = transport.stream(serial, ['diagnostics', 'battery', 'monitor'], (line) => {
-      const b = parseBatteryLine(line)
-      if (b !== null) this.last.battery = b
+    // así que arranca siempre y es de los más baratos del stack. Y por lo mismo se repone
+    // solo: verificado contra el iPhone real, matar su proceso dejaba la temperatura en N/A
+    // hasta el próximo enganche del device, y la temperatura es lo único térmico que iOS da.
+    this.battery = new ResilientStream({
+      ...(this.opts.backoffMs !== undefined ? { backoffMs: this.opts.backoffMs } : {}),
+      start: (onExit) =>
+        transport.stream(
+          serial,
+          ['diagnostics', 'battery', 'monitor'],
+          (line) => {
+            const b = parseBatteryLine(line)
+            if (b === null) return
+            this.last.battery = { value: b, at: this.now() }
+            this.battery?.noteData()
+          },
+          onExit,
+        ),
     })
+    this.battery.start()
 
     if (this.opts.processName !== undefined) this.setProcessName(this.opts.processName)
     this.timer = setInterval(() => this.emit(), this.opts.intervalMs ?? 1000)
@@ -84,10 +154,21 @@ export class IosMetricSource {
    *
    * Idempotente: con el mismo nombre no re-arma el stream, porque volver a levantarlo
    * cuesta decenas de segundos de handshake del túnel.
+   *
+   * **Salvo que el stream esté muerto** (ticket 046). La idempotencia miraba sólo el
+   * nombre, así que un sysmon caído con la app llamándose igual no se re-armaba nunca y el
+   * canal de proceso quedaba mudo para el resto de la sesión. El watch de procesos del
+   * server llama acá cada 5 s: con la salud del stream en la condición, ese mismo latido
+   * es el que lo repone.
    */
   setProcessName(processName: string): void {
-    if (processName === this.processName) return
+    if (processName === this.processName && this.sysmonAlive) return
     this.processName = processName
+    this.sysmonAlive = true
+    // Generación del stream: matar al hijo viejo dispara SU onExit un rato después, y sin
+    // esto ese cadáver apagaría la bandera del stream nuevo. El watch lo vería muerto,
+    // re-armaría, y cada vuelta de 5 s pagaría un handshake de túnel para nada.
+    const gen = ++this.sysmonGen
     this.stopSysmon?.()
     this.last.process = null
     const { transport, serial } = this.opts
@@ -122,7 +203,10 @@ export class IosMetricSource {
       ],
       (line) => {
         const s = this.assembler.push(line)
-        if (s !== null) this.last.process = s
+        if (s !== null) this.last.process = { value: s, at: this.now() }
+      },
+      () => {
+        if (gen === this.sysmonGen) this.sysmonAlive = false
       },
     )
   }
@@ -133,14 +217,18 @@ export class IosMetricSource {
   }
 
   stop(): void {
+    // ANTES de matar a los hijos: al hacerlo salta su `onExit`, que sin este flag avisaría
+    // "canal vital caído" en pleno teardown y le arrancaría al server una ventana de
+    // gracia por un device que él mismo acaba de soltar.
+    this.stopped = true
     if (this.timer !== null) clearInterval(this.timer)
     this.timer = null
     this.stopGraphics?.()
     this.stopSysmon?.()
-    this.stopBattery?.()
+    this.battery?.stop()
     this.stopGraphics = null
     this.stopSysmon = null
-    this.stopBattery = null
+    this.battery = null
   }
 
   /** true cuando algún canal ya entregó datos — lo usa el server para no emitir en vacío. */
@@ -148,9 +236,38 @@ export class IosMetricSource {
     return this.last.graphics !== null || this.last.process !== null || this.last.battery !== null
   }
 
+  /** El canal vital está caído ahora mismo (hijo muerto o TTL vencido). */
+  get isVitalDown(): boolean {
+    return this.vitalDown
+  }
+
+  /** Valor del canal si llegó dentro de la ventana de frescura; si no, null. */
+  private fresh<T>(entry: Fresh<T> | null): T | null {
+    if (entry === null) return null
+    return this.now() - entry.at <= this.staleMs ? entry.value : null
+  }
+
+  private markVitalDown(): void {
+    if (this.vitalDown || this.stopped) return
+    this.vitalDown = true
+    this.opts.onVitalDown?.()
+  }
+
+  private markVitalUp(): void {
+    if (!this.vitalDown || this.stopped) return
+    this.vitalDown = false
+    this.opts.onVitalUp?.()
+  }
+
   private emit(): void {
-    const g = this.last.graphics
-    const p = this.last.process
+    // El TTL sólo corre DESPUÉS de la primera línea: levantar el túnel tarda decenas de
+    // segundos (spike 033) y no se puede dar por caído un canal que todavía no arrancó.
+    // El handshake que nunca llega no se detecta acá — sí lo detecta la muerte del hijo.
+    if (this.last.graphics !== null && this.fresh(this.last.graphics) === null) {
+      this.markVitalDown()
+    }
+    const g = this.fresh(this.last.graphics)
+    const p = this.fresh(this.last.process)
     const sample: Sample = {
       t: this.t,
       ts: Date.now(),
@@ -186,7 +303,12 @@ export class IosMetricSource {
       // Temperatura de SoC: no existe en iOS sin entitlements privados.
       tempC: null,
       // Temperatura DE BATERÍA (no del SoC — eso no existe en iOS).
-      battery: this.last.battery ?? { levelPct: null, tempC: null, mA: null, charging: null },
+      battery: this.fresh(this.last.battery) ?? {
+        levelPct: null,
+        tempC: null,
+        mA: null,
+        charging: null,
+      },
       netRxKb: null,
       netTxKb: null,
     }

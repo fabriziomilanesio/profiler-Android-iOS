@@ -6,11 +6,22 @@ import type { Sample } from '../schema'
 
 /** Transporte fake: guarda los callbacks para empujar líneas a mano desde el test. */
 function fakeTransport() {
-  const streams: Array<{ args: string[]; onLine: (l: string) => void; stopped: boolean }> = []
+  const streams: Array<{
+    args: string[]
+    onLine: (l: string) => void
+    /** el test lo llama para simular la muerte del hijo de pymobiledevice3 */
+    onExit?: ((err: Error | null) => void) | undefined
+    stopped: boolean
+  }> = []
   return {
     streams,
-    stream(_serial: string, args: string[], onLine: (l: string) => void): () => void {
-      const entry = { args, onLine, stopped: false }
+    stream(
+      _serial: string,
+      args: string[],
+      onLine: (l: string) => void,
+      onExit?: (err: Error | null) => void,
+    ): () => void {
+      const entry = { args, onLine, onExit, stopped: false }
       streams.push(entry)
       return () => {
         entry.stopped = true
@@ -210,5 +221,172 @@ describe('IosMetricSource', () => {
     streamFor(transport, 'graphics')?.onLine(GRAPHICS_LINE)
     expect(src.hasData).toBe(true)
     src.stop()
+  })
+})
+
+// ---- ticket 046: frescura, canal vital y re-armado ----
+
+/** Igual que makeSource pero con clock manual: los TTL se testean sin dormir. */
+function makeStaleSource(opts: { staleMs?: number; backoffMs?: number[] } = {}) {
+  const transport = fakeTransport()
+  const samples: Sample[] = []
+  const events: string[] = []
+  let clock = 1_000_000
+  const src = new IosMetricSource({
+    transport,
+    serial: 'UDID',
+    processName: 'EvermoreArcade',
+    onSample: (s) => samples.push(s),
+    intervalMs: 5,
+    staleMs: opts.staleMs ?? 3000,
+    backoffMs: opts.backoffMs ?? [5],
+    now: () => clock,
+    onVitalDown: () => events.push('down'),
+    onVitalUp: () => events.push('up'),
+  })
+  return {
+    transport,
+    samples,
+    src,
+    events,
+    advance: (ms: number) => {
+      clock += ms
+    },
+  }
+}
+
+describe('IosMetricSource — frescura y canal vital (046)', () => {
+  test('un valor más viejo que staleMs sale null en vez de repetirse', async () => {
+    // El bug: el tick seguía empujando el último FPS con ts fresco cada segundo, así que
+    // un túnel mudo se veía igual que un juego corriendo a 59 fps.
+    const { transport, samples, src, advance } = makeStaleSource()
+    src.start()
+    streamFor(transport, 'graphics')?.onLine(GRAPHICS_LINE)
+    streamFor(transport, 'battery')?.onLine('{"CurrentCapacity": 87, "Temperature": 2989}')
+    pushSysmon(streamFor(transport, 'sysmon')?.onLine ?? (() => {}))
+    await tick()
+    expect(samples.at(-1)?.fps).toBe(59)
+
+    advance(3001)
+    await tick()
+    src.stop()
+    const s = samples.at(-1)
+    expect(s?.fps).toBeNull()
+    expect(s?.gpu).toBeNull()
+    expect(s?.cpu).toBeNull()
+    expect(s?.battery.levelPct).toBeNull()
+  })
+
+  test('graphics vencido avisa caída del canal vital UNA sola vez', async () => {
+    const { transport, src, events, advance } = makeStaleSource()
+    src.start()
+    streamFor(transport, 'graphics')?.onLine(GRAPHICS_LINE)
+    await tick()
+    expect(events).toEqual([])
+
+    advance(3001)
+    await tick(30) // varios ticks con el canal vencido
+    src.stop()
+    expect(events).toEqual(['down'])
+  })
+
+  test('el hijo muerto avisa al instante, sin esperar el TTL', () => {
+    const { transport, src, events } = makeStaleSource()
+    src.start()
+    streamFor(transport, 'graphics')?.onExit?.(null)
+    src.stop()
+    expect(events).toEqual(['down'])
+  })
+
+  test('si el canal vuelve dentro de la ventana, se avisa la recuperación', async () => {
+    const { transport, src, events, advance } = makeStaleSource()
+    src.start()
+    streamFor(transport, 'graphics')?.onLine(GRAPHICS_LINE)
+    advance(3001)
+    await tick()
+    expect(events).toEqual(['down'])
+
+    streamFor(transport, 'graphics')?.onLine(GRAPHICS_LINE)
+    await tick()
+    src.stop()
+    expect(events).toEqual(['down', 'up'])
+    expect(src.isVitalDown).toBe(false)
+  })
+
+  test('sin la primera línea NO se declara caído: el handshake del túnel tarda', async () => {
+    // Levantar el túnel userspace tarda decenas de segundos (spike 033). Declarar caído un
+    // canal que todavía no arrancó tiraría la sesión justo mientras se está conectando.
+    const { src, events, advance } = makeStaleSource()
+    src.start()
+    advance(60_000)
+    await tick(30)
+    src.stop()
+    expect(events).toEqual([])
+  })
+
+  test('stop() no dispara la caída del canal vital', () => {
+    // stop() mata a los hijos y eso levanta sus onExit: sin el guard, el server abriría una
+    // ventana de gracia por un device que él mismo acaba de soltar.
+    const { transport, src, events } = makeStaleSource()
+    src.start()
+    src.stop()
+    for (const s of transport.streams) s.onExit?.(null)
+    expect(events).toEqual([])
+  })
+
+  test('muerto el sysmon, setProcessName lo re-arma aunque el nombre sea el mismo', () => {
+    // El bug: la idempotencia miraba sólo el nombre, así que un sysmon caído con la app
+    // llamándose igual quedaba mudo para el resto de la sesión.
+    const { transport, src } = makeStaleSource()
+    src.start()
+    const antes = transport.streams.filter((s) => s.args.includes('sysmon')).length
+    expect(antes).toBe(1)
+
+    src.setProcessName('EvermoreArcade') // sin cambios y con el stream vivo: no re-arma
+    expect(transport.streams.filter((s) => s.args.includes('sysmon'))).toHaveLength(1)
+
+    streamFor(transport, 'sysmon')?.onExit?.(null)
+    src.setProcessName('EvermoreArcade') // mismo nombre, stream muerto: SÍ re-arma
+    src.stop()
+    expect(transport.streams.filter((s) => s.args.includes('sysmon'))).toHaveLength(2)
+  })
+
+  test('muerto el canal de batería, se repone solo y la temperatura vuelve', async () => {
+    // Salió del iPhone real: matar `diagnostics battery monitor` dejaba la temperatura en
+    // N/A para el resto de la sesión. Es lo único térmico que iOS entrega.
+    const { transport, samples, src, advance } = makeStaleSource()
+    const batteries = () => transport.streams.filter((s) => s.args.includes('battery'))
+    src.start()
+    batteries().at(-1)!.onLine('{"CurrentCapacity": 87, "Temperature": 3300}')
+    await tick()
+    expect(samples.at(-1)?.battery.tempC).toBeCloseTo(33, 1)
+
+    batteries().at(-1)!.onExit?.(null) // muere el proceso del canal
+    advance(3001)
+    await tick()
+    expect(samples.at(-1)?.battery.tempC).toBeNull() // N/A honesto, no el valor congelado
+
+    await tick(30) // backoff de 5 ms: ya se repuso
+    expect(batteries()).toHaveLength(2)
+    batteries().at(-1)!.onLine('{"CurrentCapacity": 86, "Temperature": 3319}')
+    await tick()
+    src.stop()
+    expect(samples.at(-1)?.battery.tempC).toBeCloseTo(33.19, 2)
+  })
+
+  test('el onExit tardío del sysmon viejo no marca muerto al nuevo', async () => {
+    // Al re-armar se mata al hijo anterior y su onExit llega DESPUÉS. Sin generación, ese
+    // cadáver apagaba la bandera del stream recién creado y el watch re-armaba cada 5 s,
+    // pagando un handshake de túnel por vuelta.
+    const { transport, src } = makeStaleSource()
+    src.start()
+    const viejo = transport.streams.find((s) => s.args.includes('sysmon'))!
+
+    src.setProcessName('OtraApp') // re-arma: ahora hay 2 streams de sysmon
+    viejo.onExit?.(null) // …y recién ahí muere el hijo anterior
+
+    src.setProcessName('OtraApp') // el nuevo está vivo: NO debe re-armar
+    src.stop()
+    expect(transport.streams.filter((s) => s.args.includes('sysmon'))).toHaveLength(2)
   })
 })

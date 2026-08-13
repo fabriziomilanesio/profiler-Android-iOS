@@ -453,6 +453,14 @@
         background: var(--chip-bg);
         border-color: var(--line);
       }
+      /* device en ventana de gracia: se cayó el canal vital pero todavía no se soltó nada */
+      .rec-badge.warn {
+        background: rgba(234, 179, 8, 0.1);
+        border-color: rgba(234, 179, 8, 0.5);
+      }
+      .rec-badge.warn .rec-dot {
+        background: var(--warn);
+      }
       .rec-dot {
         width: 10px;
         height: 10px;

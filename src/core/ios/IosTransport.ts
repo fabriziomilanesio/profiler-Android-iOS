@@ -104,17 +104,22 @@ export class IosTransport {
    * Procesos vivos del device (lockdown, sin DTX: no necesita levantar el túnel).
    * Es lo que permite resolver el nombre real del proceso de la app en vez de adivinarlo
    * desde el bundle id — ver `resolveIosProcess`.
+   *
+   * **`null` ≠ `[]`** (ticket 046): `[]` es "pregunté y la app no está corriendo"; `null` es
+   * "no pude preguntar" (device desenchufado, lockdown caído, timeout). Devolver `[]` en el
+   * segundo caso hacía que cada desconexión se reportara como muerte de la app. Es el mismo
+   * contrato que `Sampler.refreshPid()` en Android, que devuelve `null` para no concluir nada.
    */
-  async processes(serial: string): Promise<IosProcess[]> {
+  async processes(serial: string): Promise<IosProcess[] | null> {
     try {
       const r = await run(this.python, ['-m', 'pymobiledevice3', 'processes', 'ps'], {
         timeoutMs: DEFAULT_TIMEOUT_MS,
         env: { ...process.env, PYMOBILEDEVICE3_UDID: serial },
       })
-      if (r.exitCode !== 0) return []
+      if (r.exitCode !== 0) return null
       return parseIosProcesses(r.stdout)
     } catch {
-      return []
+      return null
     }
   }
 
