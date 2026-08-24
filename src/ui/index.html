@@ -864,6 +864,39 @@
         text-transform: uppercase;
         color: var(--muted);
       }
+      /* Encabezados de paneles plegables. Conservan el lenguaje visual de los
+         títulos existentes, pero ahora también son el control accesible para
+         mostrar u ocultar su contenido. */
+      .collapse-toggle {
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .collapse-toggle:hover .card-title,
+      .collapse-toggle:hover.tile-label {
+        color: var(--accent2-ink);
+      }
+      .collapse-toggle .caret {
+        margin-left: auto;
+      }
+      .collapsible-content[hidden] {
+        display: none;
+      }
+      .fps-tile .collapsible-content,
+      .gpu-tile .collapsible-content,
+      .tl-card .collapsible-content,
+      .mem-card .collapsible-content,
+      .sys-card .collapsible-content {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+        flex-direction: column;
+      }
       .target-chip {
         font-family: var(--font-body);
         font-weight: 600;
@@ -1225,6 +1258,19 @@
         align-items: center;
         gap: 26px;
         padding: 14px 20px;
+      }
+      .net > .collapse-toggle,
+      .net > .collapsible-content {
+        grid-column: 1 / -1;
+      }
+      .net > .collapsible-content {
+        display: grid;
+        grid-template-columns: auto auto auto minmax(0, 1fr);
+        align-items: center;
+        gap: 26px;
+      }
+      .net .inspector {
+        grid-column: 1 / -1;
       }
       .net-stat {
         display: flex;
@@ -1700,6 +1746,10 @@
           gap: 12px 20px;
           padding: 12px 16px;
         }
+        .net > .collapsible-content {
+          grid-template-columns: 1fr 1fr;
+          gap: 12px 20px;
+        }
         #netSpark,
         .insp-toggle,
         .net-na {
@@ -1993,6 +2043,9 @@
     <!-- ============ NETWORK ============ -->
     <div class="section-label" data-cap="network">Network</div>
     <section class="card net" data-cap="network">
+      <div class="panel-head">
+        <span class="card-title">Network</span>
+      </div>
       <div class="net-stat net-rx">
         <span class="lbl">↓ RX</span>
         <span class="val" id="rxNow">— KB/s</span>
@@ -2063,10 +2116,10 @@
           <span id="logsMatched" hidden></span>
           <span class="logs-badge badge-e" id="logsBadgeE">E 0</span>
           <span class="logs-badge badge-w" id="logsBadgeW">W 0</span>
-          <span class="caret" id="logsCaret">▼</span>
+          <span class="caret" id="logsCaret">▲</span>
         </span>
       </button>
-      <div class="logs-body" id="logsBody" hidden>
+      <div class="logs-body" id="logsBody">
         <div class="logs-controls">
           <span id="logsChips">
             <button class="chip log-chip-e active" data-chip="E" type="button">Error</button>
@@ -2145,6 +2198,7 @@
     <script src="vendor/echarts.min.js"></script>
     <script src="vendor/motion.min.js"></script>
     <script src="capabilities.js"></script>
+    <script src="collapsiblePanels.js"></script>
     <script src="render.js"></script>
     <script src="logsCore.js"></script>
     <script src="logsPanel.js"></script>
