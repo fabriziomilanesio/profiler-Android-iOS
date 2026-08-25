@@ -53,4 +53,13 @@ describe('protocolo WS', () => {
     const app = { packageName: 'com.evermore.oda.qa', pid: 123, launched: true }
     expect(JSON.parse(appMessage(app))).toEqual({ type: 'app', app })
   })
+
+  test('el carril secundario se etiqueta sin alterar el protocolo primario', () => {
+    const sample = { ts: 1 } as Sample
+    expect(JSON.parse(sampleMessage(sample, 'secondary'))).toEqual({
+      type: 'sample',
+      sample,
+      pane: 'secondary',
+    })
+  })
 })
