@@ -35,7 +35,7 @@ function happyRoutes(): Array<[RegExp, string]> {
   return [
     // `dumpsys meminfo` explícito: el cat combinado también contiene "/proc/meminfo"
     [/dumpsys meminfo/, read('oneshot/dumpsys-meminfo.txt')],
-    [/gpu_busy/, read('oneshot/gpu-samsung-gpu-busy.txt')],
+    [/\/sys\/kernel\/gpu\/gpu_busy$/, read('oneshot/gpu-samsung-gpu-busy.txt')],
     [/thermalservice/, read('oneshot/dumpsys-thermalservice.txt')],
     [/timestats/, read('session/final/timestats-dump.txt')],
     [/dumpsys battery/, read('oneshot/dumpsys-battery.txt')],
@@ -186,6 +186,34 @@ describe('Sampler', () => {
     expect(s.fps).toBeCloseTo(33.94, 2)
   })
 
+  test('GPU detecta Qualcomm gpubusy y reutiliza esa fuente en los ticks siguientes', async () => {
+    const { t, calls } = logged(
+      fixtureTransport([[/\/kgsl-3d0\/gpubusy$/, '25 100\n'], ...happyRoutes()]),
+    )
+    const sampler = new Sampler(t, 'REDACTED-SERIAL', PKG, 18078)
+
+    expect((await sampler.sampleOnce()).gpu).toBe(25)
+    expect((await sampler.sampleOnce()).gpu).toBe(25)
+
+    const gpuCalls = calls.filter((command) => command.includes('gpu'))
+    expect(gpuCalls).toEqual([
+      'cat /sys/class/kgsl/kgsl-3d0/gpubusy',
+      'cat /sys/class/kgsl/kgsl-3d0/gpubusy',
+    ])
+  })
+
+  test('GPU hace fallback hasta la ruta Samsung disponible', async () => {
+    const { t, calls } = logged(fixtureTransport(happyRoutes()))
+    const sampler = new Sampler(t, 'REDACTED-SERIAL', PKG, 18078)
+
+    expect((await sampler.sampleOnce()).gpu).toBe(99)
+    expect(calls.filter((command) => command.includes('gpu')).slice(0, 3)).toEqual([
+      'cat /sys/class/kgsl/kgsl-3d0/gpubusy',
+      'cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage',
+      'cat /sys/kernel/gpu/gpu_busy',
+    ])
+  })
+
   test('un shell que tira excepción no rompe el Sample entero', async () => {
     const t = fixtureTransport(happyRoutes())
     // envolver shell para que thermal explote
@@ -201,7 +229,8 @@ describe('Sampler', () => {
   })
 
   test('SHELL_COMMANDS expone los comandos (documentación viva de las fuentes)', () => {
-    expect(SHELL_COMMANDS.gpu).toContain('/sys/kernel/gpu/gpu_busy')
+    expect(SHELL_COMMANDS.gpu).toContain('cat /sys/class/kgsl/kgsl-3d0/gpubusy')
+    expect(SHELL_COMMANDS.gpu).toContain('cat /sys/kernel/gpu/gpu_busy')
     expect(SHELL_COMMANDS.fps).toContain('timestats')
     expect(SHELL_COMMANDS.cpu([42])).toContain('/proc/42/status') // VmRSS en el cat combinado
   })

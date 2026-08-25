@@ -27,7 +27,7 @@ import { parseCpu, parseDeviceCpu, type CpuSnapshot } from '../collectors/cpu'
 import { parseDeviceMemUsedMb } from '../collectors/deviceMem'
 import { parseFps, parseFrameStats, NULL_FRAME } from '../collectors/fps'
 import { parseTemp } from '../collectors/temp'
-import { parseGpu } from '../collectors/gpu'
+import { GPU_SOURCES, parseGpu, type GpuSource } from '../collectors/gpu'
 import { parseBattery } from '../collectors/battery'
 import { parseNetDev, netThroughputKb, type NetSnapshot } from '../collectors/netdev'
 
@@ -47,8 +47,8 @@ export const SHELL_COMMANDS = {
     ].join(' '),
   /** main + hijos del package en un comando (reemplaza a pidof en el loop) */
   pids: 'ps -A -o PID,NAME',
-  // primaria del device (kgsl y mali fallan acá → ver research §5 para fallbacks)
-  gpu: 'cat /sys/kernel/gpu/gpu_busy',
+  // Se prueban una vez, en orden, y se reutiliza la primera fuente legible.
+  gpu: GPU_SOURCES.map(({ path }) => `cat ${path}`),
   temp: 'dumpsys thermalservice',
   // -dump -clear: reporta averageFPS desde el último clear y resetea, así cada tick
   // mide ~el último segundo. Sin -clear, averageFPS acumula toda la sesión y a los
@@ -168,6 +168,8 @@ export class Sampler {
   private lastMem: MemSample = NULL_MEM
   private lastTempC: number | null = null
   private lastBattery: BatterySample = NULL_BATTERY
+  /** undefined = todavía sin probar; null = ninguna fuente disponible. */
+  private gpuSource: GpuSource | null | undefined
   /** el último cat combinado no vio al pid main ⇒ forzar ps en el próximo refreshPid */
   private pidMissing = false
 
@@ -215,7 +217,7 @@ export class Sampler {
 
     // Correr todo en paralelo; cada uno best-effort. Los comandos del carril lento
     // solo si les toca (Promise.resolve(null) = "este tick no corre, carry-forward").
-    const [memRaw, childMemRaws, gpuRaw, tempRaw, fpsRaw, batRaw, netRaw, procSnap] =
+    const [memRaw, childMemRaws, gpu, tempRaw, fpsRaw, batRaw, netRaw, procSnap] =
       await Promise.all([
         runMeminfo
           ? best<string | null>(
@@ -230,7 +232,7 @@ export class Sampler {
               ),
             )
           : Promise.resolve([] as string[]),
-        best(async () => (await shell(SHELL_COMMANDS.gpu)).stdout, ''),
+        best(async () => this.readGpu(), null),
         runSlow
           ? best<string | null>(async () => (await shell(SHELL_COMMANDS.temp)).stdout, '')
           : Promise.resolve(null),
@@ -290,7 +292,7 @@ export class Sampler {
       cpu,
       deviceCpu,
       deviceRamUsedMb: procSnap?.deviceRamUsedMb ?? null,
-      gpu: safe(() => parseGpu(gpuRaw), null),
+      gpu,
       // filtrar el layer de la app (el dump lista NotificationShade/StatusBar también)
       fps: safe(() => parseFps(fpsRaw, this.pkg), null),
       // frame-times/jank del MISMO dump (ticket 024): cero comandos adb extra
@@ -305,6 +307,28 @@ export class Sampler {
       netTxKb,
     }
     return sample
+  }
+
+  /** Detecta el sysfs del driver una vez y luego lee solo esa ruta en cada tick. */
+  private async readGpu(): Promise<number | null> {
+    if (this.gpuSource === null) return null
+
+    if (this.gpuSource === undefined) {
+      for (const source of GPU_SOURCES) {
+        const result = await this.transport.shell(this.serial, `cat ${source.path}`)
+        if (result.exitCode !== 0) continue
+        const value = parseGpu(result.stdout, source.format)
+        if (value === null) continue
+        this.gpuSource = source
+        return value
+      }
+      this.gpuSource = null
+      return null
+    }
+
+    const result = await this.transport.shell(this.serial, `cat ${this.gpuSource.path}`)
+    if (result.exitCode !== 0) return null
+    return parseGpu(result.stdout, this.gpuSource.format)
   }
 
   private async readProcSnapshot(): Promise<ProcSnapshot | null> {
