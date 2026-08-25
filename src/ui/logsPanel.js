@@ -60,7 +60,8 @@
   var buf = [] // ring del cliente (más vieja primero)
   var counts = Core.countLevels([]) // contadores incrementales por nivel
   var filter = Core.defaultFilter()
-  var open = false
+  // El dashboard abre sus paneles por defecto; los logs siguen el mismo criterio.
+  var open = true
   var pausedManual = false // botón Pausa (solo el botón la levanta)
   var pausedScroll = false // pausa automática al scrollear fuera del borde vivo
   var newSincePause = 0 // entradas nuevas que pasan el filtro durante la pausa
