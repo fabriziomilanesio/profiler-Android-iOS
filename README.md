@@ -216,6 +216,13 @@ qué backend se usa. Los `unauthorized`/`offline` (y los iPhone sin "Confiar" ac
 pero no son elegibles. Al cambiar de device, la ficha, el sampler, los logs y el inspector se
 recablean en caliente y la app actual se re-engancha en el device nuevo.
 
+**Comparación dual**: el botón **⇄ Dual comparison** abre dos paneles verticales dentro de la
+misma ventana. El panel A conserva el device actual; elegí un segundo device desde el selector
+del panel B para iniciar un sampler independiente. Se pueden combinar Android y iOS. Cada panel
+recibe sólo sus propias métricas en tiempo real, por lo que un device lento no frena al otro. Al
+salir con **Exit dual mode**, se elimina el panel B y se liberan sus streams, mientras el panel A
+queda exactamente como estaba.
+
 **Selector de apps**: no hace falta pasar `--package`. Sin flag, arranca con la **última app
 usada** (primera vez: `com.sample.oda.qa`) y desde el dashboard cambiás en caliente con el
 dropdown del header: lista las apps instaladas del device — `pm list packages -3` en Android,

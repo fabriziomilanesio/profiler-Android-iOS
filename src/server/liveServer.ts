@@ -56,6 +56,7 @@ import {
   appMessage,
   logsMessage,
   connectionMessage,
+  type DashboardPane,
   type AppStatus,
   type ConnectionState,
 } from './messages'
@@ -138,6 +139,24 @@ export function staticHeaders(contentType: string): Record<string, string> {
 
 /** Si el batch pendiente supera esto, se flushea ya (no esperar el timer). */
 const LOG_BATCH_MAX = 500
+
+function paneFromUrl(url: URL): DashboardPane {
+  return url.searchParams.get('pane') === 'secondary' ? 'secondary' : 'primary'
+}
+
+/** Estado deliberadamente acotado del segundo panel: métricas en vivo, sin duplicar
+ * exportes, inspector HTTP ni captura de logs (que siguen perteneciendo a la sesión A). */
+interface SecondaryLane {
+  serial: string | null
+  device: DeviceInfo | null
+  sampler: Sampler | null
+  iosSource: IosMetricSource | null
+  app: AppStatus | null
+  capabilities: Capabilities
+  timer: ReturnType<typeof setInterval> | null
+  iosProcessTimer: ReturnType<typeof setInterval> | null
+  ticking: boolean
+}
 
 /** Captura la ficha del device una vez (getprop + /proc/meminfo + SurfaceFlinger GLES). */
 export async function captureDeviceInfo(
@@ -227,6 +246,18 @@ export class LiveServer {
    * alguien cambia de device/app a mano, así una ventana vieja no tira un device nuevo.
    */
   private iosGrace: { cancelled: boolean } | null = null
+  /** Segundo muestreador independiente, activado únicamente por la UI dual. */
+  private secondary: SecondaryLane = {
+    serial: null,
+    device: null,
+    sampler: null,
+    iosSource: null,
+    app: null,
+    capabilities: capabilitiesFor('android'),
+    timer: null,
+    iosProcessTimer: null,
+    ticking: false,
+  }
 
   constructor(private readonly opts: LiveServerOptions) {
     this.serial = opts.serial ?? null
@@ -311,6 +342,9 @@ export class LiveServer {
         if (url.pathname === '/api/device' && req.method === 'POST') {
           return this.handleSelectDevice(req)
         }
+        if (url.pathname === '/api/dual' && req.method === 'POST') {
+          return this.handleDualMode(req)
+        }
         if (url.pathname === '/api/report' && req.method === 'GET') {
           return this.handleReport(url)
         }
@@ -360,6 +394,21 @@ export class LiveServer {
         // …y el estado del cable. La ficha de arriba es del ÚLTIMO device conocido: sin
         // esto, un dashboard abierto con el teléfono desenchufado pinta un device fantasma.
         client.send(connectionMessage(this.connState, this.serial))
+        // El panel B se inicializa vacío hasta que el usuario el elige. Si ya existe,
+        // un iframe abierto tarde recibe su estado completo antes del primer tick.
+        if (this.secondary.device) {
+          client.send(
+            deviceMessage(this.secondary.device, this.secondary.capabilities, 'secondary'),
+          )
+        }
+        if (this.secondary.app) client.send(appMessage(this.secondary.app, 'secondary'))
+        client.send(
+          connectionMessage(
+            this.secondary.serial ? 'connected' : 'lost',
+            this.secondary.serial,
+            'secondary',
+          ),
+        )
       },
     })
 
@@ -729,6 +778,139 @@ export class LiveServer {
     this.opts.onSample?.(sample)
   }
 
+  /** Tick aislado del panel B. No comparte la guarda del panel A: una shell lenta en
+   * un teléfono no puede frenar el streaming ni la UI del otro. */
+  private async tickSecondary(): Promise<void> {
+    const lane = this.secondary
+    if (lane.ticking || !lane.sampler) return
+    lane.ticking = true
+    try {
+      await lane.sampler.refreshPid()
+      const sample = await lane.sampler.sampleOnce()
+      this.server?.broadcast(sampleMessage(sample, 'secondary'))
+    } catch {
+      /* un device B desconectado no debe afectar el muestreo principal */
+    } finally {
+      lane.ticking = false
+    }
+  }
+
+  private stopSecondaryTimer(): void {
+    if (this.secondary.timer) clearInterval(this.secondary.timer)
+    this.secondary.timer = null
+    if (this.secondary.iosProcessTimer) clearInterval(this.secondary.iosProcessTimer)
+    this.secondary.iosProcessTimer = null
+  }
+
+  /** Libera por completo el segundo device; es idempotente para que apagar el modo
+   * dual siempre devuelva exactamente al dashboard normal del device A. */
+  private async stopSecondary(): Promise<void> {
+    this.stopSecondaryTimer()
+    this.secondary.iosSource?.stop()
+    this.secondary.iosSource = null
+    const sampler = this.secondary.sampler
+    this.secondary.sampler = null
+    await sampler?.dispose()
+    this.secondary.serial = null
+    this.secondary.device = null
+    this.secondary.app = null
+    this.secondary.ticking = false
+  }
+
+  /** Inicializa un sampler adicional para Android o una fuente Instruments para iOS. */
+  private async startSecondary(
+    serial: string,
+    packageName = this.appStatus?.packageName ?? this.opts.packageName,
+  ): Promise<{ device: DeviceInfo; app: AppStatus }> {
+    await this.stopSecondary()
+    if (serial === this.serial) throw new Error('el dispositivo B debe ser distinto del A')
+    const pkg = packageName
+    const [android, ios] = await Promise.all([
+      this.opts.transport.devices().catch(() => [] as AdbDevice[]),
+      this.opts.iosTransport?.devices().catch(() => [] as AdbDevice[]) ?? Promise.resolve([]),
+    ])
+    const androidDevice = android.find((d) => d.serial === serial && d.state === 'device')
+    const iosDevice = ios.find((d) => d.serial === serial && d.state === 'device')
+    if (!androidDevice && !iosDevice) throw new Error('device no conectado')
+
+    this.secondary.serial = serial
+    if (iosDevice) {
+      this.secondary.capabilities = capabilitiesFor('ios')
+      this.secondary.device = iosDeviceInfo(iosDevice)
+      const executable =
+        (await this.opts.iosTransport?.appExecutable?.(serial, pkg).catch(() => null)) ?? null
+      const processes = (await this.opts.iosTransport?.processes?.(serial).catch(() => null)) ?? []
+      const proc = resolveIosProcess(processes, pkg, executable)
+      this.secondary.app = { packageName: pkg, pid: proc?.pid ?? null, launched: false }
+      this.secondary.iosSource = new IosMetricSource({
+        transport: { stream: this.opts.iosTransport!.stream!.bind(this.opts.iosTransport) },
+        serial,
+        ...(proc ? { processName: proc.name } : {}),
+        intervalMs: this.intervalMs,
+        onSample: (sample) => this.server?.broadcast(sampleMessage(sample, 'secondary')),
+        ...(this.opts.iosStaleMs !== undefined ? { staleMs: this.opts.iosStaleMs } : {}),
+      })
+      this.secondary.iosSource.start()
+      // iOS no tiene equivalente a monkey: si la app B se abre después, enganchar el
+      // proceso sin recrear Instruments ni bloquear el panel A.
+      this.secondary.iosProcessTimer = setInterval(() => {
+        const lane = this.secondary
+        if (!lane.serial || lane.serial !== serial || !lane.iosSource || !lane.app) return
+        void this.opts.iosTransport
+          ?.processes(serial)
+          .then((processes) => {
+            if (
+              this.secondary.serial !== serial ||
+              !this.secondary.iosSource ||
+              !this.secondary.app
+            )
+              return
+            const current = resolveIosProcess(
+              processes ?? [],
+              this.secondary.app.packageName,
+              executable,
+            )
+            this.secondary.iosSource.setProcessName(current?.name ?? '')
+            if (this.secondary.app.pid !== (current?.pid ?? null)) {
+              this.secondary.app = { ...this.secondary.app, pid: current?.pid ?? null }
+              this.server?.broadcast(appMessage(this.secondary.app, 'secondary'))
+            }
+          })
+          .catch(() => {})
+      }, this.opts.iosProcessPollMs ?? 5000)
+      // La RAM total llega aparte: no bloquear el primer frame de B por una consulta lenta.
+      void this.opts.iosTransport?.systemInfo?.(serial).then((sys) => {
+        if (this.secondary.serial !== serial || !this.secondary.device) return
+        this.secondary.device = {
+          ...this.secondary.device,
+          ramTotalMb: sys.ramTotalMb,
+          cores: sys.cores,
+        }
+        this.server?.broadcast(
+          deviceMessage(this.secondary.device, this.secondary.capabilities, 'secondary'),
+        )
+      })
+    } else {
+      this.secondary.capabilities = capabilitiesFor('android')
+      this.secondary.device = await captureDeviceInfo(this.opts.transport, serial)
+      const pid = await resolvePid(this.opts.transport, serial, pkg)
+      const sampler = new Sampler(this.opts.transport, serial, pkg, pid ?? 0, {
+        refreshHz: this.secondary.device.refreshHz ?? null,
+      })
+      await sampler.init()
+      this.secondary.sampler = sampler
+      this.secondary.app = { packageName: pkg, pid, launched: false }
+      this.secondary.timer = setInterval(() => void this.tickSecondary(), this.intervalMs)
+      void this.tickSecondary()
+    }
+    this.server?.broadcast(
+      deviceMessage(this.secondary.device, this.secondary.capabilities, 'secondary'),
+    )
+    this.server?.broadcast(appMessage(this.secondary.app, 'secondary'))
+    this.server?.broadcast(connectionMessage('connected', serial, 'secondary'))
+    return { device: this.secondary.device, app: this.secondary.app }
+  }
+
   /**
    * Debounce de vida del proceso (3 refresh seguidos sin verlo = muerto): pausa la
    * persistencia y deja eventos app-died/app-restarted en el historial, así el
@@ -778,22 +960,25 @@ export class LiveServer {
    * así que CPU y memoria de la app salían null. Las apps de iOS salen por lockdown.
    */
   private async handleListPackages(url: URL): Promise<Response> {
+    const pane = paneFromUrl(url)
     const includeSystem = url.searchParams.get('system') === '1'
     let installed: string[] = []
-    if (this.serial) {
+    const lane = pane === 'secondary' ? this.secondary : null
+    const serial = lane ? lane.serial : this.serial
+    const device = lane ? lane.device : this.device
+    const app = lane ? lane.app : this.appStatus
+    if (serial) {
       installed =
-        this.device?.platform === 'ios'
-          ? ((await this.opts.iosTransport?.apps(this.serial, { includeSystem })) ?? []).map(
-              (a) => a.id,
-            )
-          : await listPackages(this.opts.transport, this.serial, { includeSystem })
+        device?.platform === 'ios'
+          ? ((await this.opts.iosTransport?.apps(serial, { includeSystem })) ?? []).map((a) => a.id)
+          : await listPackages(this.opts.transport, serial, { includeSystem })
     }
     const store = this.opts.appStore?.data ?? defaultAppStoreData()
     const body = {
       packages: rankPackages(installed, store.usage),
       usage: store.usage,
       filterTerm: store.filterTerm,
-      current: this.appStatus?.packageName ?? this.opts.packageName,
+      current: app?.packageName ?? this.opts.packageName,
     }
     return Response.json(body)
   }
@@ -806,9 +991,9 @@ export class LiveServer {
     if (origin !== null && !isLocalOrigin(origin)) {
       return new Response('Forbidden origin', { status: 403 })
     }
-    let pkg: unknown
+    let body: { package?: unknown; pane?: unknown }
     try {
-      pkg = ((await req.json()) as { package?: unknown }).package
+      body = (await req.json()) as { package?: unknown; pane?: unknown }
     } catch {
       return Response.json({ error: 'body inválido' }, { status: 400 })
     }
@@ -816,16 +1001,20 @@ export class LiveServer {
     // que la validación es estricta. En iOS la forma es otra — los bundle ids admiten
     // guiones (`LB-Software.PhotoEraser`) y el validador de Android los rechazaba con 400,
     // dejando esas apps imposibles de elegir desde el dashboard.
+    const pkg = body.package
+    const pane: DashboardPane = body.pane === 'secondary' ? 'secondary' : 'primary'
     if (typeof pkg !== 'string') {
       return Response.json({ error: 'package inválido' }, { status: 400 })
     }
     const appId: string = pkg
+    const targetDevice = pane === 'secondary' ? this.secondary.device : this.device
     const validId =
-      this.device?.platform === 'ios' ? isValidBundleId(appId) : isValidPackageName(appId)
+      targetDevice?.platform === 'ios' ? isValidBundleId(appId) : isValidPackageName(appId)
     if (!validId) {
       return Response.json({ error: 'package inválido' }, { status: 400 })
     }
-    if (!this.serial) {
+    const targetSerial = pane === 'secondary' ? this.secondary.serial : this.serial
+    if (!targetSerial) {
       return Response.json({ error: 'sin device conectado' }, { status: 409 })
     }
     if (this.switching) {
@@ -833,6 +1022,10 @@ export class LiveServer {
     }
     this.switching = true
     try {
+      if (pane === 'secondary') {
+        const result = await this.startSecondary(targetSerial, appId)
+        return Response.json({ ok: true, ...result })
+      }
       const status = await this.switchApp(appId)
       return Response.json({ ok: true, app: status })
     } catch (err) {
@@ -963,7 +1156,32 @@ export class LiveServer {
       this.opts.transport.devices().catch(() => [] as AdbDevice[]),
       this.opts.iosTransport?.devices().catch(() => [] as AdbDevice[]) ?? Promise.resolve([]),
     ])
-    return Response.json({ devices: [...android, ...ios], current: this.serial })
+    return Response.json({
+      devices: [...android, ...ios],
+      current: this.serial,
+      secondary: this.secondary.serial,
+    })
+  }
+
+  /** POST /api/dual {enabled}. Desactivarlo corta y libera B antes de que la UI oculte
+   * su panel, evitando timers/streams huérfanos. */
+  private async handleDualMode(req: Request): Promise<Response> {
+    const origin = req.headers.get('origin')
+    if (origin !== null && !isLocalOrigin(origin))
+      return new Response('Forbidden origin', { status: 403 })
+    let enabled: unknown
+    try {
+      enabled = ((await req.json()) as { enabled?: unknown }).enabled
+    } catch {
+      return Response.json({ error: 'body inválido' }, { status: 400 })
+    }
+    if (typeof enabled !== 'boolean')
+      return Response.json({ error: 'enabled debe ser boolean' }, { status: 400 })
+    if (!enabled) {
+      await this.stopSecondary()
+      this.server?.broadcast(connectionMessage('lost', null, 'secondary'))
+    }
+    return Response.json({ ok: true, enabled, secondary: this.secondary.serial })
   }
 
   /** POST /api/device {"serial": "..."} — cambia el device profileado en caliente. */
@@ -972,14 +1190,16 @@ export class LiveServer {
     if (origin !== null && !isLocalOrigin(origin)) {
       return new Response('Forbidden origin', { status: 403 })
     }
-    let serial: unknown
+    let body: { serial?: unknown; pane?: unknown }
     try {
-      serial = ((await req.json()) as { serial?: unknown }).serial
+      body = (await req.json()) as { serial?: unknown; pane?: unknown }
     } catch {
       return Response.json({ error: 'body inválido' }, { status: 400 })
     }
     // Se valida contra la lista real de adb: solo un device presente y autorizado
     // es elegible (y de paso nunca viaja un serial arbitrario a adb).
+    const serial = body.serial
+    const pane: DashboardPane = body.pane === 'secondary' ? 'secondary' : 'primary'
     if (typeof serial !== 'string' || !serial) {
       return Response.json({ error: 'serial inválido' }, { status: 400 })
     }
@@ -988,6 +1208,13 @@ export class LiveServer {
     }
     this.switching = true
     try {
+      if (pane === 'secondary') {
+        if (serial === this.secondary.serial) {
+          return Response.json({ ok: true, device: this.secondary.device, app: this.secondary.app })
+        }
+        const result = await this.startSecondary(serial)
+        return Response.json({ ok: true, ...result })
+      }
       const devices = await this.opts.transport.devices()
       const target = devices.find((d) => d.serial === serial)
       if (!target) {
@@ -1514,6 +1741,7 @@ export class LiveServer {
     this.logFlushTimer = null
     this.logCapture?.stop()
     this.logCapture = null
+    await this.stopSecondary()
     this.flushLogs() // lo pendiente va a disco antes de cerrar
     if (this.inspector) await this.stopInspector() // restaura el proxy del device
     await this.sampler?.dispose() // sin await, el -disable de timestats muere a mitad de vuelo

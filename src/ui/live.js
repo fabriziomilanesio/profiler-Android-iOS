@@ -13,6 +13,115 @@
   var pkg = null
   var device = null
   var reconnectDelay = 1000
+  // El mismo dashboard se reutiliza dentro de cada mitad del split. Cada iframe sólo
+  // procesa su propio carril y nunca puede cambiar el sampler de la otra mitad.
+  var pane =
+    new URLSearchParams(location.search).get('pane') === 'secondary' ? 'secondary' : 'primary'
+  var paneQuery = 'pane=' + pane
+  var isEmbeddedPane = new URLSearchParams(location.search).has('pane')
+  var dualInspectorStyle = null
+
+  function setDualInspectorHidden(hidden) {
+    if (!isEmbeddedPane) return
+    if (hidden && !dualInspectorStyle) {
+      dualInspectorStyle = document.createElement('style')
+      dualInspectorStyle.textContent =
+        '#inspToggle,#inspWarn,#inspector,[data-cap="network"]{display:none!important}'
+      document.head.appendChild(dualInspectorStyle)
+    } else if (!hidden && dualInspectorStyle) {
+      dualInspectorStyle.remove()
+      dualInspectorStyle = null
+    }
+  }
+
+  if (isEmbeddedPane) {
+    window.addEventListener('message', function (event) {
+      if (event.origin !== location.origin || !event.data || event.data.type !== 'dual-inspector')
+        return
+      setDualInspectorHidden(event.data.hidden === true)
+    })
+  }
+
+  // Logs e inspector pertenecen a la sesión A; B sólo presenta sus métricas.
+  if (isEmbeddedPane && pane === 'secondary') {
+    var secondaryStyle = document.createElement('style')
+    secondaryStyle.textContent = '#logs,#inspector{display:none!important}'
+    document.head.appendChild(secondaryStyle)
+  }
+
+  /** Activa dos instancias del dashboard existente en iframes del mismo origen. Así cada
+   * panel conserva sus charts, resize handlers y estado sin copiar miles de líneas de UI. */
+  function installDualToggle() {
+    if (isEmbeddedPane) return
+    var button = document.createElement('button')
+    button.type = 'button'
+    button.id = 'dualToggle'
+    button.className = 'chip'
+    button.textContent = '⇄ Dual comparison'
+    button.title = 'Compare two connected devices side by side'
+    var header = document.querySelector('header .header-right')
+    if (!header) return
+    header.insertBefore(button, header.firstChild)
+
+    function closeDual() {
+      fetch('/api/dual', { method: 'POST', body: JSON.stringify({ enabled: false }) }).catch(
+        function () {},
+      )
+      var root = document.getElementById('dualRoot')
+      if (root) root.remove()
+      document.body.style.overflow = ''
+      button.textContent = '⇄ Dual comparison'
+      button.classList.remove('active')
+    }
+
+    function openDual() {
+      fetch('/api/dual', { method: 'POST', body: JSON.stringify({ enabled: true }) })
+        .then(function (r) {
+          if (!r.ok) throw new Error('could not enable dual mode')
+          var root = document.createElement('div')
+          root.id = 'dualRoot'
+          root.innerHTML =
+            '<div class="dual-toolbar"><strong>Dual comparison</strong><span>Device A and B stream independently</span><button type="button">Exit dual mode</button></div>' +
+            '<div class="dual-panels"><iframe title="Device A metrics" src="/?pane=primary"></iframe><iframe title="Device B metrics" src="/?pane=secondary"></iframe></div>'
+          root.querySelector('button').addEventListener('click', closeDual)
+          document.body.appendChild(root)
+          // El panel A puede ser Android y anunciarse antes que B: ocultarlo desde el
+          // primer frame, sin depender de la plataforma de los devices.
+          var frames = root.querySelectorAll('iframe')
+          for (var i = 0; i < frames.length; i++) {
+            frames[i].addEventListener('load', function () {
+              this.contentWindow.postMessage(
+                { type: 'dual-inspector', hidden: true },
+                location.origin,
+              )
+            })
+          }
+          document.body.style.overflow = 'hidden'
+          button.textContent = 'Dual comparison active'
+          button.classList.add('active')
+        })
+        .catch(function () {
+          button.title = 'Could not enable dual comparison'
+        })
+    }
+    button.addEventListener('click', function () {
+      if (document.getElementById('dualRoot')) closeDual()
+      else openDual()
+    })
+  }
+
+  if (!isEmbeddedPane) {
+    var dualStyle = document.createElement('style')
+    dualStyle.textContent =
+      '#dualRoot{position:fixed;inset:0;z-index:10000;background:var(--bg,#10151c);display:grid;grid-template-rows:48px minmax(0,1fr)}' +
+      '.dual-toolbar{display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.15);font:600 13px Inter,system-ui,sans-serif}' +
+      '.dual-toolbar span{opacity:.72;font-weight:400;flex:1}.dual-toolbar button{border:0;border-radius:7px;padding:7px 10px;cursor:pointer}' +
+      '.dual-panels{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px;background:rgba(255,255,255,.2);min-height:0}' +
+      '.dual-panels iframe{border:0;width:100%;height:100%;background:#10151c}' +
+      '@media(max-width:900px){.dual-panels{grid-template-columns:1fr;overflow:auto}.dual-panels iframe{min-height:760px}}'
+    document.head.appendChild(dualStyle)
+    installDualToggle()
+  }
 
   // --- Micro-animaciones (Motion vendoreado; feedback HITL 2026-08-01) ---
   // Guardas: sin window.Motion (archivo faltante) o con prefers-reduced-motion
@@ -74,7 +183,7 @@
   }
 
   function loadPackages() {
-    var url = '/api/packages' + (appSel.sys.checked ? '?system=1' : '')
+    var url = '/api/packages?' + paneQuery + (appSel.sys.checked ? '&system=1' : '')
     appSel.empty.hidden = false
     appSel.empty.textContent = 'Loading device apps…'
     fetch(url)
@@ -133,7 +242,7 @@
     appSwitching = true
     appSel.pkgLabel.textContent = p + ' — switching…'
     closeAppPop()
-    fetch('/api/app', { method: 'POST', body: JSON.stringify({ package: p }) })
+    fetch('/api/app', { method: 'POST', body: JSON.stringify({ package: p, pane: pane }) })
       .then(function (r) {
         if (!r.ok) throw new Error('switch failed')
         // el estado real llega por WS ({type:"app"}) — acá no hay nada más que hacer
@@ -210,7 +319,7 @@
       var li = document.createElement('li')
       var b = document.createElement('button')
       b.type = 'button'
-      var isCurrent = d.serial === data.current
+      var isCurrent = d.serial === (pane === 'secondary' ? data.secondary : data.current)
       if (isCurrent) b.className = 'current'
       // "model:SM_A155M product:a15ub ..." → SM A155M
       var modelMatch = (d.description || '').match(/model:(\S+)/)
@@ -250,7 +359,7 @@
     devSwitching = true
     closeDevPop()
     document.getElementById('devName').textContent = 'Switching device…'
-    fetch('/api/device', { method: 'POST', body: JSON.stringify({ serial: serial }) })
+    fetch('/api/device', { method: 'POST', body: JSON.stringify({ serial: serial, pane: pane }) })
       .then(function (r) {
         if (!r.ok) throw new Error('switch failed')
         // la ficha nueva llega por WS ({type:"device"} + {type:"app"})
@@ -714,7 +823,7 @@
       ProfilerDashboard.setConnected(true)
       // bootstrap del panel de logs (últimas N del ring del server); el merge
       // dedupea contra lo que llegue por WS mientras tanto (ticket 028)
-      LogsPanel.bootstrap()
+      if (pane === 'primary') LogsPanel.bootstrap()
     })
 
     ws.addEventListener('message', function (ev) {
@@ -724,6 +833,17 @@
       } catch (e) {
         return
       }
+      // Los mensajes sin pane son los de versiones anteriores y equivalen al panel A.
+      if (
+        (msg.type === 'device' ||
+          msg.type === 'sample' ||
+          msg.type === 'app' ||
+          msg.type === 'connection') &&
+        (msg.pane || 'primary') !== pane
+      ) {
+        return
+      }
+      if (pane === 'secondary' && (msg.type === 'flow' || msg.type === 'logs')) return
       if (msg.type === 'device') {
         // cambio de device: las series del timeline y los logs son del device anterior
         if (device && device.serial !== msg.device.serial) {

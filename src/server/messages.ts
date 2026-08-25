@@ -29,33 +29,40 @@ export interface AppStatus {
  */
 export type ConnectionState = 'connected' | 'reconnecting' | 'lost'
 
+/** Carril de visualización. El primario conserva el protocolo anterior al omitirse. */
+export type DashboardPane = 'primary' | 'secondary'
+
 export type ServerMessage =
-  | { type: 'device'; device: DeviceInfo; capabilities?: Capabilities }
-  | { type: 'sample'; sample: Sample }
+  | { type: 'device'; device: DeviceInfo; capabilities?: Capabilities; pane?: DashboardPane }
+  | { type: 'sample'; sample: Sample; pane?: DashboardPane }
   | { type: 'flow'; flow: InspectorFlow }
-  | { type: 'app'; app: AppStatus }
+  | { type: 'app'; app: AppStatus; pane?: DashboardPane }
   | { type: 'logs'; entries: LogEntry[] }
-  | { type: 'connection'; state: ConnectionState; serial: string | null }
+  | { type: 'connection'; state: ConnectionState; serial: string | null; pane?: DashboardPane }
 
 /**
  * Ficha del device + qué puede medir esta plataforma (ticket 037). La UI usa las
  * capacidades para ESCONDER lo que no existe en el device — un tile permanentemente
  * vacío se lee como "está roto", que es peor que no mostrarlo.
  */
-export function deviceMessage(device: DeviceInfo, capabilities?: Capabilities): string {
-  return JSON.stringify({ type: 'device', device, capabilities } satisfies ServerMessage)
+export function deviceMessage(
+  device: DeviceInfo,
+  capabilities?: Capabilities,
+  pane?: DashboardPane,
+): string {
+  return JSON.stringify({ type: 'device', device, capabilities, pane } satisfies ServerMessage)
 }
 
-export function sampleMessage(sample: Sample): string {
-  return JSON.stringify({ type: 'sample', sample } satisfies ServerMessage)
+export function sampleMessage(sample: Sample, pane?: DashboardPane): string {
+  return JSON.stringify({ type: 'sample', sample, pane } satisfies ServerMessage)
 }
 
 export function flowMessage(flow: InspectorFlow): string {
   return JSON.stringify({ type: 'flow', flow } satisfies ServerMessage)
 }
 
-export function appMessage(app: AppStatus): string {
-  return JSON.stringify({ type: 'app', app } satisfies ServerMessage)
+export function appMessage(app: AppStatus, pane?: DashboardPane): string {
+  return JSON.stringify({ type: 'app', app, pane } satisfies ServerMessage)
 }
 
 /**
@@ -63,8 +70,12 @@ export function appMessage(app: AppStatus): string {
  * recibe igual la ficha del último device conocido, así que sin este mensaje pintaría un
  * teléfono que no está.
  */
-export function connectionMessage(state: ConnectionState, serial: string | null): string {
-  return JSON.stringify({ type: 'connection', state, serial } satisfies ServerMessage)
+export function connectionMessage(
+  state: ConnectionState,
+  serial: string | null,
+  pane?: DashboardPane,
+): string {
+  return JSON.stringify({ type: 'connection', state, serial, pane } satisfies ServerMessage)
 }
 
 export function logsMessage(entries: LogEntry[]): string {
