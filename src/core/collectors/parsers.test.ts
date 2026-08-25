@@ -385,7 +385,7 @@ describe('parseTemp (thermalservice HAL, mType 0=CPU/AP)', () => {
   })
 })
 
-describe('parseGpu (/sys/kernel/gpu/gpu_busy "NN %")', () => {
+describe('parseGpu (sysfs por vendor)', () => {
   test('parsea el entero del fixed real', () => {
     expect(parseGpu(read('oneshot/gpu-samsung-gpu-busy.txt'))).toBe(99)
   })
@@ -393,6 +393,13 @@ describe('parseGpu (/sys/kernel/gpu/gpu_busy "NN %")', () => {
   test('parsea variantes de session ticks', () => {
     expect(parseGpu('100 %\n')).toBe(100)
     expect(parseGpu('0 %')).toBe(0)
+    expect(parseGpu('12.5')).toBe(12.5)
+  })
+
+  test('convierte los contadores busy/total de Qualcomm kgsl', () => {
+    expect(parseGpu('25 100\n', 'busy-total')).toBe(25)
+    expect(parseGpu('3 8', 'busy-total')).toBe(37.5)
+    expect(parseGpu('0 0', 'busy-total')).toBe(0)
   })
 
   test('.err.txt / vacío / no numérico ⇒ null', () => {
