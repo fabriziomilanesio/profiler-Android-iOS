@@ -13,6 +13,32 @@ function Test-Command($name) {
   return [bool](Get-Command $name -ErrorAction SilentlyContinue)
 }
 
+# Get-Command/Test-Path no bastan para Python: los aliases de Microsoft Store y los venv
+# sobreviven a veces a una actualización aunque el intérprete al que apuntan ya no exista.
+function Test-Python($command) {
+  if (-not $command) { return $false }
+  try {
+    & $command --version 2>&1 | Out-Null
+    return $LASTEXITCODE -eq 0
+  } catch { return $false }
+}
+
+function Find-Python {
+  $fromPath = Get-Command python -ErrorAction SilentlyContinue
+  if ($fromPath -and (Test-Python $fromPath.Source)) { return $fromPath.Source }
+
+  # Ruta del instalador oficial de python.org vía winget. Usarla directamente cubre una
+  # sesión cuyo PATH todavía no se refrescó después de instalar o actualizar Python.
+  $roots = @(
+    (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+    (Join-Path $env:ProgramFiles 'Python312\python.exe')
+  )
+  foreach ($candidate in $roots) {
+    if ((Test-Path -LiteralPath $candidate) -and (Test-Python $candidate)) { return $candidate }
+  }
+  return $null
+}
+
 function Install-WingetPackage($id, $label) {
   $installed = winget list --id $id -e --accept-source-agreements 2>$null | Select-String $id
   if ($installed) {
@@ -176,27 +202,41 @@ if (-not (Install-WingetPackage 'Google.PlatformTools' 'adb / platform-tools')) 
 #    Opcional a propósito: si falla, el camino ANDROID queda intacto — no se aborta la
 #    instalación por algo que sólo hace falta para perfilar iPhones.
 Write-Host "`n  iOS (opcional — sólo si vas a perfilar iPhone/iPad):" -ForegroundColor Magenta
-$pythonOk = $true
-if (-not (Test-Command 'python')) {
+$pythonExe = Find-Python
+if (-not $pythonExe) {
   # OJO: en Windows el ejecutable es `python`, NO `python3`.
-  if (-not (Install-WingetPackage 'Python.Python.3.12' 'Python 3.12')) {
+  $pythonInstalled = Install-WingetPackage 'Python.Python.3.12' 'Python 3.12'
+  if (-not $pythonInstalled) {
     Write-Warning '  no se pudo instalar Python: el camino iOS va a quedar sin configurar (Android no se ve afectado).'
-    $pythonOk = $false
   }
   $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
     [Environment]::GetEnvironmentVariable('Path', 'User')
+  $pythonExe = Find-Python
+
+  # winget puede decir "ya instalado" aunque una actualización de Microsoft Store haya
+  # dejado sólo aliases o launchers rotos. En ese caso hay que reparar el paquete real.
+  if (-not $pythonExe -and $pythonInstalled) {
+    Write-Host "  →   reparando Python 3.12…" -ForegroundColor Cyan
+    winget install --id Python.Python.3.12 -e --silent --force `
+      --accept-source-agreements --accept-package-agreements | Out-Host
+    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+      [Environment]::GetEnvironmentVariable('Path', 'User')
+    $pythonExe = Find-Python
+  }
 }
 
-if ($pythonOk -and (Test-Command 'python')) {
+if ($pythonExe) {
   # Venv propio en vez de instalar en el Python del sistema: mismo criterio que
   # platform-tools (la tool se ocupa de su toolchain) y esquiva PEP 668.
   $venv = Join-Path $env:USERPROFILE '.sample-profiler\pmd3-venv'
   $venvPy = Join-Path $venv 'Scripts\python.exe'
-  if (-not (Test-Path $venvPy)) {
-    Write-Host "  →   creando venv en $venv…" -ForegroundColor Cyan
-    python -m venv $venv 2>&1 | Out-Null
+  if (-not (Test-Python $venvPy)) {
+    Write-Host "  →   creando o reparando venv en $venv…" -ForegroundColor Cyan
+    # --clear sustituye launchers rotos que quedaron apuntando a una versión anterior del
+    # Python de Microsoft Store. La carpeta es fija y exclusiva de esta aplicación.
+    & $pythonExe -m venv --clear $venv 2>&1 | Out-Null
   }
-  if (Test-Path $venvPy) {
+  if (Test-Python $venvPy) {
     Write-Host "  →   instalando pymobiledevice3…" -ForegroundColor Cyan
     & $venvPy -m pip install --quiet --upgrade pip pymobiledevice3 2>&1 | Out-Null
     $pmdVer = (& $venvPy -m pymobiledevice3 version 2>&1 | Out-String).Trim()
@@ -212,6 +252,8 @@ if ($pythonOk -and (Test-Command 'python')) {
   # El usbmux de Apple — el `adb` de iOS. Se instala acá igual que adb y Python; es la
   # única pieza que no se puede vendorizar (viene firmada por Apple).
   Install-AppleDevices
+} else {
+  Write-Warning '  no hay un Python ejecutable — reinstalá Python 3.12 y ejecutá INSTALAR.bat otra vez.'
 }
 
 # 4. Refrescar PATH de esta sesión (winget lo agrega para sesiones nuevas)
@@ -236,7 +278,7 @@ if (Test-Command 'adb') {
 # (pymobiledevice3 lo instalamos nosotros; el usbmux viene de Apple y no se puede vendorizar).
 # Verlas separadas evita el diagnóstico equivocado de "no se detecta el iPhone".
 $venvPyCheck = Join-Path $env:USERPROFILE '.sample-profiler\pmd3-venv\Scripts\python.exe'
-if (Test-Path $venvPyCheck) {
+if (Test-Python $venvPyCheck) {
   $pmdCheck = (& $venvPyCheck -m pymobiledevice3 version 2>&1 | Out-String).Trim()
   if ($LASTEXITCODE -eq 0) {
     Write-Host "  ok  pymobiledevice3 $pmdCheck (iOS)" -ForegroundColor Green
