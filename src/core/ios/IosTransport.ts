@@ -13,7 +13,7 @@
 import { homedir, platform } from 'node:os'
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
-import { run, streamLines } from '../../runtime/spawn'
+import { run, streamLines, type RunOptions, type RunResult } from '../../runtime/spawn'
 import type { AdbDevice } from '../adb/AdbTransport'
 import { parseIosDevices } from './parseDevices'
 import { parseIosProcesses, type IosProcess } from './deviceInfo'
@@ -54,22 +54,77 @@ export function discoverPython(
   return systemPython(os)
 }
 
+/**
+ * Intérpretes que se prueban para iOS, en orden.
+ *
+ * No alcanza con Test-Path: un venv de Windows puede conservar `python.exe` después de
+ * que Microsoft Store mueva o quite el Python base.
+ */
+export function pythonCandidates(
+  explicit?: string,
+  exists: (p: string) => boolean = existsSync,
+  home: string = homedir(),
+  os: string = platform(),
+): string[] {
+  if (explicit !== undefined && explicit !== '') return [explicit]
+  const candidates = [managedVenvPython(home, os)].filter(exists)
+  candidates.push(systemPython(os))
+  return [...new Set(candidates)]
+}
+
+type RunCommand = (command: string, args: string[], options?: RunOptions) => Promise<RunResult>
+
+export async function runPmdWithFallback(
+  candidates: string[],
+  args: string[],
+  options: RunOptions,
+  runner: RunCommand = run,
+): Promise<{ python: string; result: RunResult }> {
+  let lastResult: RunResult | null = null
+  let lastResultPython: string | null = null
+  let lastError: unknown = null
+  for (const python of candidates) {
+    try {
+      const result = await runner(python, ['-m', 'pymobiledevice3', ...args], options)
+      lastResult = result
+      lastResultPython = python
+      if (result.exitCode === 0) return { python, result }
+    } catch (err) {
+      lastError = err
+    }
+  }
+  if (lastResult && lastResultPython) return { python: lastResultPython, result: lastResult }
+  throw lastError instanceof Error ? lastError : new Error('No hay un Python usable para iOS')
+}
+
 export class IosTransport {
-  private readonly python: string
+  private readonly candidates: string[]
+  private candidateIndex = 0
 
   constructor(python?: string) {
-    this.python = discoverPython(python)
+    this.candidates = pythonCandidates(python)
   }
 
   /** Qué intérprete quedó elegido — lo muestra el preflight. */
   get interpreter(): string {
-    return this.python
+    return this.candidates[this.candidateIndex]!
+  }
+
+  private async runPmd(args: string[], options: RunOptions): Promise<RunResult> {
+    const { python, result } = await runPmdWithFallback(
+      this.candidates.slice(this.candidateIndex),
+      args,
+      options,
+    )
+    const successfulIndex = this.candidates.indexOf(python)
+    if (result.exitCode === 0 && successfulIndex >= 0) this.candidateIndex = successfulIndex
+    return result
   }
 
   /** false si no hay Python o `pymobiledevice3` no está instalado. */
   async isAvailable(): Promise<boolean> {
     try {
-      const r = await run(this.python, ['-m', 'pymobiledevice3', 'version'], {
+      const r = await this.runPmd(['version'], {
         timeoutMs: DEFAULT_TIMEOUT_MS,
       })
       return r.exitCode === 0
@@ -79,7 +134,7 @@ export class IosTransport {
   }
 
   async version(): Promise<string> {
-    const r = await run(this.python, ['-m', 'pymobiledevice3', 'version'], {
+    const r = await this.runPmd(['version'], {
       timeoutMs: DEFAULT_TIMEOUT_MS,
     })
     return r.stdout.trim()
@@ -88,7 +143,7 @@ export class IosTransport {
   /** iPhones/iPads conectados, ya deduplicados y con `platform: 'ios'`. */
   async devices(): Promise<AdbDevice[]> {
     try {
-      const r = await run(this.python, ['-m', 'pymobiledevice3', 'usbmux', 'list'], {
+      const r = await this.runPmd(['usbmux', 'list'], {
         timeoutMs: DEFAULT_TIMEOUT_MS,
       })
       if (r.exitCode !== 0) return []
@@ -112,7 +167,7 @@ export class IosTransport {
    */
   async processes(serial: string): Promise<IosProcess[] | null> {
     try {
-      const r = await run(this.python, ['-m', 'pymobiledevice3', 'processes', 'ps'], {
+      const r = await this.runPmd(['processes', 'ps'], {
         timeoutMs: DEFAULT_TIMEOUT_MS,
         env: { ...process.env, PYMOBILEDEVICE3_UDID: serial },
       })
@@ -133,11 +188,11 @@ export class IosTransport {
    */
   async apps(serial: string, opts: { includeSystem?: boolean } = {}): Promise<IosApp[]> {
     try {
-      const args = ['-m', 'pymobiledevice3', 'apps', 'list']
+      const args = ['apps', 'list']
       // El filtro se pide al device en vez de traer todo y descartar acá: menos de la mitad
       // de bytes por el cable.
       if (!opts.includeSystem) args.push('-t', 'User')
-      const r = await run(this.python, args, {
+      const r = await this.runPmd(args, {
         timeoutMs: 120_000,
         env: { ...process.env, PYMOBILEDEVICE3_UDID: serial },
       })
@@ -157,7 +212,7 @@ export class IosTransport {
    */
   async appExecutable(serial: string, bundleId: string): Promise<string | null> {
     try {
-      const r = await run(this.python, ['-m', 'pymobiledevice3', 'apps', 'query', bundleId], {
+      const r = await this.runPmd(['apps', 'query', bundleId], {
         timeoutMs: 60_000,
         env: { ...process.env, PYMOBILEDEVICE3_UDID: serial },
       })
@@ -178,14 +233,10 @@ export class IosTransport {
    */
   async systemInfo(serial: string): Promise<IosSystemInfo> {
     try {
-      const r = await run(
-        this.python,
-        ['-m', 'pymobiledevice3', 'developer', 'dvt', 'sysmon', 'system'],
-        {
-          timeoutMs: 120_000,
-          env: { ...process.env, PYMOBILEDEVICE3_UDID: serial, PYTHONUNBUFFERED: '1' },
-        },
-      )
+      const r = await this.runPmd(['developer', 'dvt', 'sysmon', 'system'], {
+        timeoutMs: 120_000,
+        env: { ...process.env, PYMOBILEDEVICE3_UDID: serial, PYTHONUNBUFFERED: '1' },
+      })
       return parseIosSystem(r.stdout)
     } catch {
       return { ramTotalMb: null, cores: null }
@@ -207,7 +258,7 @@ export class IosTransport {
     onLine: (line: string) => void,
     onExit?: (err: Error | null) => void,
   ): () => void {
-    return streamLines(this.python, ['-m', 'pymobiledevice3', ...args], onLine, onExit, {
+    return streamLines(this.interpreter, ['-m', 'pymobiledevice3', ...args], onLine, onExit, {
       env: {
         ...process.env,
         PYMOBILEDEVICE3_UDID: serial,

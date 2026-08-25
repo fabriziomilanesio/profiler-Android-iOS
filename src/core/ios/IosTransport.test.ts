@@ -1,6 +1,12 @@
 // Tests del transporte iOS: descubrimiento del intérprete y el env de los streams.
 import { describe, expect, test } from 'bun:test'
-import { discoverPython, managedVenvPython, systemPython } from './IosTransport'
+import {
+  discoverPython,
+  managedVenvPython,
+  pythonCandidates,
+  runPmdWithFallback,
+  systemPython,
+} from './IosTransport'
 
 describe('discoverPython', () => {
   test('respeta el intérprete explícito por encima de todo', () => {
@@ -30,6 +36,40 @@ describe('managedVenvPython', () => {
   test('vive junto a las sesiones, en ~/.sample-profiler', () => {
     expect(managedVenvPython('/home/x')).toContain('.sample-profiler')
     expect(managedVenvPython('/home/x')).toContain('pmd3-venv')
+  })
+})
+
+describe('pythonCandidates', () => {
+  test('prueba el venv genérico y por último el Python del sistema', () => {
+    expect(pythonCandidates(undefined, () => true, 'C:\\Users\\x', 'win32')).toEqual([
+      'C:\\Users\\x\\.sample-profiler\\pmd3-venv\\Scripts\\python.exe',
+      'python',
+    ])
+  })
+
+  test('un intérprete explícito no cae silenciosamente a otro', () => {
+    expect(pythonCandidates('C:\\tools\\python.exe', () => true, 'C:\\Users\\x', 'win32')).toEqual([
+      'C:\\tools\\python.exe',
+    ])
+  })
+})
+
+describe('runPmdWithFallback', () => {
+  test('salta un launcher roto y promueve el primer Python que responde', async () => {
+    const calls: string[] = []
+    const runner = async (command: string) => {
+      calls.push(command)
+      if (command === 'broken-python') throw new Error('No Python at base interpreter')
+      return { stdout: '10.7.2', stderr: '', exitCode: 0 }
+    }
+    const result = await runPmdWithFallback(
+      ['broken-python', 'working-python'],
+      ['version'],
+      {},
+      runner,
+    )
+    expect(calls).toEqual(['broken-python', 'working-python'])
+    expect(result.python).toBe('working-python')
   })
 })
 
