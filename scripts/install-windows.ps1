@@ -1,26 +1,136 @@
-# install-windows.ps1 — bootstrap del Mobile Profiler en Windows 11.
-# Instala los dos requisitos (Bun + adb/platform-tools) vía winget y deja el repo listo.
+﻿# install-windows.ps1 — bootstrap reproducible de Mobile Profiler para Windows.
 #
-# Uso (desde la raíz del repo, en PowerShell):
-#   powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
+# Soporta Windows 10 1809+ y Windows 11 de 64 bits. Instala y verifica:
+#   Android: Bun + dependencias del repo + Android Platform-Tools (adb)
+#   iOS:     Python 3.12 + pymobiledevice3 + Apple Devices/usbmux
 #
-# Idempotente: si algo ya está instalado, lo saltea. winget viene incluido en Windows 11;
-# en Windows 10 requiere "App Installer" de la Microsoft Store.
+# El teléfono no tiene que estar conectado durante la instalación. Si lo está, se verifica
+# además el enlace USB y se informa el estado de Modo Desarrollador de iOS.
+
+param([switch]$CheckOnly)
 
 $ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$managedRoot = Join-Path $env:USERPROFILE '.sample-profiler'
+$venv = Join-Path $managedRoot 'pmd3-venv'
+$venvPy = Join-Path $venv 'Scripts\python.exe'
+$script:WingetExe = $null
 
 function Test-Command($name) {
   return [bool](Get-Command $name -ErrorAction SilentlyContinue)
 }
 
-function Install-WingetPackage($id, $label) {
-  $installed = winget list --id $id -e --accept-source-agreements 2>$null | Select-String $id
-  if ($installed) {
-    Write-Host "  ok  $label ya instalado ($id)" -ForegroundColor Green
+function Refresh-ProcessPath {
+  $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+  $user = [Environment]::GetEnvironmentVariable('Path', 'User')
+  $env:Path = @($machine, $user) -join ';'
+}
+
+function Add-UserPath($directory) {
+  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  $entries = @($userPath -split ';' | Where-Object { $_ -ne '' })
+  if ($entries -notcontains $directory) {
+    $newPath = (@($entries) + $directory) -join ';'
+    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+  }
+  if (($env:Path -split ';') -notcontains $directory) { $env:Path = "$env:Path;$directory" }
+}
+
+function Find-Executable($commandName, $knownPaths) {
+  $command = Get-Command $commandName -ErrorAction SilentlyContinue
+  if ($command -and (Test-Path -LiteralPath $command.Source -PathType Leaf)) {
+    return $command.Source
+  }
+  foreach ($candidate in $knownPaths) {
+    if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
+  }
+  return $null
+}
+
+function Find-Winget {
+  return Find-Executable 'winget' @(
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\winget.exe')
+  )
+}
+
+function Find-Bun {
+  $candidate = Find-Executable 'bun' @(
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\bun.exe'),
+    (Join-Path $env:USERPROFILE '.bun\bin\bun.exe')
+  )
+  if (-not $candidate) { return $null }
+  try {
+    & $candidate --version 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) { return $candidate }
+  } catch {}
+  return $null
+}
+
+function Find-Adb {
+  $known = @(
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\adb.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Android\platform-tools\adb.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe')
+  )
+  if ($env:ANDROID_HOME) { $known += Join-Path $env:ANDROID_HOME 'platform-tools\adb.exe' }
+  if ($env:ANDROID_SDK_ROOT) { $known += Join-Path $env:ANDROID_SDK_ROOT 'platform-tools\adb.exe' }
+  $candidate = Find-Executable 'adb' $known
+  if (-not $candidate) { return $null }
+  try {
+    & $candidate version 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) { return $candidate }
+  } catch {}
+  return $null
+}
+
+function Test-Python($command) {
+  if (-not $command) { return $false }
+  try {
+    $versionText = (& $command --version 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $versionText -notmatch '(\d+)\.(\d+)') { return $false }
+    return ([version]"$($Matches[1]).$($Matches[2])") -ge ([version]'3.9')
+  } catch { return $false }
+}
+
+function Find-Python {
+  $fromPath = Get-Command python -ErrorAction SilentlyContinue
+  if ($fromPath -and (Test-Python $fromPath.Source)) { return $fromPath.Source }
+
+  $candidates = @()
+  foreach ($parent in @(
+      (Join-Path $env:LOCALAPPDATA 'Programs\Python'),
+      $env:ProgramFiles
+    )) {
+    if (-not $parent -or -not (Test-Path -LiteralPath $parent -PathType Container)) { continue }
+    $dirs = Get-ChildItem -LiteralPath $parent -Directory -Filter 'Python3*' -ErrorAction SilentlyContinue |
+      Sort-Object Name -Descending
+    foreach ($dir in $dirs) { $candidates += Join-Path $dir.FullName 'python.exe' }
+  }
+  foreach ($candidate in $candidates) {
+    if ((Test-Path -LiteralPath $candidate -PathType Leaf) -and (Test-Python $candidate)) {
+      return $candidate
+    }
+  }
+  return $null
+}
+
+function Install-WingetPackage($id, $label, $source = $null) {
+  $listedArgs = @('list', '--id', $id, '--exact', '--accept-source-agreements', '--disable-interactivity')
+  if ($source) { $listedArgs += @('--source', $source) }
+  $listed = (& $script:WingetExe @listedArgs 2>$null | Out-String)
+  if ($LASTEXITCODE -eq 0 -and $listed -match [regex]::Escape($id)) {
+    Write-Host "  ok  $label ya instalado" -ForegroundColor Green
     return $true
   }
-  Write-Host "  →   instalando $label ($id)…" -ForegroundColor Cyan
-  winget install --id $id -e --silent --accept-source-agreements --accept-package-agreements | Out-Host
+
+  Write-Host "  →   instalando $label…" -ForegroundColor Cyan
+  $installArgs = @(
+    'install', '--id', $id, '--exact', '--silent', '--accept-source-agreements',
+    '--accept-package-agreements', '--disable-interactivity'
+  )
+  if ($source) { $installArgs += @('--source', $source) }
+  & $script:WingetExe @installArgs | Out-Host
   if ($LASTEXITCODE -ne 0) {
     Write-Warning "winget no pudo instalar $label ($id) — exit code $LASTEXITCODE"
     return $false
@@ -29,258 +139,260 @@ function Install-WingetPackage($id, $label) {
   return $true
 }
 
-# Descarga platform-tools directo de Google cuando winget falla (p. ej. hash del
-# manifiesto desactualizado). Prueba varias URLs oficiales hasta que una funcione.
 function Install-PlatformToolsDirect {
-  $urls = @(
-    'https://dl.google.com/android/repository/platform-tools-latest-windows.zip'
-    'https://dl.google.com/android/repository/platform-tools_r37.0.1-win.zip'
-    'https://dl.google.com/android/repository/platform-tools_r36.0.0-win.zip'
-    'https://dl.google.com/android/repository/platform-tools_r35.0.2-win.zip'
-  )
   $destParent = Join-Path $env:LOCALAPPDATA 'Android'
   $dest = Join-Path $destParent 'platform-tools'
-
-  if (Test-Path (Join-Path $dest 'adb.exe')) {
-    Write-Host "  ok  platform-tools ya estaba en $dest" -ForegroundColor Green
-  } else {
-    $zip = Join-Path $env:TEMP 'platform-tools-win.zip'
-    $downloaded = $false
-    foreach ($url in $urls) {
-      Write-Host "  →   descargando $url…" -ForegroundColor Cyan
-      try {
-        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
-        $downloaded = $true
-        break
-      } catch {
-        Write-Warning "  no se pudo descargar ($($_.Exception.Message)) — probando la siguiente versión…"
-      }
-    }
-    if (-not $downloaded) {
-      throw 'No se pudo descargar platform-tools de ninguna de las URLs de Google. Revisá la conexión y volvé a correr el instalador.'
-    }
-    New-Item -ItemType Directory -Force -Path $destParent | Out-Null
-    if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
-    Expand-Archive -Path $zip -DestinationPath $destParent -Force
-    Remove-Item $zip -ErrorAction SilentlyContinue
-    if (-not (Test-Path (Join-Path $dest 'adb.exe'))) {
-      throw "El zip de platform-tools no trajo adb.exe (se esperaba en $dest)."
-    }
-    Write-Host "  ok  platform-tools instalado en $dest" -ForegroundColor Green
+  $adb = Join-Path $dest 'adb.exe'
+  if (Test-Path -LiteralPath $adb -PathType Leaf) {
+    Add-UserPath $dest
+    return $adb
   }
 
-  # Dejarlo en el PATH del usuario para sesiones futuras y en el de esta sesión.
-  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-  if ($userPath -notlike "*$dest*") {
-    [Environment]::SetEnvironmentVariable('Path', "$userPath;$dest", 'User')
+  $zip = Join-Path $env:TEMP 'mobile-profiler-platform-tools.zip'
+  $url = 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip'
+  Write-Host '  →   descargando Platform-Tools oficial de Google…' -ForegroundColor Cyan
+  Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+  New-Item -ItemType Directory -Force -Path $destParent | Out-Null
+  Expand-Archive -LiteralPath $zip -DestinationPath $destParent -Force
+  Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+  if (-not (Test-Path -LiteralPath $adb -PathType Leaf)) {
+    throw "El paquete de Google no trajo adb.exe en $adb"
   }
-  $env:Path = "$env:Path;$dest"
+  Add-UserPath $dest
+  Write-Host "  ok  Platform-Tools instalado en $dest" -ForegroundColor Green
+  return $adb
 }
 
-# ¿Hay alguien escuchando en el puerto del usbmux de Apple? Es LA señal de que el camino
-# iOS funciona: es por donde pymobiledevice3 le habla al teléfono.
-#
-# Es deliberado no preguntar por el servicio Windows 'Apple Mobile Device Service': ese lo
-# registra el iTunes clásico, pero la app "Apple Devices" (MSIX de la Store, lo que se
-# instala hoy en Windows 11) no registra servicio alguno y corre AppleMobileDeviceProcess.exe
-# como proceso de usuario. Buscar el servicio daba un "falta instalar Apple" con el usbmux
-# perfectamente vivo.
 function Test-Usbmux {
   try {
     $probe = New-Object Net.Sockets.TcpClient
     $probe.Connect('127.0.0.1', 27015)
     $up = $probe.Connected
-    $probe.Close()
+    $probe.Dispose()
     return $up
   } catch { return $false }
 }
 
-# Instala "Apple Devices" (Microsoft Store) y lo deja EN MARCHA.
-#
-# Los dos pasos son necesarios: instalar el paquete no levanta el usbmux — la app tiene que
-# abrirse una vez para que arranque AppleMobileDeviceProcess.exe, y recién ahí el puerto
-# 27015 empieza a atender. Verificado en Windows 11: recién instalado y sin abrir la app,
-# `pymobiledevice3 usbmux list` no ve ningún iPhone.
 function Install-AppleDevices {
   if (Test-Usbmux) {
-    Write-Host "  ok  usbmux de Apple escuchando en 127.0.0.1:27015" -ForegroundColor Green
-    return
+    Write-Host '  ok  usbmux de Apple escuchando en 127.0.0.1:27015' -ForegroundColor Green
+    return $true
+  }
+
+  $service = Get-Service -Name 'Apple Mobile Device Service' -ErrorAction SilentlyContinue
+  if ($service -and $service.Status -ne 'Running') {
+    try { Start-Service -Name $service.Name } catch {}
   }
 
   $pkg = Get-AppxPackage -Name 'AppleInc.AppleDevices' -ErrorAction SilentlyContinue
-  if (-not $pkg -and -not (Get-Service -Name 'Apple Mobile Device Service' -ErrorAction SilentlyContinue)) {
-    Write-Host "  →   instalando Apple Devices (Microsoft Store)…" -ForegroundColor Cyan
-    # 9NP83LWLPZ9K = "Apple Devices". Sale de la fuente msstore, que necesita aceptar sus
-    # términos aparte de los del paquete.
-    winget install --id 9NP83LWLPZ9K --source msstore `
-      --accept-package-agreements --accept-source-agreements --disable-interactivity | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-      Write-Warning @'
-  No se pudo instalar "Apple Devices" por winget (la Store puede pedir iniciar sesión).
-  Instalala a mano desde la Microsoft Store, abrila una vez y volvé a correr el instalador.
-  Android funciona igual: esto sólo hace falta para perfilar iPhone/iPad.
-'@
-      return
-    }
+  if (-not $pkg -and -not $service) {
+    if (-not (Install-WingetPackage '9NP83LWLPZ9K' 'Apple Devices' 'msstore')) { return $false }
     $pkg = Get-AppxPackage -Name 'AppleInc.AppleDevices' -ErrorAction SilentlyContinue
   }
 
-  # Abrirla una vez para que levante el usbmux. El AUMID se resuelve del propio paquete en
-  # vez de hardcodearlo: el sufijo del publisher cambia entre versiones del paquete.
   if ($pkg) {
-    $appId = (Get-AppxPackageManifest $pkg).Package.Applications.Application.Id
-    if ($appId) {
-      Write-Host "  →   abriendo Apple Devices para que levante el usbmux…" -ForegroundColor Cyan
-      Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!$appId"
-      # Arranque en frío: tarda unos segundos en atender el puerto.
-      for ($i = 0; $i -lt 30 -and -not (Test-Usbmux); $i++) { Start-Sleep -Seconds 1 }
+    try {
+      $appId = @((Get-AppxPackageManifest $pkg).Package.Applications.Application.Id)[0]
+      if ($appId) {
+        $aumid = "$($pkg.PackageFamilyName)!$appId"
+        Write-Host '  →   abriendo Apple Devices para iniciar el enlace USB…' -ForegroundColor Cyan
+        Start-Process explorer.exe -ArgumentList "shell:AppsFolder\$aumid"
+      }
+    } catch {
+      Write-Warning "Apple Devices está instalado pero no se pudo abrir automáticamente: $($_.Exception.Message)"
     }
   }
 
+  for ($i = 0; $i -lt 30 -and -not (Test-Usbmux); $i++) { Start-Sleep -Seconds 1 }
   if (Test-Usbmux) {
-    Write-Host "  ok  usbmux de Apple escuchando en 127.0.0.1:27015" -ForegroundColor Green
-  } else {
-    Write-Warning @'
-  Apple Devices quedó instalado pero su usbmux todavía no atiende. Abrí la app a mano una
-  vez (queda corriendo en segundo plano) y volvé a conectar el teléfono. Sin eso los iPhone
-  no se detectan; Android no se ve afectado.
+    Write-Host '  ok  usbmux de Apple escuchando en 127.0.0.1:27015' -ForegroundColor Green
+    return $true
+  }
+
+  Write-Warning @'
+Apple Devices quedó instalado, pero el enlace USB todavía no está activo. Abrí la app a
+mano, aceptá sus permisos y volvé a ejecutar INSTALAR.bat. Android ya puede funcionar.
 '@
+  return $false
+}
+
+function Show-IosDeviceStatus($pmdPython) {
+  try {
+    $json = (& $pmdPython -m pymobiledevice3 usbmux list 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $json) {
+      Write-Warning 'pymobiledevice3 no pudo consultar usbmux; revisá Apple Devices.'
+      return
+    }
+    $devices = @($json | ConvertFrom-Json)
+    if ($devices.Count -eq 0) {
+      Write-Host '  –   no hay iPhone/iPad conectado; se verificará al enchufarlo' -ForegroundColor DarkGray
+      return
+    }
+
+    Write-Host "  ok  $($devices.Count) dispositivo(s) iOS visible(s) por USB" -ForegroundColor Green
+    $oldUdid = $env:PYMOBILEDEVICE3_UDID
+    try {
+      foreach ($device in $devices) {
+        $udid = if ($device.Identifier) { $device.Identifier } else { $device.UniqueDeviceID }
+        if (-not $udid) { continue }
+        $env:PYMOBILEDEVICE3_UDID = $udid
+        $developerMode = (& $pmdPython -m pymobiledevice3 amfi developer-mode-status 2>$null |
+          Out-String).Trim().ToLowerInvariant()
+        $model = if ($device.ProductType) { $device.ProductType } else { 'iPhone/iPad' }
+        if ($LASTEXITCODE -eq 0 -and $developerMode -eq 'true') {
+          Write-Host "  ok  ${model}: Modo Desarrollador activado" -ForegroundColor Green
+        } else {
+          Write-Warning "${model}: activá Modo Desarrollador en Ajustes > Privacidad y seguridad."
+        }
+      }
+    } finally {
+      if ($null -eq $oldUdid) { Remove-Item Env:PYMOBILEDEVICE3_UDID -ErrorAction SilentlyContinue }
+      else { $env:PYMOBILEDEVICE3_UDID = $oldUdid }
+    }
+  } catch {
+    Write-Warning "No se pudo verificar el iPhone/iPad conectado: $($_.Exception.Message)"
   }
 }
 
-Write-Host "`nMobile Profiler — setup para Windows 11`n" -ForegroundColor Magenta
+if ($CheckOnly) {
+  Write-Host 'PowerShell syntax OK'
+  exit 0
+}
 
-# 0. winget disponible (incluido en Windows 11)
-if (-not (Test-Command 'winget')) {
+Write-Host "`nMobile Profiler — instalación para Windows`n" -ForegroundColor Magenta
+
+$windows = [Environment]::OSVersion.Version
+if ($windows.Major -lt 10 -or $windows.Build -lt 17763) {
+  Write-Error 'Se necesita Windows 10 versión 1809 (build 17763) o posterior.'
+  exit 1
+}
+if (-not [Environment]::Is64BitOperatingSystem) {
+  Write-Error 'Se necesita Windows de 64 bits (x64 o ARM64).'
+  exit 1
+}
+Write-Host "  ok  Windows build $($windows.Build) · $env:PROCESSOR_ARCHITECTURE" -ForegroundColor Green
+
+Refresh-ProcessPath
+$script:WingetExe = Find-Winget
+if (-not $script:WingetExe) {
   Write-Error @'
-winget no está disponible. En Windows 11 viene de fábrica; si es Windows 10,
-instalá "App Installer" desde la Microsoft Store y volvé a correr este script.
+No se encontró WinGet. Instalá o actualizá "App Installer" desde Microsoft Store
+(https://aka.ms/getwinget) y volvé a ejecutar INSTALAR.bat.
 '@
   exit 1
 }
+Write-Host "  ok  WinGet: $script:WingetExe" -ForegroundColor Green
 
-# 1. Bun (runtime del CLI, tests y dashboard)
-if (-not (Install-WingetPackage 'Oven-sh.Bun' 'Bun')) {
-  throw 'winget no pudo instalar Bun. Instalalo manualmente desde https://bun.sh y volvé a correr el instalador.'
+Write-Host "`nAndroid y runtime:" -ForegroundColor Magenta
+$null = Install-WingetPackage 'Oven-sh.Bun' 'Bun'
+Refresh-ProcessPath
+$bunExe = Find-Bun
+if ($bunExe) { Write-Host "  ok  Bun $(& $bunExe --version)" -ForegroundColor Green }
+else { Write-Warning 'Bun no responde después de instalarlo.' }
+
+$null = Install-WingetPackage 'Google.PlatformTools' 'Android Platform-Tools'
+Refresh-ProcessPath
+$adbExe = Find-Adb
+if (-not $adbExe) {
+  try { $adbExe = Install-PlatformToolsDirect } catch { Write-Warning $_.Exception.Message }
 }
-
-# 2. adb (Android SDK Platform-Tools, oficiales de Google)
-#    winget primero; si falla (p. ej. "Installer hash does not match" porque Google
-#    actualizó el zip y el manifiesto de winget quedó viejo), descarga directa.
-if (-not (Install-WingetPackage 'Google.PlatformTools' 'adb / platform-tools')) {
-  Write-Host "  →   winget falló — descargando platform-tools directo de Google…" -ForegroundColor Cyan
-  Install-PlatformToolsDirect
-}
-
-# 3. Stack iOS: Python + pymobiledevice3 en un venv gestionado (ticket 041).
-#    Opcional a propósito: si falla, el camino ANDROID queda intacto — no se aborta la
-#    instalación por algo que sólo hace falta para perfilar iPhones.
-Write-Host "`n  iOS (opcional — sólo si vas a perfilar iPhone/iPad):" -ForegroundColor Magenta
-$pythonOk = $true
-if (-not (Test-Command 'python')) {
-  # OJO: en Windows el ejecutable es `python`, NO `python3`.
-  if (-not (Install-WingetPackage 'Python.Python.3.12' 'Python 3.12')) {
-    Write-Warning '  no se pudo instalar Python: el camino iOS va a quedar sin configurar (Android no se ve afectado).'
-    $pythonOk = $false
-  }
-  $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
-    [Environment]::GetEnvironmentVariable('Path', 'User')
-}
-
-if ($pythonOk -and (Test-Command 'python')) {
-  # Venv propio en vez de instalar en el Python del sistema: mismo criterio que
-  # platform-tools (la tool se ocupa de su toolchain) y esquiva PEP 668.
-  $venv = Join-Path $env:USERPROFILE '.sample-profiler\pmd3-venv'
-  $venvPy = Join-Path $venv 'Scripts\python.exe'
-  if (-not (Test-Path $venvPy)) {
-    Write-Host "  →   creando venv en $venv…" -ForegroundColor Cyan
-    python -m venv $venv 2>&1 | Out-Null
-  }
-  if (Test-Path $venvPy) {
-    Write-Host "  →   instalando pymobiledevice3…" -ForegroundColor Cyan
-    & $venvPy -m pip install --quiet --upgrade pip pymobiledevice3 2>&1 | Out-Null
-    $pmdVer = (& $venvPy -m pymobiledevice3 version 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -eq 0) {
-      Write-Host "  ok  pymobiledevice3 $pmdVer" -ForegroundColor Green
-    } else {
-      Write-Warning '  pip no pudo instalar pymobiledevice3 — el camino iOS queda sin configurar.'
-    }
-  } else {
-    Write-Warning '  no se pudo crear el venv — el camino iOS queda sin configurar.'
-  }
-
-  # El usbmux de Apple — el `adb` de iOS. Se instala acá igual que adb y Python; es la
-  # única pieza que no se puede vendorizar (viene firmada por Apple).
-  Install-AppleDevices
-}
-
-# 4. Refrescar PATH de esta sesión (winget lo agrega para sesiones nuevas)
-$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
-  [Environment]::GetEnvironmentVariable('Path', 'User')
-
-# 5. Verificación
-Write-Host "`nVerificando:" -ForegroundColor Magenta
-if (Test-Command 'bun') {
-  Write-Host "  ok  bun $(bun --version)" -ForegroundColor Green
-} else {
-  Write-Warning 'bun no está en el PATH de esta sesión — abrí una terminal nueva y listo.'
-}
-if (Test-Command 'adb') {
-  $adbVersion = (adb --version | Select-Object -First 1)
+if ($adbExe) {
+  $adbVersion = (& $adbExe version | Select-Object -First 1)
   Write-Host "  ok  $adbVersion" -ForegroundColor Green
+  & $adbExe start-server 2>&1 | Out-Null
 } else {
-  Write-Warning 'adb no está en el PATH de esta sesión — abrí una terminal nueva y listo.'
+  Write-Warning 'adb no quedó disponible; Android no funcionará.'
 }
 
-# Estado del camino iOS de un vistazo: son DOS piezas independientes y fallan distinto
-# (pymobiledevice3 lo instalamos nosotros; el usbmux viene de Apple y no se puede vendorizar).
-# Verlas separadas evita el diagnóstico equivocado de "no se detecta el iPhone".
-$venvPyCheck = Join-Path $env:USERPROFILE '.sample-profiler\pmd3-venv\Scripts\python.exe'
-if (Test-Path $venvPyCheck) {
-  $pmdCheck = (& $venvPyCheck -m pymobiledevice3 version 2>&1 | Out-String).Trim()
-  if ($LASTEXITCODE -eq 0) {
-    Write-Host "  ok  pymobiledevice3 $pmdCheck (iOS)" -ForegroundColor Green
-  } else {
-    Write-Warning '  pymobiledevice3 no responde — los iPhone no se van a detectar.'
+Write-Host "`niOS:" -ForegroundColor Magenta
+$pythonExe = Find-Python
+if (-not $pythonExe) {
+  $pythonInstalled = Install-WingetPackage 'Python.Python.3.12' 'Python 3.12'
+  Refresh-ProcessPath
+  $pythonExe = Find-Python
+  if (-not $pythonExe -and $pythonInstalled) {
+    Write-Host '  →   reparando la instalación de Python 3.12…' -ForegroundColor Cyan
+    & $script:WingetExe install --id Python.Python.3.12 --exact --silent --force `
+      --accept-source-agreements --accept-package-agreements --disable-interactivity | Out-Host
+    Refresh-ProcessPath
+    $pythonExe = Find-Python
   }
-} else {
-  Write-Host "  –   iOS sin configurar (no hay venv) — sólo Android" -ForegroundColor DarkGray
-}
-if (Test-Usbmux) {
-  Write-Host "  ok  usbmux de Apple (iOS)" -ForegroundColor Green
-} else {
-  Write-Host "  –   usbmux de Apple no responde — abrí 'Apple Devices' una vez" -ForegroundColor DarkGray
 }
 
-# 5. Dependencias del repo (si se corre desde el clon)
-$repoRoot = Split-Path -Parent $PSScriptRoot
-if (Test-Path (Join-Path $repoRoot 'package.json')) {
-  Write-Host "`nInstalando dependencias del repo (bun install)…" -ForegroundColor Cyan
+$pmdOk = $false
+if ($pythonExe) {
+  Write-Host "  ok  $((& $pythonExe --version 2>&1 | Out-String).Trim())" -ForegroundColor Green
+  if (-not (Test-Python $venvPy)) {
+    Write-Host "  →   creando o reparando el entorno iOS en $venv…" -ForegroundColor Cyan
+    New-Item -ItemType Directory -Force -Path $managedRoot | Out-Null
+    & $pythonExe -m venv --clear $venv 2>&1 | Out-Host
+  }
+  if (Test-Python $venvPy) {
+    Write-Host '  →   instalando/actualizando pymobiledevice3…' -ForegroundColor Cyan
+    $pipOutput = (& $venvPy -m pip install --disable-pip-version-check --quiet `
+      --upgrade pip pymobiledevice3 2>&1 | Out-String).Trim()
+    $pipExit = $LASTEXITCODE
+    if ($pipExit -eq 0) {
+      $pmdVersion = (& $venvPy -m pymobiledevice3 version 2>&1 | Out-String).Trim()
+      if ($LASTEXITCODE -eq 0 -and $pmdVersion) {
+        Write-Host "  ok  pymobiledevice3 $pmdVersion" -ForegroundColor Green
+        $pmdOk = $true
+      }
+    } elseif ($pipOutput) {
+      Write-Warning "pip no pudo instalar pymobiledevice3:`n$pipOutput"
+    }
+  }
+}
+if (-not $pmdOk) { Write-Warning 'Python/pymobiledevice3 no quedó operativo; iOS no funcionará.' }
+
+# Apple Devices es independiente de Python: se instala incluso si el venv falló, para que
+# una segunda ejecución pueda reparar sólo la pieza que falta.
+$appleOk = Install-AppleDevices
+if ($pmdOk -and $appleOk) { Show-IosDeviceStatus $venvPy }
+
+$depsOk = $false
+if ($bunExe -and (Test-Path -LiteralPath (Join-Path $repoRoot 'package.json'))) {
+  Write-Host "`nDependencias del proyecto:" -ForegroundColor Magenta
   Push-Location $repoRoot
   try {
-    bun install
-  } finally {
-    Pop-Location
-  }
+    & $bunExe install --frozen-lockfile
+    $depsOk = $LASTEXITCODE -eq 0
+  } finally { Pop-Location }
+  if ($depsOk) { Write-Host '  ok  dependencias instaladas desde bun.lock' -ForegroundColor Green }
+  else { Write-Warning 'bun install falló; el profiler no podrá arrancar.' }
 }
+
+$androidOk = [bool]($bunExe -and $adbExe -and $depsOk)
+$iosOk = [bool]($pmdOk -and $appleOk)
+
+Write-Host "`nResumen:" -ForegroundColor Magenta
+if ($androidOk) { Write-Host '  ok  Android listo' -ForegroundColor Green }
+else { Write-Host '  ERROR  Android incompleto' -ForegroundColor Red }
+if ($iosOk) { Write-Host '  ok  iOS listo en Windows' -ForegroundColor Green }
+else { Write-Host '  ERROR  iOS incompleto' -ForegroundColor Red }
 
 Write-Host @'
 
-Listo. Para usar el profiler:
+Configuración única en los teléfonos:
 
-  → Doble click en INICIAR.bat (en la carpeta del proyecto).
-    El dashboard se abre solo en el navegador.
+ANDROID
+  1. Ajustes > Acerca del teléfono > tocá 7 veces "Número de compilación".
+  2. Opciones de desarrollador > activá "Depuración USB".
+  3. Conectá por USB y aceptá "Permitir depuración USB".
 
-En un ANDROID (una sola vez):
-  1. Activá "Depuración USB": Ajustes → Acerca del teléfono → tocá 7 veces
-     "Número de compilación" → volvé → Opciones de desarrollador → Depuración USB.
-  2. Conectalo por USB y aceptá "¿Permitir depuración USB?" (marcá "Permitir siempre").
+iPHONE / iPAD
+  1. Conectá por USB, desbloqueá y tocá "Confiar en este equipo".
+  2. Ajustes > Privacidad y seguridad > Modo Desarrollador > activar.
+  3. El teléfono se reinicia: confirmá "Activar" e ingresá el código.
+  4. Dejá Apple Devices abierto la primera vez que conectes el dispositivo.
 
-En un iPHONE / iPAD (una sola vez):
-  1. Conectalo por USB, desbloqueá la pantalla y tocá "Confiar" en el diálogo del teléfono.
-  2. Si no aparece, abrí la app "Apple Devices" en la PC y volvé a enchufarlo.
-     (No hace falta jailbreak, ni Mac, ni permisos de administrador.)
-
-No hace falta el teléfono para arrancar: el dashboard queda esperando y detecta solo lo que
-enchufes, sea Android o iPhone.
+Después, ejecutá INICIAR.bat. El profiler detectará Android y iOS automáticamente.
 '@ -ForegroundColor Magenta
+
+if (-not $androidOk -or -not $iosOk) {
+  Write-Host 'La instalación quedó incompleta. Corregí los ERROR y ejecutá INSTALAR.bat otra vez.' -ForegroundColor Red
+  exit 1
+}
+
+Write-Host 'Instalación completa para Android e iOS.' -ForegroundColor Green
+exit 0

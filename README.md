@@ -80,7 +80,9 @@ los últimos 60 s + % de ticks en verde; los crashes de la sesión suman un chip
 
 ---
 
-## Windows 11 — instalación en 3 pasos (sin conocimientos técnicos)
+## Windows 10/11 — instalación en 3 pasos (sin conocimientos técnicos)
+
+Requiere Windows 10 1809 o posterior, de 64 bits (x64 o ARM64).
 
 1. **Descargá el proyecto**: en GitHub, botón verde **Code → Download ZIP**, y descomprimilo
    (o `git clone` si sabés usarlo).
@@ -88,8 +90,9 @@ los últimos 60 s + % de ticks en verde; los crashes de la sesión suman un chip
    listo. Se corre **una sola vez**; lo que ya esté instalado lo saltea. Para Android: Bun y
    adb. Para iPhone/iPad, además: Python, `pymobiledevice3` (en un entorno propio, sin tocar
    el Python del sistema) y la app **Apple Devices** de la Microsoft Store, que trae el
-   servicio con el que Windows habla con los iPhone. **Todo el bloque de iOS es opcional**:
-   si algo de eso falla, Android sigue funcionando igual.
+   servicio con el que Windows habla con los iPhone. Al terminar muestra por separado
+   `Android listo` e `iOS listo`; si falta una dependencia devuelve error y se puede volver
+   a ejecutar sin reinstalar lo que ya funciona.
 3. **Doble click en `INICIAR.bat`** — el dashboard se abre solo en el navegador. Conectá el
    teléfono por USB y listo (no importa el orden ni la marca: el dashboard detecta solo lo
    que enchufes, Android o iPhone).
@@ -99,9 +102,11 @@ tocá 7 veces "Número de compilación" → volvé → Opciones de desarrollador
 y al conectarlo aceptá el diálogo "¿Permitir depuración USB?" marcando "Permitir siempre".
 
 **En un iPhone/iPad**, una sola vez: conectalo por USB, desbloqueá la pantalla y tocá
-**"Confiar"** en el diálogo que aparece en el teléfono. Si no aparece, abrí una vez la app
-_Apple Devices_ en la PC y volvé a enchufarlo. **No hace falta Mac, ni jailbreak, ni permisos
-de administrador**: el túnel con el iPhone se levanta en modo usuario.
+**"Confiar"**. Después activá **Ajustes → Privacidad y seguridad → Modo Desarrollador**;
+el teléfono se reinicia y pide confirmar la activación con el código. Si no aparece el
+dispositivo, abrí una vez _Apple Devices_ en la PC y volvé a enchufarlo. No hace falta Mac
+ni jailbreak. El instalador puede pedir UAC para instalar dependencias, pero el profiler y
+el túnel de iOS 17.4+ corren después en modo usuario.
 
 ## macOS / Linux — instalación normal
 
@@ -126,7 +131,7 @@ Las secciones que siguen detallan requisitos, flags y desarrollo.
 
 ## Requisitos
 
-Para **ejecutarlo** hace falta exactamente esto (en Windows 11, `INSTALAR.bat` hace los
+Para **ejecutarlo** hace falta exactamente esto (en Windows 10/11, `INSTALAR.bat` hace los
 pasos 1 y 2 solo):
 
 1. **Bun ≥ 1.3** (runtime — corre el CLI, los tests y el server del dashboard):
@@ -168,7 +173,9 @@ simplemente no se detectan y el resto anda igual.
      vez**: instalar el paquete no alcanza, el servicio arranca recién cuando se abre la app.
    - **macOS**: ya viene con el sistema.
    - **Linux**: `usbmuxd`.
-3. Un **iPhone/iPad con iOS 17.4+** desbloqueado y con **"Confiar en este equipo"** aceptado.
+3. Un **iPhone/iPad con iOS 17.4+**, desbloqueado, con **"Confiar en este equipo"** aceptado
+   y **Modo Desarrollador** activado. El instalador comprueba este estado si el dispositivo
+   está conectado, pero la confirmación y el reinicio se hacen necesariamente en el teléfono.
    Verificado contra un iPhone 15,3 con iOS 26.5.2 en Windows 11.
 
 > **Sin admin y sin Mac.** Los servicios de desarrollo de iOS 17+ exigen un túnel; desde
