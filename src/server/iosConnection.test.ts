@@ -12,7 +12,7 @@ import type { IosProcess } from '../core/ios/deviceInfo'
 import { LiveServer } from './liveServer'
 
 const UI_ROOT = join(import.meta.dir, '../ui')
-const PKG = 'com.evermore.arcade'
+const PKG = 'com.sample.arcade'
 // A propósito NO tiene forma de UDID real (8hex-16hex): el scrubber de fixtures lo
 // tomaría por PII y bloquearía el commit, y acá el valor sólo tiene que ser una clave.
 const UDID = 'UDID-DE-PRUEBA'
@@ -49,7 +49,7 @@ interface FakeIosStream {
  * device no está).
  */
 function fakeIos() {
-  const state = { present: true, processes: [{ pid: 500, name: 'EvermoreArcade' }] as IosProcess[] }
+  const state = { present: true, processes: [{ pid: 500, name: 'SampleApp' }] as IosProcess[] }
   const streams: FakeIosStream[] = []
   return {
     state,
@@ -59,7 +59,7 @@ function fakeIos() {
       isAvailable: async () => true,
       devices: async () => (state.present ? [IOS_DEVICE] : []),
       processes: async () => (state.present ? state.processes : null),
-      appExecutable: async () => 'EvermoreArcade',
+      appExecutable: async () => 'SampleApp',
       apps: async () => [],
       systemInfo: async () => ({ ramTotalMb: 6144, cores: 6 }),
       stream: (

@@ -4,7 +4,7 @@ import { RealAdbTransport } from '../src/core/adb/RealAdbTransport'
 import { captureDeviceInfo } from '../src/server/liveServer'
 import { Sampler, resolvePid } from '../src/core/sampler/sampler'
 
-const PKG = process.env['PKG'] ?? 'com.evermore.oda.qa'
+const PKG = process.env['PKG'] ?? 'com.sample.oda.qa'
 const TICKS = Number(process.argv[2] ?? 5)
 
 async function main(): Promise<void> {

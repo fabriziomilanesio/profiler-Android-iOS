@@ -46,7 +46,7 @@
     pkgLabel: document.getElementById('appPkg'),
     launched: document.getElementById('appLaunched'),
   }
-  var chipOn = true // filtro default: solo apps que matchean filterTerm ("evermore")
+  var chipOn = true // filtro default: solo apps que matchean filterTerm ("sample")
   var appData = null // {packages, usage, filterTerm, current} del último fetch
   var appSwitching = false
 
@@ -336,7 +336,7 @@
         return r.blob().then(function (blob) {
           var a = document.createElement('a')
           a.href = URL.createObjectURL(blob)
-          a.download = m ? m[1] : 'evermore-report.html'
+          a.download = m ? m[1] : 'sample-report.html'
           // dentro del popover: el click sintético no burbujea a document (cerraría el menú)
           menu.pop.appendChild(a)
           a.click()

@@ -21,7 +21,7 @@ export interface DiscoverAdbOptions {
   configPath?: string
 }
 
-const MANAGED_DIR = '.evermore-profiler'
+const MANAGED_DIR = '.sample-profiler'
 
 function envCaseInsensitive(env: DiscoverAdbOptions['env'], name: string): string | undefined {
   if (env[name] !== undefined) return env[name]

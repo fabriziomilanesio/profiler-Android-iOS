@@ -10,7 +10,7 @@ blocked-by: [10, 13]
 ## Question
 
 Implementar `profiler doctor`: con un device real enchufado, corre el preflight, detecta
-la app (default `com.evermore.oda.qa`, override por flag), samplea ~30s y reporta por
+la app (default `com.sample.oda.qa`, override por flag), samplea ~30s y reporta por
 consola qué métrica anda y cuál no en ese device (CPU ✓, RAM ✓, FPS ✓, temp ✓/N-A,
 GPU ✓/N-A, net ✓), con valores de muestra para sanity-check humano.
 

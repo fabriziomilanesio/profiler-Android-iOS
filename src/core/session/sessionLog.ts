@@ -23,7 +23,7 @@ export function isValidSessionId(id: string): boolean {
 }
 
 export function defaultSessionsDir(): string {
-  return join(homedir(), '.config', 'evermore-profiler', 'sessions')
+  return join(homedir(), '.config', 'sample-profiler', 'sessions')
 }
 
 export interface SessionInfo {

@@ -1,5 +1,5 @@
 // Tests capa 1 de los parsers iOS, contra la salida REAL del iPhone15,3 capturada con
-// Evermore Arcade corriendo (fixtures/ios-iphone15-3/). Mismo esquema que
+// Sample App corriendo (fixtures/ios-iphone15-3/). Mismo esquema que
 // parsers.test.ts del lado Android.
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -63,7 +63,7 @@ describe('SysmonAssembler — JSON pretty multi-línea', () => {
     const asm = new SysmonAssembler()
     const out = sysmonLines.map((l) => asm.push(l)).filter(Boolean)
     expect(out.length).toBeGreaterThan(2)
-    expect(out[0]?.name).toBe('EvermoreArcade')
+    expect(out[0]?.name).toBe('SampleApp')
   })
 
   test('convierte la memoria a MB y respeta los valores reales', () => {
@@ -86,7 +86,7 @@ describe('SysmonAssembler — JSON pretty multi-línea', () => {
 
   test('ignora el banner "Monitoring pid=…" sin romper el estado', () => {
     const asm = new SysmonAssembler()
-    expect(asm.push('Monitoring pid=63819, ppid=1, name=EvermoreArcade')).toBeNull()
+    expect(asm.push('Monitoring pid=63819, ppid=1, name=SampleApp')).toBeNull()
     expect(asm.push('{')).toBeNull()
     expect(asm.push('  "pid": 1,')).toBeNull()
     expect(asm.push('  "name": "X"')).toBeNull()

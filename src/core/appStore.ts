@@ -2,7 +2,7 @@
 // contadores de uso, término del chip) + preferencias del dashboard (tema,
 // intervalo de sampling, carpeta de reportes). Editable a mano.
 //
-// Vive en ~/.config/evermore-profiler/config.json — local a la máquina, fuera del
+// Vive en ~/.config/sample-profiler/config.json — local a la máquina, fuera del
 // repo a propósito. Migración silenciosa desde el viejo apps.json si existe.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -43,7 +43,7 @@ export interface AppStoreData {
   reportsDir: string
   /**
    * Target de FPS del semáforo (ticket 025): verde ≥ target · amarillo ≥ 80% ·
-   * rojo abajo. Default 30 (gama baja donde testea Evermore). Aplica en caliente
+   * rojo abajo. Default 30 (gama baja donde testea Sample). Aplica en caliente
    * desde el panel de config; el reporte (026) declara el target usado.
    */
   fpsTarget: number
@@ -78,14 +78,14 @@ export function autoIntervalMs(ramTotalMb: number | null): number {
 }
 
 export function defaultReportsDir(): string {
-  return join(homedir(), '.config', 'evermore-profiler', 'reports')
+  return join(homedir(), '.config', 'sample-profiler', 'reports')
 }
 
 export function defaultAppStoreData(): AppStoreData {
   return {
     last: null,
     usage: {},
-    filterTerm: 'evermore',
+    filterTerm: 'sample',
     // dark protagonista desde el rediseño del dashboard (tickets 031/032)
     theme: 'dark',
     intervalMs: 1000,
@@ -152,12 +152,12 @@ export function rankPackages(installed: string[], usage: Record<string, number>)
 }
 
 export function appStorePath(): string {
-  return join(homedir(), '.config', 'evermore-profiler', 'config.json')
+  return join(homedir(), '.config', 'sample-profiler', 'config.json')
 }
 
 /** Ruta vieja (pre-panel de config): se migra silenciosamente a config.json. */
 export function legacyAppStorePath(): string {
-  return join(homedir(), '.config', 'evermore-profiler', 'apps.json')
+  return join(homedir(), '.config', 'sample-profiler', 'apps.json')
 }
 
 /** Store con persistencia. Carga al construir; select()/set() guardan enseguida. */

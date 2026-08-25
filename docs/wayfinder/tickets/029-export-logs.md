@@ -45,7 +45,7 @@ sessionId?, entries? }`: para `filtered` el cliente manda las entries visibles
   panel), crashes marcados con prefijo `[CRASH]` (o `[ANR]` para am_anr) en CADA
   línea del bloque — greppeable al pegar en Jira/Slack; `serializeLogsJsonl` —
   las LogEntry tal cual, una por línea (mismo esquema del sink);
-  `logsExportFilename` — `evermore-logs-<sesión|fecha>[-filtered].<ext>`;
+  `logsExportFilename` — `sample-logs-<sesión|fecha>[-filtered].<ext>`;
   `parseExportEntries` — valida/normaliza las entries del cliente (input hostil
   que termina en disco): forma de LogEntry estricta, campos desconocidos afuera.
 - **Server** (`liveServer.ts`): `POST /api/logs/export` con check de origin como

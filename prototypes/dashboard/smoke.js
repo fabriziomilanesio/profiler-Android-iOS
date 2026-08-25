@@ -72,7 +72,6 @@ for (const f of ['app.js', 'sim.js']) {
 const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
 const refs = [
   'vendor/echarts.min.js', 'sim.js', 'app.js',
-  'assets/evermore-logo.png', 'assets/odaclick-dog.png', 'assets/evermore-appicon.png',
   'vendor/fonts/baloo-2-latin-800-normal.woff2', 'vendor/fonts/inter-latin-400-normal.woff2',
 ];
 for (const r of refs) {

@@ -8,7 +8,7 @@ import type { AdbTransport } from '../adb/AdbTransport'
 import type { LogEntry } from './logEntry'
 import { LogcatCapture, LOGCAT_COMMANDS } from './logcatCapture'
 
-const PKG = 'com.evermore.oda.qa'
+const PKG = 'com.sample.oda.qa'
 const FIXTURES = join(import.meta.dir, '../../../fixtures/logcat')
 const CRASH_FIXTURE = readFileSync(join(FIXTURES, 'crash-events.txt'), 'utf8')
   .split('\n')
@@ -123,7 +123,7 @@ describe('LogcatCapture crashes/ANR', () => {
     // completo: incluye el banner PREVIO a la línea `>>> pkg <<<` (retro-adjudicado)…
     expect(tomb[0]!.message).toStartWith('*** ***')
     expect(tomb[1]!.message).toStartWith('Build fingerprint:')
-    expect(tomb[2]!.message).toContain('>>> com.evermore.oda.qa <<<')
+    expect(tomb[2]!.message).toContain('>>> com.sample.oda.qa <<<')
     // …y el frame nativo posterior, que ya no menciona el package
     expect(tomb[3]!.message).toContain('#00 pc')
     expect(tomb[3]!.message).toEndWith('libil2cpp.so')

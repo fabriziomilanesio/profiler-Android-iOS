@@ -23,7 +23,7 @@ export interface IosProcessSample {
   residentMb: number | null
   /**
    * `memCompressed` en MB — páginas comprimidas, YA incluidas en el footprint. Es la
-   * señal de presión de memoria: en evermorearcade fueron 578 MB de 1023 MB de footprint.
+   * señal de presión de memoria: en samplearcade fueron 578 MB de 1023 MB de footprint.
    */
   compressedMb: number | null
   /** proxy de consumo energético del proceso; no tiene equivalente en Android. */

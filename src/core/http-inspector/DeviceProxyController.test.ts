@@ -9,7 +9,7 @@ const SERIAL = 'R58M42XXXX'
 
 const dirs: string[] = []
 function freshBaseDir(): string {
-  const d = mkdtempSync(join(tmpdir(), 'evermore-proxy-test-'))
+  const d = mkdtempSync(join(tmpdir(), 'sample-proxy-test-'))
   dirs.push(d)
   return d
 }

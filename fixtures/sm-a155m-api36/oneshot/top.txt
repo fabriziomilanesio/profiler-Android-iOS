@@ -7,7 +7,7 @@ Tasks: 885 total,   7 running, 878 sleeping,   0 stopped,   0 zombie
  2162 u0_a65       10 -10  11G 277M 137M R 50.0   7.5   7:00.65 com.android.systemui
  1694 system       18  -2  19G 309M 144M S 43.7   8.4  49:10.89 system_server
  1160 system       -3  -8 3.1G  23M  14M S 43.7   0.6   7:21.68 surfaceflinger
-18078 u0_a340      10 -10  17G 869M 598M S 37.5  23.7   0:41.64 com.evermore.oda.qa
+18078 u0_a340      10 -10  17G 869M 598M S 37.5  23.7   0:41.64 com.sample.oda.qa
  1102 system       -3  -8 2.6G 7.5M 4.8M S 25.0   0.2   4:23.33 android.hardware.graphics.composer@3.4-service
 18939 shell        20   0 2.1G 4.9M 3.7M R 18.7   0.1   0:00.09 top -b -n 1
  1097 audioserver  20   0 3.0G 9.2M 6.4M S 18.7   0.2   5:32.71 android.hardware.audio.service-aidl.mediatek

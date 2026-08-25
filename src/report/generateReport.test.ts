@@ -42,7 +42,7 @@ function sample(t: number): Sample {
 
 const SESSION = buildReportSession({
   samples: [sample(0), sample(1), sample(2)],
-  packageName: 'com.evermore.oda.qa',
+  packageName: 'com.sample.oda.qa',
   device: {
     serial: 'X1',
     model: 'SM-A155M',
@@ -62,10 +62,9 @@ const SESSION = buildReportSession({
 describe('generateReportHtml', () => {
   test('produce un HTML auto-contenido con los datos embebidos', () => {
     const html = generateReportHtml(SESSION, 'dark', new Date('2026-07-20T18:00:00Z'))
-    expect(html).toContain('com.evermore.oda.qa')
+    expect(html).toContain('com.sample.oda.qa')
     expect(html).toContain('data-theme="dark"')
     expect(html).toContain('window.ReportData')
-    expect(html).toContain('data:image/png;base64,') // logos inline
     expect(html).toContain('data:font/woff2;base64,') // fuentes inline
     expect(html).toContain('echarts') // lib inline
     // ningún placeholder del template sin resolver (echarts minificado usa __X__ propios)
@@ -73,8 +72,6 @@ describe('generateReportHtml', () => {
       '__TITLE__',
       '__THEME__',
       '__FONTS_CSS__',
-      '__LOGO_EVERMORE__',
-      '__LOGO_ODACLICK__',
       '__GENERATED__',
       '__ECHARTS__',
       '__REPORT_DATA__',
@@ -104,7 +101,7 @@ describe('generateReportHtml', () => {
   test('el target configurado viaja hasta el reporte (no siempre 30)', () => {
     const s60 = buildReportSession({
       samples: [sample(0), sample(1), sample(2)],
-      packageName: 'com.evermore.oda.qa',
+      packageName: 'com.sample.oda.qa',
       device: null,
       intervalMs: 1000,
       trimmed: false,
@@ -123,7 +120,7 @@ describe('generateReportHtml', () => {
         delete clone.frame
         return clone as Sample
       }),
-      packageName: 'com.evermore.oda.qa',
+      packageName: 'com.sample.oda.qa',
       device: null,
       intervalMs: 1000,
       trimmed: false,
@@ -138,7 +135,7 @@ describe('generateReportHtml', () => {
   test('escapa </script> dentro de los datos (no corta el script del template)', () => {
     const evil = buildReportSession({
       samples: [sample(0)],
-      packageName: 'com.evermore.oda.qa',
+      packageName: 'com.sample.oda.qa',
       device: null,
       intervalMs: 1000,
       trimmed: false,
@@ -151,7 +148,7 @@ describe('generateReportHtml', () => {
 
   test('reportFilename: app + timestamp', () => {
     expect(reportFilename(SESSION, new Date('2026-07-20T18:05:30Z'))).toBe(
-      'evermore-report-com.evermore.oda.qa-2026-07-20T18-05-30.html',
+      'sample-report-com.sample.oda.qa-2026-07-20T18-05-30.html',
     )
   })
 })
@@ -178,13 +175,13 @@ describe('logs embebidos en el reporte (030)', () => {
     logAt(800, 'W', 'Texture atlas not preloaded'),
     logAt(1200, 'E', 'FATAL EXCEPTION: main', true),
     logAt(1210, 'E', 'java.lang.IllegalStateException: boom', true),
-    logAt(1220, 'E', '\tat com.evermore.oda.GameLoop.tick(GameLoop.java:87)', true),
+    logAt(1220, 'E', '\tat com.sample.oda.GameLoop.tick(GameLoop.java:87)', true),
   ]
 
   test('reporte con crashes: marks presentes y sección de logs embebida', () => {
     const s = buildReportSession({
       samples: [sample(0), sample(1), sample(2)],
-      packageName: 'com.evermore.oda.qa',
+      packageName: 'com.sample.oda.qa',
       device: null,
       intervalMs: 1000,
       trimmed: false,
@@ -206,7 +203,7 @@ describe('logs embebidos en el reporte (030)', () => {
   test('sesión sin logs: marks vacías, logs null, el HTML degrada sin sección con datos', () => {
     const s = buildReportSession({
       samples: [sample(0), sample(1)],
-      packageName: 'com.evermore.oda.qa',
+      packageName: 'com.sample.oda.qa',
       device: null,
       intervalMs: 1000,
       trimmed: false,
@@ -225,7 +222,7 @@ describe('logs embebidos en el reporte (030)', () => {
     many.sort((a, b) => a.ts - b.ts)
     const s = buildReportSession({
       samples: [sample(0), sample(1), sample(2)],
-      packageName: 'com.evermore.oda.qa',
+      packageName: 'com.sample.oda.qa',
       device: null,
       intervalMs: 1000,
       trimmed: false,
@@ -240,7 +237,7 @@ describe('logs embebidos en el reporte (030)', () => {
     // samples en t=0..2 ⇒ ventana [BASE_TS, BASE_TS+2000]
     const s = buildReportSession({
       samples: [sample(0), sample(1), sample(2)],
-      packageName: 'com.evermore.oda.qa',
+      packageName: 'com.sample.oda.qa',
       device: null,
       intervalMs: 1000,
       trimmed: false,

@@ -74,15 +74,15 @@ describe('pickGpuPath', () => {
 })
 
 describe('oneshotPlan', () => {
-  const plan = oneshotPlan('com.evermore.oda.qa', '12345')
+  const plan = oneshotPlan('com.sample.oda.qa', '12345')
 
   test('interpola pkg y pid en los comandos', () => {
     expect(plan.find((s) => s.file === 'dumpsys-meminfo.txt')?.cmd).toBe(
-      'dumpsys meminfo com.evermore.oda.qa',
+      'dumpsys meminfo com.sample.oda.qa',
     )
     expect(plan.find((s) => s.file === 'proc-pid-stat.txt')?.cmd).toBe('cat /proc/12345/stat')
     expect(plan.find((s) => s.file === 'gfxinfo-framestats.txt')?.cmd).toBe(
-      'dumpsys gfxinfo com.evermore.oda.qa framestats',
+      'dumpsys gfxinfo com.sample.oda.qa framestats',
     )
   })
 
@@ -120,7 +120,7 @@ describe('oneshotPlan', () => {
 
 describe('tickPlan', () => {
   test('proc/stat y proc/<pid>/stat van juntos en una sola llamada', () => {
-    const plan = tickPlan('com.evermore.oda.qa', '999', null)
+    const plan = tickPlan('com.sample.oda.qa', '999', null)
     expect(plan.find((s) => s.file === 'proc-stat.txt')?.cmd).toBe('cat /proc/stat /proc/999/stat')
   })
 
@@ -142,7 +142,7 @@ describe('tickPlan', () => {
 })
 
 describe('findSurfaceViewLayer', () => {
-  const pkg = 'com.evermore.oda.qa'
+  const pkg = 'com.sample.oda.qa'
 
   test('encuentra el layer BLAST (API 31+)', () => {
     const list = [
@@ -228,12 +228,12 @@ describe('buildReadme', () => {
 
   test('incluye ficha del device y sección de fallos', () => {
     const md = buildReadme(info, {
-      pkg: 'com.evermore.oda.qa',
+      pkg: 'com.sample.oda.qa',
       date: '2026-07-16T12:00:00Z',
       sessionSeconds: 30,
       ticks: 30,
       gpuPath: null,
-      layer: 'SurfaceView[com.evermore.oda.qa/...]@0(BLAST)#1',
+      layer: 'SurfaceView[com.sample.oda.qa/...]@0(BLAST)#1',
       failures: ['`oneshot/gpu-kgsl-gpubusy.err.txt` — exit 1: No such file or directory'],
     })
     expect(md).toContain('# Fixtures: Pixel 7 (API 33)')

@@ -3,9 +3,9 @@ import type { AdbTransport, ShellResult } from './AdbTransport'
 import { listPackages, parsePackageList } from './listPackages'
 
 const PM_OUT = [
-  'package:com.evermore.oda.qa',
+  'package:com.sample.oda.qa',
   'package:com.android.chrome',
-  'package:com.evermore.arcade',
+  'package:com.sample.arcade',
   '', // línea vacía
   'garbage line without prefix',
   'package:', // prefijo sin nombre
@@ -16,8 +16,8 @@ describe('parsePackageList', () => {
   test('extrae solo las líneas package: y ordena alfabéticamente', () => {
     expect(parsePackageList(PM_OUT)).toEqual([
       'com.android.chrome',
-      'com.evermore.arcade',
-      'com.evermore.oda.qa',
+      'com.sample.arcade',
+      'com.sample.oda.qa',
       'org.fdroid.fdroid',
     ])
   })
@@ -54,7 +54,7 @@ describe('listPackages', () => {
   test('por default lista solo apps de terceros (pm list packages -3)', async () => {
     const { t, cmds } = transportWith(/pm list packages -3/, PM_OUT)
     const pkgs = await listPackages(t, 'SERIAL', {})
-    expect(pkgs).toContain('com.evermore.oda.qa')
+    expect(pkgs).toContain('com.sample.oda.qa')
     expect(cmds[0]).toBe('pm list packages -3')
   })
 

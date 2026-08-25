@@ -8,7 +8,7 @@ import { defaultAppStoreData, type AppStoreData } from '../core/appStore'
 import { LiveServer } from './liveServer'
 
 const UI_ROOT = join(import.meta.dir, '../ui')
-const PKG = 'com.evermore.oda.qa'
+const PKG = 'com.sample.oda.qa'
 
 const ok = (stdout: string): ShellResult => ({ stdout, stderr: '', exitCode: 0 })
 
@@ -82,7 +82,7 @@ function memoryStore(): {
 } {
   const selected: string[] = []
   const store = {
-    data: { ...defaultAppStoreData(), usage: { 'com.evermore.arcade': 7 } },
+    data: { ...defaultAppStoreData(), usage: { 'com.sample.arcade': 7 } },
     select(pkg: string) {
       selected.push(pkg)
     },
@@ -124,16 +124,16 @@ describe('LiveServer /api/packages', () => {
   test('lista instaladas rankeadas por uso, con filterTerm y current', async () => {
     const { server, url } = await startServer(new Map([[PKG, 111]]), [
       'com.aaa.app',
-      'com.evermore.arcade',
+      'com.sample.arcade',
       'com.zzz.app',
     ])
     try {
       const res = await fetch(`${url}/api/packages`)
       expect(res.status).toBe(200)
       const body = (await res.json()) as PackagesBody
-      // com.evermore.arcade tiene usage 7 ⇒ primera; el resto alfabético
-      expect(body.packages).toEqual(['com.evermore.arcade', 'com.aaa.app', 'com.zzz.app'])
-      expect(body.filterTerm).toBe('evermore')
+      // com.sample.arcade tiene usage 7 ⇒ primera; el resto alfabético
+      expect(body.packages).toEqual(['com.sample.arcade', 'com.aaa.app', 'com.zzz.app'])
+      expect(body.filterTerm).toBe('sample')
       expect(body.current).toBe(PKG)
     } finally {
       await server.stop()
@@ -171,19 +171,19 @@ describe('LiveServer /api/app', () => {
     const { server, url, store } = await startServer(
       new Map([
         [PKG, 111],
-        ['com.evermore.arcade', 222],
+        ['com.sample.arcade', 222],
       ]),
       [],
     )
     try {
       const res = await fetch(`${url}/api/app`, {
         method: 'POST',
-        body: JSON.stringify({ package: 'com.evermore.arcade' }),
+        body: JSON.stringify({ package: 'com.sample.arcade' }),
       })
       expect(res.status).toBe(200)
       const body = (await res.json()) as SelectBody
-      expect(body.app).toEqual({ packageName: 'com.evermore.arcade', pid: 222, launched: false })
-      expect(store.selected).toEqual(['com.evermore.arcade'])
+      expect(body.app).toEqual({ packageName: 'com.sample.arcade', pid: 222, launched: false })
+      expect(store.selected).toEqual(['com.sample.arcade'])
     } finally {
       await server.stop()
     }
@@ -194,11 +194,11 @@ describe('LiveServer /api/app', () => {
     try {
       const res = await fetch(`${url}/api/app`, {
         method: 'POST',
-        body: JSON.stringify({ package: 'com.evermore.arcade' }),
+        body: JSON.stringify({ package: 'com.sample.arcade' }),
       })
       const body = (await res.json()) as SelectBody
-      expect(cmds).toContain('monkey -p com.evermore.arcade 1')
-      expect(body.app).toEqual({ packageName: 'com.evermore.arcade', pid: 4242, launched: true })
+      expect(cmds).toContain('monkey -p com.sample.arcade 1')
+      expect(body.app).toEqual({ packageName: 'com.sample.arcade', pid: 4242, launched: true })
     } finally {
       await server.stop()
     }
@@ -316,7 +316,7 @@ describe('LiveServer export/config/sesiones', () => {
       await new Promise((r) => setTimeout(r, 150)) // el primer tick llena el buffer
       const res = await fetch(`${url}/api/report?window=full`)
       expect(res.status).toBe(200)
-      expect(res.headers.get('content-disposition')).toContain('evermore-report-')
+      expect(res.headers.get('content-disposition')).toContain('sample-report-')
       const html = await res.text()
       expect(html).toContain('window.ReportData')
       expect(html).toContain(PKG)
@@ -371,7 +371,7 @@ describe('LiveServer export/config/sesiones', () => {
       const before = (await (await fetch(`${url}/api/config`)).json()) as {
         config: { filterTerm: string; theme: string }
       }
-      expect(before.config.filterTerm).toBe('evermore')
+      expect(before.config.filterTerm).toBe('sample')
 
       const put = await fetch(`${url}/api/config`, {
         method: 'PUT',
@@ -622,14 +622,14 @@ describe('LiveServer logs (ticket 027)', () => {
     const { server, url, streams } = await startServer(
       new Map([
         [PKG, 111],
-        ['com.evermore.arcade', 222],
+        ['com.sample.arcade', 222],
       ]),
       [],
     )
     try {
       const res = await fetch(`${url}/api/app`, {
         method: 'POST',
-        body: JSON.stringify({ package: 'com.evermore.arcade' }),
+        body: JSON.stringify({ package: 'com.sample.arcade' }),
       })
       expect(res.status).toBe(200)
       const old = streams.find((s) => s.command.includes('--pid=111'))!
@@ -695,7 +695,7 @@ describe('LiveServer /api/logs/export (ticket 029)', () => {
       })
       expect(res.status).toBe(200)
       const dispo = res.headers.get('content-disposition') ?? ''
-      expect(dispo).toContain('evermore-logs-')
+      expect(dispo).toContain('sample-logs-')
       expect(dispo).toContain('-filtered.txt')
       const txt = await res.text()
       expect(txt).toContain('E/Unity(111): NullReferenceException: señal 💥')
@@ -748,7 +748,7 @@ describe('LiveServer /api/logs/export (ticket 029)', () => {
       const list = (await (await fetch(`${url}/api/sessions`)).json()) as { current: string }
       const res = await exportReq(url, { scope: 'session', format: 'txt' })
       expect(res.status).toBe(200)
-      expect(res.headers.get('content-disposition')).toContain(`evermore-logs-${list.current}.txt`)
+      expect(res.headers.get('content-disposition')).toContain(`sample-logs-${list.current}.txt`)
       expect(await res.text()).toContain('I/Unity(111): exportame')
     } finally {
       await server.stop()
@@ -779,7 +779,7 @@ describe('LiveServer /api/logs/export (ticket 029)', () => {
     try {
       const res = await exportReq(url, { scope: 'session', format: 'jsonl', sessionId: oldId })
       expect(res.status).toBe(200)
-      expect(res.headers.get('content-disposition')).toContain(`evermore-logs-${oldId}.jsonl`)
+      expect(res.headers.get('content-disposition')).toContain(`sample-logs-${oldId}.jsonl`)
       expect(await res.text()).toContain('atlas no precargado')
 
       // sesión sin logs (sin <id>.logs.jsonl): 404 con mensaje, no error

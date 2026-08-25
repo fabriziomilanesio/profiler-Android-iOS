@@ -50,7 +50,7 @@ describe('protocolo WS', () => {
   })
 
   test('appMessage serializa {type:"app", app}', () => {
-    const app = { packageName: 'com.evermore.oda.qa', pid: 123, launched: true }
+    const app = { packageName: 'com.sample.oda.qa', pid: 123, launched: true }
     expect(JSON.parse(appMessage(app))).toEqual({ type: 'app', app })
   })
 })

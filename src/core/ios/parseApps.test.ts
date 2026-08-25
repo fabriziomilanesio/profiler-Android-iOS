@@ -5,10 +5,10 @@ import { parseIosApps } from './parseApps'
 import { isValidBundleId } from './bundleId'
 
 const REAL_SHAPE = JSON.stringify({
-  'com.evermoregames.evermorearcade': {
+  'com.samplegames.samplearcade': {
     ApplicationType: 'User',
-    CFBundleDisplayName: 'Evermore Arcade',
-    CFBundleExecutable: 'EvermoreArcade',
+    CFBundleDisplayName: 'Sample App',
+    CFBundleExecutable: 'SampleApp',
   },
   'LB-Software.PhotoEraser': {
     ApplicationType: 'User',
@@ -37,12 +37,12 @@ describe('parseIosApps', () => {
     const apps = parseIosApps(REAL_SHAPE)
     expect(apps.map((a) => a.label)).toEqual([
       'com.pelado.app',
-      'Evermore Arcade',
+      'Sample App',
       'Photo Eraser',
       'Sin Nombre',
     ])
-    expect(apps.find((a) => a.label === 'Evermore Arcade')!.id).toBe(
-      'com.evermoregames.evermorearcade',
+    expect(apps.find((a) => a.label === 'Sample App')!.id).toBe(
+      'com.samplegames.samplearcade',
     )
   })
 
@@ -77,7 +77,7 @@ describe('parseIosApps', () => {
 
 describe('isValidBundleId', () => {
   test('acepta los bundle ids reales de iOS, incluidos los que tienen guión', () => {
-    expect(isValidBundleId('com.evermoregames.evermorearcade')).toBe(true)
+    expect(isValidBundleId('com.samplegames.samplearcade')).toBe(true)
     expect(isValidBundleId('LB-Software.PhotoEraser')).toBe(true)
     expect(isValidBundleId('com.apple.mobile-safari')).toBe(true)
     expect(isValidBundleId('com.4d.app')).toBe(true)

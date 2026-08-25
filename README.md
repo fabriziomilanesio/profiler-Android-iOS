@@ -1,10 +1,10 @@
-# Evermore Mobile Profiler
+# Mobile Profiler
 
 Herramienta cross-platform (Windows/macOS/Linux) para **profilear apps móviles en vivo:
-Android vía ADB e iOS vía pymobiledevice3**. Pensada para las apps de Evermore pero sirve para
+Android vía ADB e iOS vía pymobiledevice3**. Pensada para las apps de Sample pero sirve para
 cualquiera: levantás el dashboard (con o sin teléfono conectado — se engancha solo cuando
 aparece), elegís **device** y **app** desde selectores en el dashboard (las apps filtradas por
-"evermore" por default), ves las métricas en tiempo real, inspeccionás el tráfico de red,
+"sample" por default), ves las métricas en tiempo real, inspeccionás el tráfico de red,
 grabás sesiones y exportás reportes HTML de comparación.
 
 Un solo dashboard para las dos plataformas: **no hay que decirle qué enchufaste**. Los
@@ -110,8 +110,8 @@ de administrador**: el túnel con el iPhone se levanta en modo usuario.
 curl -fsSL https://bun.sh/install | bash        # macOS: también `brew install oven-sh/bun/bun`
 
 # 2. Clonar e instalar deps:
-git clone git@github.com:Odaclick/evermore-mobile-profiler.git
-cd evermore-mobile-profiler
+git clone git@github.com:Generic/sample-mobile-profiler.git
+cd sample-mobile-profiler
 bun install
 
 # 3. Arrancar — abre el dashboard solo en el browser:
@@ -135,7 +135,7 @@ pasos 1 y 2 solo):
    - Windows: `winget install Oven-sh.Bun` (o `powershell -c "irm bun.sh/install.ps1 | iex"`)
    - Verificar: `bun --version` (≥ 1.3).
 2. **adb** (Android platform-tools). Cualquiera de estas opciones sirve — el CLI lo descubre
-   solo en este orden: flag `--adb <ruta>` → env `EVERMORE_PROFILER_ADB` → `PATH` → SDK de
+   solo en este orden: flag `--adb <ruta>` → env `MOBILE_PROFILER_ADB` → `PATH` → SDK de
    Android Studio → instalación managed propia:
    - No hacer nada y dejar que la tool lo baje (oficiales de Google):
      `bun run src/cli.ts --install-platform-tools`
@@ -157,9 +157,9 @@ Sólo si vas a perfilar iOS. Nada de esto afecta al camino Android: si falta, lo
 simplemente no se detectan y el resto anda igual.
 
 1. **Python 3.9+** y **`pymobiledevice3`**. En Windows lo resuelve `INSTALAR.bat` (crea un
-   entorno propio en `~/.evermore-profiler/pmd3-venv` para no ensuciar el Python del
+   entorno propio en `~/.sample-profiler/pmd3-venv` para no ensuciar el Python del
    sistema). A mano: `python -m venv <ruta> && <ruta>/bin/python -m pip install pymobiledevice3`.
-   El CLI lo descubre solo: `EVERMORE_PROFILER_PYTHON` → venv gestionado → `python`/`python3`
+   El CLI lo descubre solo: `MOBILE_PROFILER_PYTHON` → venv gestionado → `python`/`python3`
    del PATH.
 2. **El servicio usbmux de Apple** — el equivalente de adb para iOS, y la única pieza que no
    se puede empaquetar (viene firmada por Apple):
@@ -182,8 +182,8 @@ simplemente no se detectan y el resto anda igual.
 ## Instalación
 
 ```bash
-git clone git@github.com:Odaclick/evermore-mobile-profiler.git
-cd evermore-mobile-profiler
+git clone git@github.com:Generic/sample-mobile-profiler.git
+cd sample-mobile-profiler
 bun install
 ```
 
@@ -217,11 +217,11 @@ pero no son elegibles. Al cambiar de device, la ficha, el sampler, los logs y el
 recablean en caliente y la app actual se re-engancha en el device nuevo.
 
 **Selector de apps**: no hace falta pasar `--package`. Sin flag, arranca con la **última app
-usada** (primera vez: `com.evermore.oda.qa`) y desde el dashboard cambiás en caliente con el
+usada** (primera vez: `com.sample.oda.qa`) y desde el dashboard cambiás en caliente con el
 dropdown del header: lista las apps instaladas del device — `pm list packages -3` en Android,
 las apps de usuario por lockdown en iOS —, con toggle para ver las de sistema, **filtradas por
-el chip "Evermore"** por default y ordenadas por las más usadas; el buscador apaga el chip y
-busca sobre todas. La selección se persiste en `~/.config/evermore-profiler/config.json`
+el chip "Sample"** por default y ordenadas por las más usadas; el buscador apaga el chip y
+busca sobre todas. La selección se persiste en `~/.config/sample-profiler/config.json`
 (última app, contadores de uso y el término del chip, editable a mano).
 
 > **Diferencia en iOS**: si la app elegida está cerrada, en Android el profiler la **lanza
@@ -244,13 +244,13 @@ Flags: `--package <pkg>` (fuerza una app, pisa el auto-resume) · `--port <n>` (
   reporte se **recorta al tramo continuo de la app actual** (stats de UNA sola app) y lo
   aclara.
 - **Registros de sesiones** — cada corrida del server escribe su sesión en
-  `~/.config/evermore-profiler/sessions/<fecha>.jsonl`; el panel las lista (fecha, apps,
+  `~/.config/sample-profiler/sessions/<fecha>.jsonl`; el panel las lista (fecha, apps,
   duración) y permite exportar el reporte de **cualquier sesión pasada**.
 - **Configuración** — aplica en caliente y persiste: término del chip de filtro, intervalo de
   sampling (**Auto** según el device — 2 s en gama baja, 1 s en el resto — o fijo 0.5–5 s;
   reinicia el loop al vuelo), carpeta de reportes y **tema claro/oscuro**
   (el toggle del header también persiste). Todo vive en
-  `~/.config/evermore-profiler/config.json` (absorbe al viejo `apps.json` con migración
+  `~/.config/sample-profiler/config.json` (absorbe al viejo `apps.json` con migración
   automática).
 
 **Demo sin adb**: `bun scripts/smoke-selector.ts` levanta el dashboard con un device fake
@@ -349,7 +349,7 @@ La salida cruda va a `.tmp/` (gitignoreado) porque tiene PII. Detalle del stack 
   `/proc`/`/sys` + FPS + RSS) y lento amortizado (`dumpsys` pesados cada 10–15 s con
   carry-forward). Best-effort: lo que falla queda N/A, no rompe.
 - `src/core/appStore.ts` — configuración persistente (selector de apps, tema, intervalo,
-  carpeta de reportes) en `~/.config/evermore-profiler/config.json`.
+  carpeta de reportes) en `~/.config/sample-profiler/config.json`.
 - `src/core/session/` — buffer de sesión en memoria (cap ~8 h), historial JSONL en disco y
   estadísticas puras del reporte (avg/peak/min/p90, drain de batería, recorte por app).
 - `src/report/` — generador del reporte HTML standalone (template + ECharts + assets inline).

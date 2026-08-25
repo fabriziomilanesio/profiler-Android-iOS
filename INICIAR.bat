@@ -1,5 +1,5 @@
 @echo off
-title Evermore Mobile Profiler
+title Mobile Profiler
 cd /d "%~dp0"
 
 rem Buscar bun: PATH, instalacion winget, o instalacion oficial de bun.sh

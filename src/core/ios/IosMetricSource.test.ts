@@ -36,7 +36,7 @@ const GRAPHICS_LINE =
 function pushSysmon(onLine: (l: string) => void, over: Record<string, unknown> = {}): void {
   const obj = {
     pid: 63819,
-    name: 'EvermoreArcade',
+    name: 'SampleApp',
     cpuUsage: 48.8,
     physFootprint: 1071188016,
     memResidentSize: 309248000,
@@ -59,7 +59,7 @@ function makeSource(intervalMs = 5) {
   const src = new IosMetricSource({
     transport,
     serial: 'UDID',
-    processName: 'EvermoreArcade',
+    processName: 'SampleApp',
     onSample: (s) => samples.push(s),
     intervalMs,
   })
@@ -113,7 +113,7 @@ describe('IosMetricSource', () => {
     const { transport, src } = makeSource()
     src.start()
     const args = streamFor(transport, 'sysmon')?.args ?? []
-    expect(args).toContain('name=EvermoreArcade')
+    expect(args).toContain('name=SampleApp')
     expect(args).toContain('--choose')
     expect(args).toContain('first')
     src.stop()
@@ -235,7 +235,7 @@ function makeStaleSource(opts: { staleMs?: number; backoffMs?: number[] } = {}) 
   const src = new IosMetricSource({
     transport,
     serial: 'UDID',
-    processName: 'EvermoreArcade',
+    processName: 'SampleApp',
     onSample: (s) => samples.push(s),
     intervalMs: 5,
     staleMs: opts.staleMs ?? 3000,
@@ -342,11 +342,11 @@ describe('IosMetricSource — frescura y canal vital (046)', () => {
     const antes = transport.streams.filter((s) => s.args.includes('sysmon')).length
     expect(antes).toBe(1)
 
-    src.setProcessName('EvermoreArcade') // sin cambios y con el stream vivo: no re-arma
+    src.setProcessName('SampleApp') // sin cambios y con el stream vivo: no re-arma
     expect(transport.streams.filter((s) => s.args.includes('sysmon'))).toHaveLength(1)
 
     streamFor(transport, 'sysmon')?.onExit?.(null)
-    src.setProcessName('EvermoreArcade') // mismo nombre, stream muerto: SÍ re-arma
+    src.setProcessName('SampleApp') // mismo nombre, stream muerto: SÍ re-arma
     src.stop()
     expect(transport.streams.filter((s) => s.args.includes('sysmon'))).toHaveLength(2)
   })

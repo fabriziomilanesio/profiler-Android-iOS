@@ -69,7 +69,7 @@ export function advance(state: PreflightState, obs: PreflightObservation): Prefl
 const REMEDIES = {
   AdbMissing:
     'Instalá los platform-tools de Android (la tool puede descargarlos sola: ' +
-    'corré con --install-platform-tools) o configurá la ruta con EVERMORE_PROFILER_ADB.',
+    'corré con --install-platform-tools) o configurá la ruta con MOBILE_PROFILER_ADB.',
   NoDevice:
     'Conectá el teléfono por USB y activá la depuración USB ' +
     '(Ajustes → Opciones de desarrollador → Depuración USB).',

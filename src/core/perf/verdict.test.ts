@@ -250,7 +250,7 @@ describe('buildPerfVerdict', () => {
 describe('veredicto sobre el fixture real (Galaxy A15)', () => {
   const FIX = join(import.meta.dir, '../../../fixtures/sm-a155m-api36')
   const dump = readFileSync(join(FIX, 'session/final/timestats-dump.txt'), 'utf8')
-  const frame = parseFrameStats(dump, 'com.evermore.oda.qa', 90)
+  const frame = parseFrameStats(dump, 'com.sample.oda.qa', 90)
 
   test('serie armada con el frame real del A15: jank bajo no infla el score', () => {
     // el dump real da p50 33 ms (~30 FPS) y jank 0.93% — un tramo sano a target 30

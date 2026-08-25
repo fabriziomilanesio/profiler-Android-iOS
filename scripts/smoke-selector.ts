@@ -29,12 +29,12 @@ function logLine(pid: number, tid: number, level: string, tag: string, msg: stri
 const APP_LOG_SCRIPT: Array<[string, string, string]> = [
   ['I', 'Unity', 'Loading scene "MainMenu"…'],
   ['D', 'Unity', 'AudioManager: pool warm (32 voices)'],
-  ['V', 'chatty', 'uid=10241 com.evermore.oda.qa identical 3 lines'],
+  ['V', 'chatty', 'uid=10241 com.sample.oda.qa identical 3 lines'],
   ['I', 'Unity', 'PlayerProfile loaded in 42 ms'],
   ['W', 'Unity', 'Texture atlas "ui_hd" not preloaded, loading on demand'],
-  ['I', 'ActivityTaskManager', 'Displayed com.evermore.oda.qa/.MainActivity: +1s240ms'],
+  ['I', 'ActivityTaskManager', 'Displayed com.sample.oda.qa/.MainActivity: +1s240ms'],
   ['E', 'Unity', 'NullReferenceException: Object reference not set to an instance of an object'],
-  ['E', 'Unity', '  at Evermore.UI.HudController.Update () [0x0001a] in <9f3b>:0'],
+  ['E', 'Unity', '  at Sample.UI.HudController.Update () [0x0001a] in <9f3b>:0'],
   ['I', 'Unity', 'Level 2 start (arena=neon_park)'],
   ['D', 'OpenGLRenderer', 'endAllActiveAnimators on 0x7b3c'],
   ['W', 'AudioTrack', 'releaseBuffer() track 0x71 disabled due to previous underrun'],
@@ -42,18 +42,18 @@ const APP_LOG_SCRIPT: Array<[string, string, string]> = [
   // línea de GC del ART: el dashboard la marca como punto ámbar sobre el trend de PSS
   [
     'I',
-    'evermore.oda.qa',
+    'sample.oda.qa',
     'Background concurrent copying GC freed 104329(4013KB) AllocSpace objects',
   ],
 ]
 
 const CRASH_SCRIPT: Array<[string, string, string]> = [
   ['E', 'AndroidRuntime', 'FATAL EXCEPTION: main'],
-  ['E', 'AndroidRuntime', 'Process: com.evermore.oda.qa, PID: 111'],
+  ['E', 'AndroidRuntime', 'Process: com.sample.oda.qa, PID: 111'],
   ['E', 'AndroidRuntime', 'java.lang.IllegalStateException: simulated crash for smoke'],
-  ['E', 'AndroidRuntime', '\tat com.evermore.oda.GameLoop.tick(GameLoop.java:87)'],
+  ['E', 'AndroidRuntime', '\tat com.sample.oda.GameLoop.tick(GameLoop.java:87)'],
   ['E', 'AndroidRuntime', '\tat android.os.Handler.handleCallback(Handler.java:942)'],
-  ['I', 'am_anr', '0,111,com.evermore.oda.qa,952680005,Input dispatching timed out'],
+  ['I', 'am_anr', '0,111,com.sample.oda.qa,952680005,Input dispatching timed out'],
 ]
 
 // ---- métricas sintéticas (contadores acumulados que los parsers deltan) ----
@@ -101,7 +101,7 @@ function combinedCat(pids: number[]): string {
     appTicks.set(pid, next)
     const u = Math.round(next / 2)
     const s = Math.round(next) - u
-    parts.push(`${pid} (evermore.oda.qa) S 0 0 0 0 0 0 0 0 0 0 ${u} ${s} 0 0`)
+    parts.push(`${pid} (sample.oda.qa) S 0 0 0 0 0 0 0 0 0 0 ${u} ${s} 0 0`)
     const rssKb = Math.round((320 + 30 * Math.sin(e / 30)) * 1024)
     parts.push(`VmRSS:\t   ${rssKb} kB`)
   }
@@ -170,16 +170,16 @@ const GETPROP = [
 ].join('\n')
 
 const INSTALLED = [
-  'com.evermore.oda.qa',
-  'com.evermore.arcade',
-  'com.evermore.oda.dev',
+  'com.sample.oda.qa',
+  'com.sample.arcade',
+  'com.sample.oda.dev',
   'com.android.chrome',
   'com.whatsapp',
   'org.fdroid.fdroid',
   'com.discord',
   'com.spotify.music',
 ]
-const running = new Map<string, number>([['com.evermore.oda.qa', 111]])
+const running = new Map<string, number>([['com.sample.oda.qa', 111]])
 
 const transport: AdbTransport = {
   isAvailable: async () => true,
@@ -248,7 +248,7 @@ const transport: AdbTransport = {
       return ok(`${Math.round(Math.max(0, Math.min(100, gpu)))} %`)
     }
     if (command.includes('SurfaceFlinger --timestats')) {
-      const pkg = [...running.keys()][0] ?? 'com.evermore.oda.qa'
+      const pkg = [...running.keys()][0] ?? 'com.sample.oda.qa'
       return command.includes('-dump') ? ok(timestatsDump(pkg)) : ok('')
     }
     if (command.includes('SurfaceFlinger --latency')) {
@@ -293,11 +293,11 @@ const transport: AdbTransport = {
   },
 }
 
-const smokeDir = join(tmpdir(), 'evermore-smoke')
+const smokeDir = join(tmpdir(), 'sample-smoke')
 const store = {
   data: {
     ...defaultAppStoreData(),
-    usage: { 'com.evermore.oda.qa': 12, 'com.evermore.arcade': 5, 'com.android.chrome': 2 },
+    usage: { 'com.sample.oda.qa': 12, 'com.sample.arcade': 5, 'com.android.chrome': 2 },
     reportsDir: join(smokeDir, 'reports'),
   } satisfies AppStoreData,
   select(pkg: string) {
@@ -312,7 +312,7 @@ const store = {
 const server = new LiveServer({
   transport,
   serial: 'FAKE-SERIAL',
-  packageName: 'com.evermore.oda.qa',
+  packageName: 'com.sample.oda.qa',
   uiRoot: join(import.meta.dir, '../src/ui'),
   port: Number(process.argv[2] ?? 4599),
   appStore: store,

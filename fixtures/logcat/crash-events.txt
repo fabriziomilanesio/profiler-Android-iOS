@@ -1,6 +1,6 @@
 --------- beginning of crash
 2026-07-31 10:20:11.001 18743 18790 E AndroidRuntime: FATAL EXCEPTION: UnityMain
-2026-07-31 10:20:11.001 18743 18790 E AndroidRuntime: Process: com.evermore.oda.qa, PID: 18743
+2026-07-31 10:20:11.001 18743 18790 E AndroidRuntime: Process: com.sample.oda.qa, PID: 18743
 2026-07-31 10:20:11.001 18743 18790 E AndroidRuntime: java.lang.NullPointerException: Attempt to invoke virtual method 'void android.media.MediaPlayer.start()' on a null object reference
 2026-07-31 10:20:11.001 18743 18790 E AndroidRuntime: 	at com.unity3d.player.UnityPlayer$e$1.handleMessage(UnityPlayer.java:116)
 2026-07-31 10:20:11.001 18743 18790 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:103)
@@ -8,11 +8,11 @@
 2026-07-31 10:20:11.001 18743 18790 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:319)
 2026-07-31 10:23:00.001  4444  4444 E AndroidRuntime: FATAL EXCEPTION: main
 2026-07-31 10:23:00.001  4444  4444 E AndroidRuntime: Process: com.other.app, PID: 4444
-2026-07-31 10:22:30.500 19102 19150 F libc    : Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0 in tid 19150 (UnityMain), pid 19102 (evermore.oda.qa)
+2026-07-31 10:22:30.500 19102 19150 F libc    : Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0 in tid 19150 (UnityMain), pid 19102 (sample.oda.qa)
 2026-07-31 10:22:30.712 19178 19178 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
 2026-07-31 10:22:30.712 19178 19178 F DEBUG   : Build fingerprint: 'samsung/a15mub/a15m:16/BP2A.250705.008/A155MUBU9CYG1:user/release-keys'
-2026-07-31 10:22:30.712 19178 19178 F DEBUG   : pid: 19102, tid: 19150, name: UnityMain  >>> com.evermore.oda.qa <<<
-2026-07-31 10:22:30.712 19178 19178 F DEBUG   :       #00 pc 00000000009d1c44  /data/app/~~x1y2z3==/com.evermore.oda.qa-a1b2c3==/lib/arm64/libil2cpp.so
+2026-07-31 10:22:30.712 19178 19178 F DEBUG   : pid: 19102, tid: 19150, name: UnityMain  >>> com.sample.oda.qa <<<
+2026-07-31 10:22:30.712 19178 19178 F DEBUG   :       #00 pc 00000000009d1c44  /data/app/~~x1y2z3==/com.sample.oda.qa-a1b2c3==/lib/arm64/libil2cpp.so
 --------- beginning of events
-2026-07-31 10:25:00.500   612   650 I am_anr  : [0,19102,com.evermore.oda.qa,952745541,Input dispatching timed out (Application does not have a focused window)]
+2026-07-31 10:25:00.500   612   650 I am_anr  : [0,19102,com.sample.oda.qa,952745541,Input dispatching timed out (Application does not have a focused window)]
 2026-07-31 10:25:01.000   612   650 I am_proc_died: [0,4444,com.other.app,900,18]

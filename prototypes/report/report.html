@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  DISPOSABLE prototype of the EXPORTED HTML REPORT — Evermore Android Profiler
+  DISPOSABLE prototype of the EXPORTED HTML REPORT — Mobile Profiler
   (wayfinder ticket 020). Standalone, no build step, no network: open with
   `open prototypes/report/report.html`. Data is 100% fake (fixtures.js, deterministic).
 
@@ -13,8 +13,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Evermore Android Profiler — session report</title>
-<link rel="icon" type="image/png" href="assets/evermore-appicon.png" />
+<title>Mobile Profiler — session report</title>
 <style>
   /* ---- Vendored fonts (offline) with system fallback ---- */
   @font-face { font-family:'Baloo 2'; font-weight:600; font-style:normal; font-display:swap; src:url('vendor/fonts/baloo-2-latin-600-normal.woff2') format('woff2'); }
@@ -72,8 +71,8 @@
 
   /* ================= HEADER ================= */
   header { display:flex; align-items:center; gap:20px; padding:10px 4px 16px; flex-wrap:nowrap; }
-  .brand-evermore { flex:0 0 auto; }
-  .brand-evermore img { height:78px; display:block; filter:drop-shadow(0 4px 18px rgba(235,0,139,.25)); }
+  .brand-sample { flex:0 0 auto; }
+  .brand-sample img { height:78px; display:block; filter:drop-shadow(0 4px 18px rgba(235,0,139,.25)); }
   .brand-sub {
     font-family:var(--font-title); font-weight:800; font-size:14px; letter-spacing:.20em;
     text-transform:uppercase; color:var(--secondary-ink); margin-top:-6px; text-align:center;
@@ -98,8 +97,8 @@
     border-radius:999px; font-family:var(--font-body); font-size:12px; font-weight:600; cursor:pointer; user-select:none;
   }
   .theme-toggle:hover { border-color:var(--secondary-ink); color:var(--text); }
-  .brand-odaclick { align-self:center; }
-  .brand-odaclick img { height:38px; display:block; }
+  .brand-generic { align-self:center; }
+  .brand-generic img { height:38px; display:block; }
 
   /* ================= DEVICE / SESSION META STRIP ================= */
   .meta-strip { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:14px; margin-bottom:14px; }
@@ -189,7 +188,7 @@
 
   /* ================= RESPONSIVE ================= */
   @media (max-width:1100px) {
-    .brand-evermore img { height:62px; }
+    .brand-sample img { height:62px; }
     .mid { grid-template-columns:1fr; }
     .meta-strip { grid-template-columns:1fr; }
   }
@@ -199,7 +198,7 @@
   }
   @media (max-width:480px) {
     body { padding:12px 12px 20px; }
-    .brand-evermore img { height:54px; }
+    .brand-sample img { height:54px; }
     .brand-sub { font-size:12px; }
     .cards { gap:10px; }
     .metric-big { font-size:30px; }
@@ -211,8 +210,7 @@
 <body data-theme="light">
 
 <header>
-  <div class="brand-evermore">
-    <img src="assets/evermore-logo.png" alt="Evermore Arcade" />
+  <div class="brand-sample">
     <div class="brand-sub">Android Profiler</div>
   </div>
   <span class="report-badge">Session Report</span>
@@ -225,9 +223,7 @@
     <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme" type="button">
       <span id="themeIcon">🌙</span><span id="themeLabel">Dark</span>
     </button>
-    <div class="brand-odaclick">
-      <img src="assets/odaclick-dog.png" alt="Odaclick Game Studio" title="Odaclick Game Studio" />
-    </div>
+
   </div>
 </header>
 
@@ -247,8 +243,8 @@
       </div>
     </div>
     <div class="session-card card">
-      <div class="session-app" id="sesApp">Evermore Arcade</div>
-      <div class="session-bundle" id="sesBundle">com.evermore.oda.qa</div>
+      <div class="session-app" id="sesApp">Sample App</div>
+      <div class="session-bundle" id="sesBundle">com.sample.oda.qa</div>
       <div class="session-facts" id="sesFacts"></div>
     </div>
   </div>
@@ -316,7 +312,7 @@
 </main>
 
 <footer class="credits">
-  Disposable prototype · fake sessions (fixtures.js, deterministic) · <b>Evermore Android Profiler</b> · Odaclick Game Studio
+  Disposable prototype · fake sessions (fixtures.js, deterministic) · <b>Mobile Profiler</b>
 </footer>
 
 <script src="vendor/echarts.min.js"></script>

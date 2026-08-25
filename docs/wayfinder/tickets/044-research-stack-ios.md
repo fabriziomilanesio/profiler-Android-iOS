@@ -49,7 +49,7 @@ commit `e371828` (2026-08-10), más las guías oficiales. Registro de lib en
 - Todos los comandos emiten **JSON por línea**, que es exactamente lo que consume el
   `streamLines` de `src/runtime/spawn.ts`. El adapter de runtime no cambia.
 - `bundleIdentifier` está entre los campos de proceso ⇒ se matchea
-  `com.evermoregames.evermorearcade.internal` sin adivinar nombres de proceso.
+  `com.samplegames.samplearcade.internal` sin adivinar nombres de proceso.
 - Batería por lockdown da `InstantAmperage`/`Temperature`/`Voltage`/`IsCharging`/
   `CurrentCapacity` — casi 1:1 contra el `BatterySample` de Android.
 - **Trampa a copiar del CLI oficial**: descarta la primera muestra de `SystemCPUUsage`

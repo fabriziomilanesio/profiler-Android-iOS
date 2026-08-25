@@ -5,7 +5,7 @@
 // del callback TLS. Este módulo es device-independent: sólo cripto + FS.
 //
 // baseDir se inyecta (no hardcodeamos homedir) para poder testear en tmp. En
-// producción el llamador pasa `~/.evermore-profiler`.
+// producción el llamador pasa `~/.sample-profiler`.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -17,9 +17,9 @@ export interface CertPair {
 }
 
 const CA_SUBJECT = [
-  { name: 'commonName', value: 'Evermore Profiler CA' },
-  { name: 'organizationName', value: 'Odaclick' },
-  { shortName: 'OU', value: 'Evermore Mobile Profiler' },
+  { name: 'commonName', value: 'Mobile Profiler CA' },
+  { name: 'organizationName', value: 'Generic' },
+  { shortName: 'OU', value: 'Mobile Profiler' },
 ]
 
 /** 10 años: la CA se instala una vez por device y sirve para siempre. */

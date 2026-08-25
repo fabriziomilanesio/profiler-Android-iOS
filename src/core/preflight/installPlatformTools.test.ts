@@ -57,26 +57,26 @@ describe('installPlatformTools', () => {
     }
   }
 
-  test('macOS: descarga a ~/.evermore-profiler, descomprime ahí y devuelve la ruta del adb', async () => {
+  test('macOS: descarga a ~/.sample-profiler, descomprime ahí y devuelve la ruta del adb', async () => {
     const { calls, deps } = makeDeps()
     const adbPath = await installPlatformTools({ platform: 'darwin', homeDir: '/Users/dev' }, deps)
 
-    expect(adbPath).toBe('/Users/dev/.evermore-profiler/platform-tools/adb')
-    expect(calls.mkdirs).toEqual(['/Users/dev/.evermore-profiler'])
+    expect(adbPath).toBe('/Users/dev/.sample-profiler/platform-tools/adb')
+    expect(calls.mkdirs).toEqual(['/Users/dev/.sample-profiler'])
     expect(calls.downloaded).toEqual([
       {
         url: 'https://dl.google.com/android/repository/platform-tools-latest-darwin.zip',
-        dest: '/Users/dev/.evermore-profiler/platform-tools.zip',
+        dest: '/Users/dev/.sample-profiler/platform-tools.zip',
       },
     ])
     expect(calls.extracted).toEqual([
       {
-        zip: '/Users/dev/.evermore-profiler/platform-tools.zip',
-        dest: '/Users/dev/.evermore-profiler',
+        zip: '/Users/dev/.sample-profiler/platform-tools.zip',
+        dest: '/Users/dev/.sample-profiler',
       },
     ])
     // limpia el zip después de extraer
-    expect(calls.removed).toEqual(['/Users/dev/.evermore-profiler/platform-tools.zip'])
+    expect(calls.removed).toEqual(['/Users/dev/.sample-profiler/platform-tools.zip'])
   })
 
   test('Windows: separador \\ y adb.exe', async () => {
@@ -85,9 +85,9 @@ describe('installPlatformTools', () => {
       { platform: 'win32', homeDir: 'C:\\Users\\dev' },
       deps,
     )
-    expect(adbPath).toBe('C:\\Users\\dev\\.evermore-profiler\\platform-tools\\adb.exe')
+    expect(adbPath).toBe('C:\\Users\\dev\\.sample-profiler\\platform-tools\\adb.exe')
     expect(calls.downloaded[0]?.url).toContain('platform-tools-latest-windows.zip')
-    expect(calls.downloaded[0]?.dest).toBe('C:\\Users\\dev\\.evermore-profiler\\platform-tools.zip')
+    expect(calls.downloaded[0]?.dest).toBe('C:\\Users\\dev\\.sample-profiler\\platform-tools.zip')
   })
 
   test('si la descarga falla, no intenta descomprimir', async () => {

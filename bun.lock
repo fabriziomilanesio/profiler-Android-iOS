@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@odaclick/evermore-android-profiler",
+      "name": "@generic/sample-android-profiler",
       "dependencies": {
         "node-forge": "^1.4.0",
       },

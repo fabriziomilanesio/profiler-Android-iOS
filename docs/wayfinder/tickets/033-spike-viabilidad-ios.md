@@ -14,7 +14,7 @@ blocked-by: [044]
 levantar el túnel RemoteXPC y leer métricas de la app por DTX? ¿Y en macOS?
 
 Criterio de éxito, mínimo y feo: imprimir por consola **un** sample de `sysmontap`
-(CPU + `physFootprint` del proceso de evermorearcade) y **una** lectura de FPS de
+(CPU + `physFootprint` del proceso de samplearcade) y **una** lectura de FPS de
 `graphics.opengl`. En los dos hosts. Sin arquitectura, sin tests, sin UI — código
 desechable.
 

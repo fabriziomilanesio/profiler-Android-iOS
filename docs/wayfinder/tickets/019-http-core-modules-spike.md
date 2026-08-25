@@ -18,7 +18,7 @@ diseño de docs/research/http-inspector-mechanism.md, y resolver empíricamente 
    bajo la versión pinneada de Bun — ¿dispara o no? Documentar el veredicto. Si no dispara,
    confirmar el fallback (certs eager por-host, o subsistema bajo Node).
 2. **`CertAuthority`** (node-forge): `ensureRootCA()` genera 1 vez y persiste en
-   `~/.evermore-profiler/ca/` (key 0600 + cert), `certForHost()` emite leaf con SAN cacheado,
+   `~/.sample-profiler/ca/` (key 0600 + cert), `certForHost()` emite leaf con SAN cacheado,
    `rootCertPath()`. Pura cripto/FS, testeable sin device.
 3. **`DeviceProxyController`** (vía `AdbTransport`): `capturePrevious()` (settings get +
    persist a `proxy-restore.json`), `set()`, `restore()` idempotente. Restauración exacta del
@@ -73,7 +73,7 @@ como plan B si el enfoque per-host-server no alcanza en 018.
 ### (b) Módulos entregados (en `src/core/http-inspector/`) + cobertura de tests
 
 Todos device-independent, adb sólo por la costura `AdbTransport`, sin spawnear adb, baseDir
-inyectable (tests corren en `tmpdir`, nada toca `~/.evermore-profiler`). `bun test`: **81 pass /
+inyectable (tests corren en `tmpdir`, nada toca `~/.sample-profiler`). `bun test`: **81 pass /
 0 fail** (28 nuevos en estos 3 módulos). `bun run typecheck` (tsc estricto): **verde**.
 
 - **`types.ts`** — `HttpFlow` (+ sub-tipos request/response/timings/body) y HAR 1.2

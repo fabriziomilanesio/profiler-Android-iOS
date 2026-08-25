@@ -20,7 +20,7 @@ dependencias de red (ECharts + datos inline), enfocado en comparación entre bui
   con dirección (mejor/peor) coloreada.
 - Barras agrupadas por métrica-sesión; percentiles de frame time.
 - Resumen de red (total rx/tx por sesión).
-- Branding evermore/Odaclick del ticket 6.
+- Branding sample/Generic del ticket 6.
 
 Reusa el layout y el `SessionSummary` validados en el prototipo del ticket 20 (no rediseñar).
 

@@ -1,4 +1,4 @@
-﻿# install-windows.ps1 — bootstrap del Evermore Mobile Profiler en Windows 11.
+# install-windows.ps1 — bootstrap del Mobile Profiler en Windows 11.
 # Instala los dos requisitos (Bun + adb/platform-tools) vía winget y deja el repo listo.
 #
 # Uso (desde la raíz del repo, en PowerShell):
@@ -148,7 +148,7 @@ function Install-AppleDevices {
   }
 }
 
-Write-Host "`nEvermore Mobile Profiler — setup para Windows 11`n" -ForegroundColor Magenta
+Write-Host "`nMobile Profiler — setup para Windows 11`n" -ForegroundColor Magenta
 
 # 0. winget disponible (incluido en Windows 11)
 if (-not (Test-Command 'winget')) {
@@ -190,7 +190,7 @@ if (-not (Test-Command 'python')) {
 if ($pythonOk -and (Test-Command 'python')) {
   # Venv propio en vez de instalar en el Python del sistema: mismo criterio que
   # platform-tools (la tool se ocupa de su toolchain) y esquiva PEP 668.
-  $venv = Join-Path $env:USERPROFILE '.evermore-profiler\pmd3-venv'
+  $venv = Join-Path $env:USERPROFILE '.sample-profiler\pmd3-venv'
   $venvPy = Join-Path $venv 'Scripts\python.exe'
   if (-not (Test-Path $venvPy)) {
     Write-Host "  →   creando venv en $venv…" -ForegroundColor Cyan
@@ -235,7 +235,7 @@ if (Test-Command 'adb') {
 # Estado del camino iOS de un vistazo: son DOS piezas independientes y fallan distinto
 # (pymobiledevice3 lo instalamos nosotros; el usbmux viene de Apple y no se puede vendorizar).
 # Verlas separadas evita el diagnóstico equivocado de "no se detecta el iPhone".
-$venvPyCheck = Join-Path $env:USERPROFILE '.evermore-profiler\pmd3-venv\Scripts\python.exe'
+$venvPyCheck = Join-Path $env:USERPROFILE '.sample-profiler\pmd3-venv\Scripts\python.exe'
 if (Test-Path $venvPyCheck) {
   $pmdCheck = (& $venvPyCheck -m pymobiledevice3 version 2>&1 | Out-String).Trim()
   if ($LASTEXITCODE -eq 0) {

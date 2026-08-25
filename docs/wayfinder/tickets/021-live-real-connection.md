@@ -76,10 +76,10 @@ mt6789 / Mali-G57 MC2 / Android 16 API 36, serial REDACTED-SERIAL). `bun test` (
 
 ```bash
 # app en foreground (relanzar si hace falta):
-adb shell monkey -p com.evermore.oda.qa -c android.intent.category.LAUNCHER 1
+adb shell monkey -p com.sample.oda.qa -c android.intent.category.LAUNCHER 1
 # server + dashboard en vivo:
 bun run src/cli.ts live            # → http://localhost:4517  (abrir en el browser)
-bun run src/cli.ts live --package com.evermore.oda.qa --port 4517
+bun run src/cli.ts live --package com.sample.oda.qa --port 4517
 # smoke de collectors contra el device real (sin server):
 bun run scripts/smoke-live.ts 6
 ```

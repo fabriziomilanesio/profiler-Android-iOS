@@ -68,7 +68,7 @@ sessions.forEach((sess) => {
 
 // ---- señal de comparación: qa consume más que prod ----
 const qa = sessions.find(s => s.bundleId.endsWith('.qa'));
-const prod = sessions.find(s => s.bundleId === 'com.evermore.oda');
+const prod = sessions.find(s => s.bundleId === 'com.sample.oda');
 check('qa drena más batería que prod', qa.summary.battery.drainPct > prod.summary.battery.drainPct,
   `qa ${qa.summary.battery.drainPct.toFixed(2)}% vs prod ${prod.summary.battery.drainPct.toFixed(2)}%`);
 check('qa más caliente (temp peak) que prod', qa.summary.tempC.peak > prod.summary.tempC.peak,
@@ -93,7 +93,6 @@ for (const f of ['report.js', 'fixtures.js']) {
 const html = fs.readFileSync(path.join(DIR, 'report.html'), 'utf8');
 const refs = [
   'vendor/echarts.min.js', 'fixtures.js', 'report.js',
-  'assets/evermore-logo.png', 'assets/odaclick-dog.png', 'assets/evermore-appicon.png',
   'vendor/fonts/baloo-2-latin-800-normal.woff2', 'vendor/fonts/inter-latin-400-normal.woff2',
 ];
 for (const r of refs) {
@@ -113,8 +112,6 @@ for (const id of ['sessSel', 'devSpecs', 'sesFacts', 'metricCards', 'memPie', 't
 // ---- 4. contrato del reporte: modos, batería, comparabilidad ----
 check('light theme es default', html.includes('data-theme="light"'));
 check('tiene toggle de modo 1 sesión / comparar', html.includes('data-mode="single"') && html.includes('data-mode="compare"'));
-check('branding evermore grande', html.includes('assets/evermore-logo.png'));
-check('perro Odaclick chico', html.includes('assets/odaclick-dog.png'));
 const js = fs.readFileSync(path.join(DIR, 'report.js'), 'utf8');
 check('report.js: tarjeta de batería (drainPct)', js.includes('drainPct'));
 check('report.js: mA promedio en la ficha', js.includes('avgMa'));

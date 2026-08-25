@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Evermore Mobile Profiler — LIVE dashboard (wayfinder tickets 021 → 032).
+  Mobile Profiler — LIVE dashboard (wayfinder tickets 021 → 032).
   Layout del rediseño aprobado en el prototipo del 031 (prototypes/redesign):
   secciones por tema con rails (Performance → Memory & System → Network → App logs),
   FPS hero con semáforo del 025 + jank/p90/p99 del 024, donut-gauges circulares para
@@ -13,8 +13,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Evermore Mobile Profiler — live</title>
-    <link rel="icon" type="image/png" href="assets/evermore-appicon.png" />
+    <title>Mobile Profiler — live</title>
     <style>
       /* ---- Vendored fonts (offline, system fallback) ---- */
       @font-face {
@@ -516,7 +515,7 @@
         border-color: var(--accent2-ink);
         color: var(--text);
       }
-      .brand-odaclick img {
+      .brand-generic img {
         height: 36px;
         display: block;
       }
@@ -1718,7 +1717,6 @@
   <body data-theme="dark">
     <header>
       <div class="brand">
-        <img src="assets/evermore-logo.png" alt="Evermore Arcade" />
         <div class="brand-sub">Mobile Profiler</div>
       </div>
 
@@ -1769,7 +1767,7 @@
                 autocomplete="off"
                 spellcheck="false"
               />
-              <button class="chip active" id="appChip" type="button">Evermore</button>
+              <button class="chip active" id="appChip" type="button">Sample</button>
               <label class="app-sys"><input type="checkbox" id="appSys" /> system</label>
             </div>
             <ul class="pop-list" id="appList"></ul>
@@ -1849,13 +1847,6 @@
           </div>
         </div>
 
-        <div class="brand-odaclick">
-          <img
-            src="assets/odaclick-dog.png"
-            alt="Odaclick Game Studio"
-            title="Odaclick Game Studio"
-          />
-        </div>
       </div>
     </header>
 
@@ -2139,7 +2130,7 @@
     </section>
 
     <footer class="credits">
-      Live data from Android &amp; iOS · <b>Evermore Mobile Profiler</b> · Odaclick Game Studio
+      Live data from Android &amp; iOS · <b>Mobile Profiler</b>
     </footer>
 
     <script src="vendor/echarts.min.js"></script>

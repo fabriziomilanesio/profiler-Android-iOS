@@ -16,7 +16,7 @@ itera con feedback humano hasta acordar el diseño; recién entonces se implemen
 
 ## Contexto (grilling 2026-07-31)
 
-- **Dirección decidida: evolucionar la identidad actual** (branding Evermore/Odaclick,
+- **Dirección decidida: evolucionar la identidad actual** (branding Sample/Generic,
   dark theme, paleta `#EB008B`/`#00E6DA`, Baloo 2 + Inter) — no partir de cero. Look de
   herramienta pro (perfetto/grafana bien hecho).
 - **Legible de un vistazo**: semáforos integrados, números grandes, menos ruido — que

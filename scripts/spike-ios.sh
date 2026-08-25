@@ -9,7 +9,7 @@
 #   bash scripts/spike-ios.sh --install       # crea el venv gestionado e instala pymobiledevice3
 #   bash scripts/spike-ios.sh --seconds 300   # ventana de captura más larga (default 60)
 #   bash scripts/spike-ios.sh --bundle com.otra.app
-#   bash scripts/spike-ios.sh --process EvermoreArcade   # si el nombre de proceso difiere
+#   bash scripts/spike-ios.sh --process SampleApp   # si el nombre de proceso difiere
 #
 # Guarda TODO crudo en .tmp/spike-ios/<timestamp>/ y escribe un SUMMARY.md al final.
 # ⚠️ Esa salida tiene PII sin redactar (UDID, ECID, serial, IMEI, teléfono). `.tmp/` está
@@ -18,7 +18,7 @@
 
 set -uo pipefail
 
-BUNDLE="com.evermoregames.evermorearcade.internal"
+BUNDLE="com.samplegames.samplearcade.internal"
 PROC=""
 UDID="${PYMOBILEDEVICE3_UDID:-}"
 # El túnel userspace tarda decenas de segundos en levantar y los samples empiezan después:
@@ -51,7 +51,7 @@ mkdir -p "$OUT"
 # Venv gestionado, al lado de las sesiones. Prefigura lo que hará el installer del ticket
 # 041: una toolchain gestionada por la tool, igual que `installPlatformTools` con adb — sin
 # ensuciar el Python del sistema ni pelear con PEP 668.
-VENV="$HOME/.evermore-profiler/pmd3-venv"
+VENV="$HOME/.sample-profiler/pmd3-venv"
 if [[ -x "$VENV/bin/python" ]]; then
   PMD=("$VENV/bin/python" -m pymobiledevice3)
   PMD_SOURCE="venv gestionado ($VENV)"

@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Evermore Mobile Profiler — reporte de sesión exportado (standalone).
+  Mobile Profiler — reporte de sesión exportado (standalone).
   Generado por el profiler con datos reales embebidos (window.ReportData).
   Diseño del prototipo ticket 020, modo single. Sin red: todo va inline.
 -->
@@ -8,7 +8,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Evermore Profiler — __TITLE__</title>
+    <title>Mobile Profiler — __TITLE__</title>
     <style>
       __FONTS_CSS__ :root {
         --bg: #f4f4f9;
@@ -102,10 +102,10 @@
         padding: 10px 4px 16px;
         flex-wrap: nowrap;
       }
-      .brand-evermore {
+      .brand-sample {
         flex: 0 0 auto;
       }
-      .brand-evermore img {
+      .brand-sample img {
         height: 78px;
         display: block;
         filter: drop-shadow(0 4px 18px rgba(235, 0, 139, 0.25));
@@ -162,10 +162,10 @@
         border-color: var(--secondary-ink);
         color: var(--text);
       }
-      .brand-odaclick {
+      .brand-generic {
         align-self: center;
       }
-      .brand-odaclick img {
+      .brand-generic img {
         height: 38px;
         display: block;
       }
@@ -595,7 +595,7 @@
       }
 
       @media (max-width: 1100px) {
-        .brand-evermore img {
+        .brand-sample img {
           height: 62px;
         }
         .mid {
@@ -627,7 +627,7 @@
         #corrChart {
           height: 400px;
         }
-        .brand-evermore img {
+        .brand-sample img {
           height: 54px;
         }
         .brand-sub {
@@ -648,8 +648,7 @@
   </head>
   <body data-theme="__THEME__">
     <header>
-      <div class="brand-evermore">
-        <img src="__LOGO_EVERMORE__" alt="Evermore Arcade" />
+      <div class="brand-sample">
         <div class="brand-sub">Mobile Profiler</div>
       </div>
       <span class="report-badge">Session Report</span>
@@ -658,9 +657,6 @@
         <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme" type="button">
           <span id="themeIcon">🌙</span><span id="themeLabel">Dark</span>
         </button>
-        <div class="brand-odaclick">
-          <img src="__LOGO_ODACLICK__" alt="Odaclick Game Studio" title="Odaclick Game Studio" />
-        </div>
       </div>
     </header>
 
@@ -752,7 +748,7 @@
     </main>
 
     <footer class="credits">
-      Generado __GENERATED__ · <b>Evermore Mobile Profiler</b> · Odaclick Game Studio
+      Generado __GENERATED__ · <b>Mobile Profiler</b>
     </footer>
 
     <script>

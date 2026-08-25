@@ -1,7 +1,7 @@
 # Fixtures: iPhone15,3 (iOS 26.5.2)
 
 Salida **cruda** de `pymobiledevice3`, sin procesar, capturada el 2026-08-10 con
-**Evermore Arcade corriendo** (`com.evermoregames.evermorearcade`, pid 63819) en un
+**Sample App corriendo** (`com.samplegames.samplearcade`, pid 63819) en un
 iPhone 14 Pro Max con iOS 26.5.2 y `pymobiledevice3` 10.7.2. Son la fuente de verdad de
 los parsers iOS (tests capa 1). No editar a mano.
 
@@ -14,7 +14,7 @@ captura nueva. La ficha del device y el pareo SÍ traen PII y por eso no están 
 
 - `graphics.jsonl` — `pymobiledevice3 developer dvt graphics`. Un JSON por línea.
 - `sysmon-pretty.txt` — `pymobiledevice3 developer dvt sysmon process monitor process
-  --filter name=EvermoreArcade --choose first --key …`. **JSON pretty multi-línea**, no
+  --filter name=SampleApp --choose first --key …`. **JSON pretty multi-línea**, no
   JSON-lines, precedido por el banner `Monitoring pid=…`. Esa diferencia es la razón de
   que exista `SysmonAssembler`.
 

@@ -1,7 +1,7 @@
 # HTTP Inspector — Mecanismo de intercepción (research, ticket 017)
 
-> Research para el **inspector HTTP secundario** del Evermore Android Profiler.
-> Pregunta madre: ¿cómo intercepta la tool el tráfico HTTP(S) de `com.evermore.oda.qa`
+> Research para el **inspector HTTP secundario** del Mobile Profiler.
+> Pregunta madre: ¿cómo intercepta la tool el tráfico HTTP(S) de `com.sample.oda.qa`
 > **sin romper** "un ejecutable self-contained por OS" (`bun build --compile`) ni "código
 > agnóstico de runtime, migrable a Node", y respetando la costura `AdbTransport`?
 >
@@ -113,7 +113,7 @@ Mitigaciones (en orden de preferencia):
 1. **Spike bajo Bun (ticket 018, bloqueante):** correr `http-mitm-proxy` tal cual en Bun contra
    un target real y ver si el per-host cert funciona. El bug puede estar resuelto en la versión de
    Bun que fijemos — **verificar contra la versión pinneada, no asumir**.
-2. **Generación eager de certs:** conocemos el package (`com.evermore.oda.qa`) y podemos descubrir
+2. **Generación eager de certs:** conocemos el package (`com.sample.oda.qa`) y podemos descubrir
    sus hosts. Si `SNICallback` no dispara, pre-generamos los certs de los hosts conocidos y los
    cargamos como `SecureContext` estáticos (o un TLS server por host), sin depender del callback.
 3. **Aislar el subsistema para correrlo bajo Node:** el código es agnóstico de runtime (costura
@@ -146,12 +146,12 @@ compatible (evitar el opt-in GPLv2; usamos la BSD, que es el default recomendado
 
 1. **Una vez**, al primer uso del inspector: generar CA raíz (keypair RSA 2048 + cert
    self-signed con `basicConstraints cA:true`), persistir en
-   `~/.evermore-profiler/ca/` → `ca.key.pem` (0600) + `ca.cert.pem`.
+   `~/.sample-profiler/ca/` → `ca.key.pem` (0600) + `ca.cert.pem`.
 2. Por-host, al vuelo: emitir leaf cert con SAN = hostname, firmado por la CA. Cachear en
-   `~/.evermore-profiler/ca/certs/<host>.pem` (o en memoria) para no re-emitir.
+   `~/.sample-profiler/ca/certs/<host>.pem` (o en memoria) para no re-emitir.
 3. Reusar CA entre sesiones/devices: instalás la CA **una vez** por device y sirve para siempre.
 
-Alineado con `~/.evermore-profiler/` que ya usa el resto de la tool (sessions/).
+Alineado con `~/.sample-profiler/` que ya usa el resto de la tool (sessions/).
 
 ### 2.2 Instalar la CA en el device Android sin root — el flujo real
 
@@ -159,7 +159,7 @@ Este es el punto más rígido y **parcialmente manual en Android 11+**. Dos cami
 
 **Camino A — User CA (sin root, Android ≤13, el realista para nosotros):**
 
-- `adb push ca.cert.pem /sdcard/Download/evermore-ca.pem` (poner el PEM al alcance del picker).
+- `adb push ca.cert.pem /sdcard/Download/sample-ca.pem` (poner el PEM al alcance del picker).
 - En **Android 11+ el install del user CA NO se puede automatizar**: el `CertInstaller` verifica
   quién lo invoca y **rechaza** cualquier install que no venga de la app Settings del sistema.
   `KeyChain.createInstallIntent()` ya no sirve y no se puede disparar desde adb.
@@ -171,7 +171,7 @@ Este es el punto más rígido y **parcialmente manual en Android 11+**. Dos cami
 - **Requisito del APK (cruza con 016):** un user CA sólo lo respeta la app si el APK declara un
   `network_security_config` que **confíe en user CAs** (`<certificates src="user"/>`) para el
   build de debug/QA. En un APK Play Store release **no aplica** (Android 7+ ignora user CAs por
-  default). ⇒ el build QA de evermore tiene que traer ese config; es un ítem que 016 debe
+  default). ⇒ el build QA de sample tiene que traer ese config; es un ítem que 016 debe
   confirmar/pedir.
 
 **Camino B — System CA (requiere root, fuera de scope v1):**
@@ -216,7 +216,7 @@ settings delete global http_proxy
 
 1. Antes de tocar nada, **leer y guardar el estado previo**:
    `settings get global http_proxy` → guardar el valor (puede ser `null`/`:0`/un proxy real del
-   usuario) en memoria y también en `~/.evermore-profiler/proxy-restore.json` (por si el proceso
+   usuario) en memoria y también en `~/.sample-profiler/proxy-restore.json` (por si el proceso
    muere sin correr el handler).
 2. Restaurar **exactamente** ese valor previo en el teardown, no asumir "sin proxy".
 3. Registrar handlers de `SIGINT`/`SIGTERM`/`beforeExit` + un `try/finally` alrededor de la
@@ -231,7 +231,7 @@ Esto es simétrico al patrón que ya vive en la tool para recursos y encaja con 
 **Gotcha Unity (cruza con gate 016 — NO se resuelve acá):**
 `UnityWebRequest` / algunos stacks de red **pueden ignorar el proxy global del sistema**
 (problema documentado en el issue tracker de Unity; Flutter/dart:io tienen el mismo síntoma).
-Si 016 confirma que evermore no respeta `http_proxy`, el enfoque "HTTP proxy vía settings" **no
+Si 016 confirma que sample no respeta `http_proxy`, el enfoque "HTTP proxy vía settings" **no
 ve nada** y hay que ir a **proxy transparente**: redirección a nivel red (iptables/pf en la
 máquina host, o hotspot con NAT) para forzar el tráfico al proxy sin cooperación del cliente.
 Eso implica: (a) el device tiene que rutear por nuestra máquina (hotspot/tethering o VPN
@@ -405,7 +405,7 @@ fallback de §1.4).
   guiado una vez por device. Riesgo de fricción, no técnico.
 - **R5 — Pinning (gate 016):** si el build QA pinnea certs, ni con CA confiable se ve el payload;
   requiere build QA sin pinning (o Frida+root, fuera de scope).
-- **R6 — network_security_config del APK QA:** el build de evermore debe declarar
+- **R6 — network_security_config del APK QA:** el build de sample debe declarar
   `<certificates src="user"/>` para debug/QA; ítem a confirmar/pedir en 016.
 - **R7 — Alcance de red device→host:** proxy apuntando a la IP de LAN puede fallar por firewall;
   mitigación `adb reverse` (verificar que Unity lo respeta).

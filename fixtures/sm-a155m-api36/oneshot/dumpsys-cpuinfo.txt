@@ -1,6 +1,6 @@
 Load: 27.31 / 29.53 / 28.26
 CPU usage from 20187ms to 1422ms ago (2026-07-17 09:02:45.289 to 2026-07-17 09:03:04.054) with 99% awake:
-  50% 18078/com.evermore.oda.qa: 35% user + 15% kernel / faults: 3070 minor 208 major
+  50% 18078/com.sample.oda.qa: 35% user + 15% kernel / faults: 3070 minor 208 major
   36% 1097/android.hardware.audio.service-aidl.mediatek: 18% user + 18% kernel
   27% 1141/audioserver: 21% user + 6% kernel / faults: 6 major
   25% 1160/surfaceflinger: 13% user + 11% kernel / faults: 46 minor 11 major

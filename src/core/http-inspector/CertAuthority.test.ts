@@ -5,10 +5,10 @@ import { join } from 'node:path'
 import forge from 'node-forge'
 import { CertAuthority } from './CertAuthority'
 
-// baseDir inyectado: cada test corre en su propio tmp, nada toca ~/.evermore-profiler.
+// baseDir inyectado: cada test corre en su propio tmp, nada toca ~/.sample-profiler.
 const dirs: string[] = []
 function freshBaseDir(): string {
-  const d = mkdtempSync(join(tmpdir(), 'evermore-ca-test-'))
+  const d = mkdtempSync(join(tmpdir(), 'sample-ca-test-'))
   dirs.push(d)
   return d
 }
@@ -58,14 +58,14 @@ describe('CertAuthority.certForHost', () => {
     const { certPem: caPem } = await ca.ensureRootCA()
     const caCert = forge.pki.certificateFromPem(caPem)
 
-    const leaf = await ca.certForHost('api.evermore.example')
+    const leaf = await ca.certForHost('api.sample.example')
     const leafCert = forge.pki.certificateFromPem(leaf.certPem)
 
     // SAN incluye el host
     const san = leafCert.getExtension('subjectAltName') as
       { altNames?: Array<{ type: number; value: string }> } | undefined
     const dnsNames = (san?.altNames ?? []).filter((a) => a.type === 2).map((a) => a.value)
-    expect(dnsNames).toContain('api.evermore.example')
+    expect(dnsNames).toContain('api.sample.example')
 
     // firmado por la CA (la CA verifica al hijo)
     expect(caCert.verify(leafCert)).toBe(true)

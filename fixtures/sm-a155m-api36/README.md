@@ -19,7 +19,7 @@ SSID del wifi (`wifiNetworkKey` en netstats), `ro.boot.em.did` y `ro.boot.kg.ap`
 | GPU | ARM, Mali-G57 MC2, OpenGL ES 3.2 |
 | Serial | REDACTED-SERIAL |
 | Fecha de captura | 2026-07-17T12:03:42.552Z |
-| Package medido | com.evermore.oda.qa |
+| Package medido | com.sample.oda.qa |
 
 ## Estructura
 
@@ -27,7 +27,7 @@ SSID del wifi (`wifiNetworkKey` en netstats), `ro.boot.em.did` y `ro.boot.kg.ap`
 - `session/tick-NNN/` — sesión de 30 s a 1 Hz mientras se jugaba (30 ticks: meminfo, proc-stat, thermal, gpubusy, netstats).
 - `session/final/` — `SurfaceFlinger --timestats -dump` + `--latency` del layer del SurfaceView al cierre.
 - Fuente GPU% elegida: /sys/kernel/gpu/gpu_busy.
-- Layer SurfaceFlinger de la app: `RequestedLayerState{ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0(BLAST)#1523 parentId=1522}`.
+- Layer SurfaceFlinger de la app: `RequestedLayerState{ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0(BLAST)#1523 parentId=1522}`.
 
 ## Comandos que fallaron (los N/A de este device)
 

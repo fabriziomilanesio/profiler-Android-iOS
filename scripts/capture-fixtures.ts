@@ -1,6 +1,6 @@
 // Captura de fixtures crudos desde un device real (ticket 001).
 //
-// Uso:  bun scripts/capture-fixtures.ts [--package com.evermore.oda.qa] [--serial X]
+// Uso:  bun scripts/capture-fixtures.ts [--package com.sample.oda.qa] [--serial X]
 //                                       [--session-seconds 30] [--adb /ruta/adb]
 //
 // Flujo: preflight (adb → device → app instalada) → esperar la app corriendo →
@@ -33,7 +33,7 @@ import {
   type CaptureStep,
 } from './capture-plan'
 
-const DEFAULT_PACKAGE = 'com.evermore.oda.qa'
+const DEFAULT_PACKAGE = 'com.sample.oda.qa'
 const DEFAULT_SESSION_SECONDS = 30
 const APP_WAIT_TIMEOUT_S = 60
 
@@ -149,7 +149,7 @@ async function waitForAppPid(
 }
 
 async function main(): Promise<void> {
-  console.log('Evermore Mobile Profiler — captura de fixtures (Android) (ticket 001)')
+  console.log('Mobile Profiler — captura de fixtures (Android) (ticket 001)')
   const args = parseArgs(process.argv.slice(2))
 
   // ── 1. Preflight (misma cadena que el CLI: adb → device → app instalada) ──
@@ -157,11 +157,11 @@ async function main(): Promise<void> {
     platform: process.platform,
     env: process.env,
     isExecutable,
-    configPath: args.adbPath ?? process.env['EVERMORE_PROFILER_ADB'],
+    configPath: args.adbPath ?? process.env['MOBILE_PROFILER_ADB'],
   })
   if (!discovery) {
     console.error(
-      '\n✗ No se encontró adb (busqué --adb/EVERMORE_PROFILER_ADB, PATH, SDK típico y managed).' +
+      '\n✗ No se encontró adb (busqué --adb/MOBILE_PROFILER_ADB, PATH, SDK típico y managed).' +
         '\n  → Instalá platform-tools: `bun run dev -- --install-platform-tools`, o pasá la ruta con --adb.',
     )
     process.exit(1)

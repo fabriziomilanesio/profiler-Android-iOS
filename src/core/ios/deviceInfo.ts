@@ -47,8 +47,8 @@ export interface IosProcess {
  *
  * iOS 26 no expone `bundleIdentifier` entre los atributos de sysmontap (spike 033), así
  * que el filtro va por NOMBRE de proceso — y ese nombre no se puede derivar del bundle:
- * `com.evermoregames.evermorearcade` corre como `EvermoreArcade`, con mayúsculas que el
- * bundle id no tiene. Adivinarlo daría `Evermorearcade` y no matchearía nunca.
+ * `com.samplegames.samplearcade` corre como `SampleApp`, con mayúsculas que el
+ * bundle id no tiene. Adivinarlo daría `Samplearcade` y no matchearía nunca.
  *
  * `executable` es el CFBundleExecutable del Info.plist y es el dato EXACTO: el binario se
  * llama igual que el proceso. Cuando está, manda. La heurística del último segmento del

@@ -41,7 +41,7 @@ export function serializeLogsJsonl(entries: LogEntry[]): string {
 }
 
 /**
- * Nombre del archivo exportado: `evermore-logs-<sesión|fecha>[-filtered].<ext>`.
+ * Nombre del archivo exportado: `sample-logs-<sesión|fecha>[-filtered].<ext>`.
  * Con sessionId (export de una sesión) el nombre queda atado a la sesión; sin él
  * (export de lo filtrado en vivo) va el timestamp del momento, como el reporte.
  */
@@ -52,7 +52,7 @@ export function logsExportFilename(opts: {
   now: Date
 }): string {
   const stamp = opts.sessionId ?? opts.now.toISOString().replace(/:/g, '-').replace(/\..*$/, '')
-  return `evermore-logs-${stamp}${opts.filtered ? '-filtered' : ''}.${opts.format}`
+  return `sample-logs-${stamp}${opts.filtered ? '-filtered' : ''}.${opts.format}`
 }
 
 /**

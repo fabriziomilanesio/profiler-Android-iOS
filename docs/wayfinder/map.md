@@ -1,10 +1,10 @@
 ---
 label: wayfinder:map
-title: Evermore Profiler
+title: Mobile Profiler
 status: open
 ---
 
-# Mapa: Evermore Profiler (ex Evermore Android Profiler)
+# Mapa: Mobile Profiler (ex Mobile Profiler)
 
 > Tracker local-markdown. Los tickets son archivos en [`tickets/`](tickets/) con frontmatter:
 > `status: open|closed`, `assignee` (vacío = sin reclamar), `blocked-by: [ids]`.
@@ -13,8 +13,8 @@ status: open
 
 ## Destination
 
-`evermore/profiler/` contiene el Evermore Android Profiler v1 funcionando: profilea
-`com.evermore.oda.qa` (o cualquier app) en un device real vía ADB con dashboard realtime
+`sample/profiler/` contiene el Mobile Profiler v1 funcionando: profilea
+`com.sample.oda.qa` (o cualquier app) en un device real vía ADB con dashboard realtime
 (gauges CPU/GPU/FPS/temp/RAM + torta de memoria + timeline + ficha del device), graba
 sesiones con historial, exporta reporte HTML autocontenido de comparación/benchmarking
 entre sesiones, y el harness e2e de 3 capas está verde en CI en Win/macOS/Linux.
@@ -43,9 +43,9 @@ realmente comparables, y explica dónde no lo son.
   muestra ese resumen tanto para 1 sesión sola como comparando varias (benchmarking).
 - **Costura clave:** interfaz `AdbTransport` — producción usa adb real, tests usan fake-adb.
   La tool jamás llama adb directo.
-- **Sesiones:** JSONL (una muestra por línea) en `~/.evermore-profiler/sessions/` +
+- **Sesiones:** JSONL (una muestra por línea) en `~/.sample-profiler/sessions/` +
   metadata del device (modelo, Android/API, RAM, GPU, SoC). Sampling default 1 Hz.
-- **Branding:** logo evermore grande/protagonista, Odaclick presente.
+- **Branding:** logo sample grande/protagonista, Generic presente.
 - **Testing:** 3 capas — parsers vs fixtures reales · e2e fake-adb + Playwright en CI (3 OS)
   · smoke `doctor` con device real. Skills a consultar por sesión: `tdd`,
   `systematic-debugging`; si el rol `dev` está activo, seguir `dev-workflow`.
@@ -112,9 +112,9 @@ realmente comparables, y explica dónde no lo son.
   desde una sola Mac, sin plan B: 3 targets compilan (58–110 MB), darwin verificado en
   runtime; para release real falta codesign/notarización (macOS) y firma (Windows AV);
   CI matrix valida los binarios no ejecutables localmente.
-- [Conseguir logos de evermore y Odaclick](tickets/006-conseguir-logos-branding.md) —
-  en `assets/brand/`: evermore color (protagonista, de LFS de evermorearcade) + wordmark
-  blanco + app icon, odaclick blanco (del branded-doc-builder); paleta Odaclick
+- [Conseguir logos de sample y Generic](tickets/006-conseguir-logos-branding.md) —
+  en `assets/brand/`: sample color (protagonista, de LFS de samplearcade) + wordmark
+  blanco + app icon, generic blanco (del branded-doc-builder); paleta Generic
   (`#EB008B`/`#00E6DA`/bg `#0B0B10`) y fuentes (Baloo 2 + Inter) en su README. Sin SVG
   vectorial en el workspace (nice-to-have: pedir los AI/SVG originales).
 - [Research formatos de dumpsys por versión Android y OEM](tickets/002-research-formatos-dumpsys.md) —
@@ -132,7 +132,7 @@ realmente comparables, y explica dónde no lo son.
 - [Prototipo del dashboard realtime](tickets/007-prototipo-dashboard-ui.md) —
   `prototypes/dashboard/index.html` (abrir directo, offline): gauges (GPU·FPS en un
   donut), torta de memoria con leyenda, timeline 120s, sim 1 Hz. Feedback humano aplicado
-  (2 rondas): UI en inglés, light default + toggle, responsive 1 línea, logo Odaclick =
+  (2 rondas): UI en inglés, light default + toggle, responsive 1 línea, logo Generic =
   perro solo. Quedan 3 preguntas abiertas (eje timeline, series default, chips GC/JANK).
 - [Decidir el mecanismo del proxy MITM (TS/Bun)](tickets/017-http-mecanismo-proxy.md) —
   DECISIÓN: proxy MITM propio en TS (`http-mitm-proxy` + `node-forge`), shell-out a
@@ -257,13 +257,13 @@ realmente comparables, y explica dónde no lo son.
 
 - Umbrales de semáforo para métricas **no-FPS** (CPU/GPU/temp) — el esquema de FPS quedó
   decidido en el ticket 025 (target configurable, verde/amarillo/rojo); el resto se
-  calibra con datos de sesiones reales de evermore, no a priori.
+  calibra con datos de sesiones reales de sample, no a priori.
 - **SDK dentro del juego Unity** — creció de alcance en el grilling 2026-08-10: además del
   canal de logs `source: 'game'` (esquema del 027), es el **único camino cross-plataforma
   para frame-times reales** (`FrameTimingManager`), **thermal state**
   (`NSProcessInfo.thermalState`, el reemplazo honesto de la temperatura de SoC que iOS no
   da) y composición de memoria desde la óptica de Unity. Un solo código C# para Android e
-  iOS. Va **después** del track iOS porque toca `evermorearcade/`, que es repo de rol —
+  iOS. Va **después** del track iOS porque toca `samplearcade/`, que es repo de rol —
   le aplica el gate `architect-before-spec`, spec, ADR y ciclo de build; acoplarlo ataría
   la entrega del profiler a la agenda del equipo del juego. El schema del 037 ya deja
   `source: device | app` preparado para recibirlo sin migración. Pendiente de discutir con
@@ -273,7 +273,7 @@ realmente comparables, y explica dónde no lo son.
 - **Carril macOS-only sobre `xctrace`/Instruments** — Windows+iOS es requisito y `xctrace`
   no existe ahí, así que quedó descartado como base. Pero en macOS podría dar métricas que
   el camino DTX no da, sin protocolo propio. Revisar recién cuando el track iOS esté vivo.
-- Escenario de juego estandarizado como "benchmark run" de evermore (misma escena/duración)
+- Escenario de juego estandarizado como "benchmark run" de sample (misma escena/duración)
   para que las comparaciones entre builds sean justas.
 - Soporte de GPU% para SoCs no-Qualcomm (Mali/Xclipse/PowerVR) — depende de lo que arroje
   el research de formatos.

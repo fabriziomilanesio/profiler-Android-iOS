@@ -17,7 +17,7 @@ headless Chromium: **0 errores de consola, 0 px de overflow horizontal** en
 
 ## Dirección (del grilling — no re-decidido acá)
 
-Evolución de la identidad actual, no partir de cero: branding Evermore/Odaclick,
+Evolución de la identidad actual, no partir de cero: branding Sample/Generic,
 Baloo 2 + Inter, **dark theme protagonista** (default) con light consistente, look de
 herramienta pro estilo Perfetto/Grafana — sin gamer-neon saturado.
 
@@ -43,9 +43,9 @@ La fila de 5 donuts muere. Lo clave se lee **sin interpretar aros**:
 Secciones rotuladas con rail (tick degradé magenta→teal + hairline):
 **Performance** (protagonista, arriba: hero FPS + GPU + timeline) → **Memory & System**
 → **Network** (+ inspector) → **App logs** (sección propia de primera clase, abierta
-por default). Header compacto en una línea: logo Evermore reducido (48 px vs 84),
+por default). Header compacto en una línea: logo Sample reducido (48 px vs 84),
 ficha de device con chips (Hz en teal), veredicto vivo, selector de app + badge de
-estado, LIVE + timer, toggle de tema, ☰, perro Odaclick.
+estado, LIVE + timer, toggle de tema, ☰, perro Generic.
 
 ### 3. Mini-veredicto vivo en el header (decidido: SÍ)
 

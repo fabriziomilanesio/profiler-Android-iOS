@@ -7,7 +7,7 @@ import type { HttpFlow } from './types'
 
 const dirs: string[] = []
 function freshBaseDir(): string {
-  const d = mkdtempSync(join(tmpdir(), 'evermore-flow-test-'))
+  const d = mkdtempSync(join(tmpdir(), 'sample-flow-test-'))
   dirs.push(d)
   return d
 }
@@ -22,7 +22,7 @@ function flow(overrides: Partial<HttpFlow> = {}): HttpFlow {
     startedAt: '2026-07-17T10:00:00.000Z',
     request: {
       method: 'GET',
-      url: 'https://api.evermore.example/ping',
+      url: 'https://api.sample.example/ping',
       httpVersion: 'HTTP/1.1',
       headers: [{ name: 'accept', value: 'application/json' }],
       queryString: [],
@@ -127,7 +127,7 @@ describe('FlowStore.exportHar', () => {
     expect(entry.startedDateTime).toBe('2026-07-17T10:00:00.000Z')
     expect(entry.time).toBe(44)
     expect(entry.request.method).toBe('GET')
-    expect(entry.request.url).toBe('https://api.evermore.example/ping')
+    expect(entry.request.url).toBe('https://api.sample.example/ping')
     expect(entry.response.status).toBe(200)
     expect(entry.response.content.size).toBe(12)
     // campos requeridos por HAR que agregamos con defaults
@@ -145,7 +145,7 @@ describe('FlowStore.exportHar', () => {
       flow({
         request: {
           method: 'POST',
-          url: 'https://api.evermore.example/upload',
+          url: 'https://api.sample.example/upload',
           httpVersion: 'HTTP/1.1',
           headers: [],
           queryString: [],

@@ -9,7 +9,7 @@ blocked-by: []
 
 ## Question
 
-Con un device Android enchufado (idealmente el de QA con `com.evermore.oda.qa` instalada),
+Con un device Android enchufado (idealmente el de QA con `com.sample.oda.qa` instalada),
 capturar y commitear como fixtures los outputs crudos que los parsers van a consumir:
 
 - `adb shell dumpsys meminfo <pkg>` (con la app corriendo)
@@ -26,7 +26,7 @@ capturar y commitear como fixtures los outputs crudos que los parsers van a cons
 - `adb shell cat /proc/net/xt_qtaguid/stats` o `dumpsys netstats detail`
 - `adb shell getprop` completo, `/proc/meminfo`, `dumpsys SurfaceFlinger | grep -i gles`
 
-Guardarlos en `evermore/profiler/fixtures/<device-model>-api<NN>/` con un README que anote
+Guardarlos en `sample/profiler/fixtures/<device-model>-api<NN>/` con un README que anote
 modelo, Android, SoC. También grabar una "sesión" temporal: los mismos comandos muestreados
 ~30s a 1 Hz mientras se juega, para que fake-adb tenga material de replay realista.
 
@@ -57,10 +57,10 @@ sigue `open`.
   script falla limpio en el preflight (exit 1 + remedio).
 
 **Comando a correr mañana con el device QA enchufado (depuración USB activa y
-`com.evermore.oda.qa` instalada):**
+`com.sample.oda.qa` instalada):**
 
 ```bash
-cd evermore/profiler
+cd sample/profiler
 bun scripts/capture-fixtures.ts
 # opcionales: --package <pkg> --serial <X> --session-seconds 30 --adb <ruta>
 ```

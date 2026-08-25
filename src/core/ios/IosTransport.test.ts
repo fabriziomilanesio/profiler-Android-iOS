@@ -27,8 +27,8 @@ describe('discoverPython', () => {
 })
 
 describe('managedVenvPython', () => {
-  test('vive junto a las sesiones, en ~/.evermore-profiler', () => {
-    expect(managedVenvPython('/home/x')).toContain('.evermore-profiler')
+  test('vive junto a las sesiones, en ~/.sample-profiler', () => {
+    expect(managedVenvPython('/home/x')).toContain('.sample-profiler')
     expect(managedVenvPython('/home/x')).toContain('pmd3-venv')
   })
 })

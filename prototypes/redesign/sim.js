@@ -50,7 +50,7 @@
     ['Unity', 'Loading scene "Arcade_Main" (additive)'],
     ['Unity', 'SpawnManager: wave 3 spawned (12 enemies)'],
     ['Unity', 'SaveSystem: profile synced ok (142 ms)'],
-    ['ActivityManager', 'Displayed com.evermore.oda.qa/.MainActivity'],
+    ['ActivityManager', 'Displayed com.sample.oda.qa/.MainActivity'],
     ['Unity', 'AudioBank "combat_a" loaded'],
     ['NetworkManager', 'Heartbeat ok rtt=84ms'],
     ['Unity', 'ObjectPool: recycled 48 projectiles'],
@@ -69,14 +69,14 @@
   ]
   var ERROR_MSGS = [
     ['Unity', 'NullReferenceException (caught): EnemyController.OnHit — enemy already pooled'],
-    ['Unity', 'Shader "Evermore/Water" not supported on this GPU, using fallback'],
+    ['Unity', 'Shader "Sample/Water" not supported on this GPU, using fallback'],
   ]
   var CRASH_BLOCK = [
     'FATAL EXCEPTION: main',
-    'Process: com.evermore.oda.qa, PID: {pid}',
+    'Process: com.sample.oda.qa, PID: {pid}',
     'java.lang.Error: FATAL EXCEPTION [UnityMain]',
     'Caused by: java.lang.NullPointerException: combat queue drained while resolving hit',
-    '  at com.evermore.oda.combat.EngageQueue.resolve(EngageQueue.java:211)',
+    '  at com.sample.oda.combat.EngageQueue.resolve(EngageQueue.java:211)',
     '  at com.unity3d.player.UnityPlayer.nativeRender(Native Method)',
     '  at com.unity3d.player.UnityPlayer$e$1.handleMessage(UnityPlayer.java:118)',
     '  at android.os.Handler.dispatchMessage(Handler.java:103)',
@@ -192,7 +192,7 @@
           mem.java = 380
           mem.native = 560
           mem.graphics = 300
-          logs.push(entry(now, 'I', 'ActivityManager', 'Start proc ' + pid + ':com.evermore.oda.qa'))
+          logs.push(entry(now, 'I', 'ActivityManager', 'Start proc ' + pid + ':com.sample.oda.qa'))
           logs.push(entry(now, 'I', 'Unity', 'UnityMain restarted, loading last checkpoint'))
         }
         return {
@@ -350,12 +350,12 @@
 
   // Flows fake para el Network Inspector (cuando se prende el toggle)
   var FLOW_HOSTS = [
-    ['GET', 'https', 'api.evermore.games', '/v2/session/heartbeat', 200, 1200],
-    ['POST', 'https', 'analytics.odaclick.com', '/collect', 204, 860],
-    ['GET', 'https', 'cdn.evermore.games', '/banks/combat_a.bank', 200, 412000],
-    ['GET', 'http', 'config.evermore.games', 'http://config.evermore.games/remote/flags.json', 200, 2300],
-    ['POST', 'https', 'api.evermore.games', '/v2/score', 200, 640],
-    ['GET', 'https', 'firebase.googleapis.com', '/v1/projects/evermore-qa', 200, 5100],
+    ['GET', 'https', 'api.sample.games', '/v2/session/heartbeat', 200, 1200],
+    ['POST', 'https', 'analytics.generic.com', '/collect', 204, 860],
+    ['GET', 'https', 'cdn.sample.games', '/banks/combat_a.bank', 200, 412000],
+    ['GET', 'http', 'config.sample.games', 'http://config.sample.games/remote/flags.json', 200, 2300],
+    ['POST', 'https', 'api.sample.games', '/v2/score', 200, 640],
+    ['GET', 'https', 'firebase.googleapis.com', '/v1/projects/sample-qa', 200, 5100],
   ]
   function fakeFlow() {
     var f = FLOW_HOSTS[irand(0, FLOW_HOSTS.length - 1)]

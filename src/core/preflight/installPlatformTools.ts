@@ -1,5 +1,5 @@
 // Instalación de platform-tools oficiales de Google (ticket 013): descarga el
-// zip a ~/.evermore-profiler/, descomprime (el zip trae la carpeta
+// zip a ~/.sample-profiler/, descomprime (el zip trae la carpeta
 // `platform-tools/` adentro) y devuelve la ruta del adb resultante.
 //
 // La orquestación es pura respecto a I/O: downloader/unzipper/fs van inyectados
@@ -55,7 +55,7 @@ export function platformToolsUrl(platform: string): string {
 }
 
 /**
- * Descarga y descomprime platform-tools en `<home>/.evermore-profiler/`.
+ * Descarga y descomprime platform-tools en `<home>/.sample-profiler/`.
  * Devuelve la ruta absoluta del adb instalado.
  */
 export async function installPlatformTools(
@@ -64,7 +64,7 @@ export async function installPlatformTools(
 ): Promise<string> {
   const isWin = opts.platform === 'win32'
   const sep = isWin ? '\\' : '/'
-  const baseDir = `${opts.homeDir}${sep}.evermore-profiler`
+  const baseDir = `${opts.homeDir}${sep}.sample-profiler`
   const zipFile = `${baseDir}${sep}platform-tools.zip`
   const adbPath = `${baseDir}${sep}platform-tools${sep}${isWin ? 'adb.exe' : 'adb'}`
 

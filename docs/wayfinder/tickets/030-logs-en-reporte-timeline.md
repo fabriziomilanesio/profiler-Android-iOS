@@ -81,4 +81,4 @@ ReportLogs | null`; `BuildReportOptions.logEntries` (el recorte lo hace
 - El rediseño (031/032) puede querer linkear cada marca del chart con su entrada
   en la sección (anchor/scroll); los datos ya alcanzan (`ts` es la clave común).
 - `CRASH_BLOCK_GAP_MS` (2 s) y la ráfaga (5/10 s) son a priori razonables;
-  calibrar con crashes reales de evermore cuando existan sesiones largas.
+  calibrar con crashes reales de sample cuando existan sesiones largas.

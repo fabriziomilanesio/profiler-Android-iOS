@@ -1,7 +1,7 @@
 Applications Graphics Acceleration Info:
 Uptime: 34221670 Realtime: 377238656
 
-** Graphics info for pid 18078 [com.evermore.oda.qa] **
+** Graphics info for pid 18078 [com.sample.oda.qa] **
 
 Stats since: 34173740078958ns
 Total frames rendered: 0
@@ -45,19 +45,19 @@ Total GPU memory usage:
 
 GraphicBufferAllocator buffers:
             Handle |         Size |     W (Stride) x H | Layers |   Format |      Usage | Requestor
-0xb400007677499e80 |  5331.25 KiB |  787 ( 800) x 1706 |      1 |        1 | 0x     b00 | ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7
+0xb400007677499e80 |  5331.25 KiB |  787 ( 800) x 1706 |      1 |        1 | 0x     b00 | ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7
 0xb4000076774d5fc0 |  9945.00 KiB | 1080 (1088) x 2340 |      1 |        1 | 0x     933 | VRI[MessagingUnityPlayerActivity]@ce0a415#6(BLAST Consumer)6
 0xb4000076774d6380 |  9945.00 KiB | 1080 (1088) x 2340 |      1 |        1 | 0x     933 | VRI[MessagingUnityPlayerActivity]@ce0a415#6(BLAST Consumer)6
-0xb400007677554f40 |  5331.25 KiB |  787 ( 800) x 1706 |      1 |        1 | 0x     b00 | ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7
-0xb4000077c2f311c0 |  5331.25 KiB |  787 ( 800) x 1706 |      1 |        1 | 0x     b00 | ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7
-0xb4000077c2f33240 |  5331.25 KiB |  787 ( 800) x 1706 |      1 |        1 | 0x     b00 | ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7
+0xb400007677554f40 |  5331.25 KiB |  787 ( 800) x 1706 |      1 |        1 | 0x     b00 | ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7
+0xb4000077c2f311c0 |  5331.25 KiB |  787 ( 800) x 1706 |      1 |        1 | 0x     b00 | ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7
+0xb4000077c2f33240 |  5331.25 KiB |  787 ( 800) x 1706 |      1 |        1 | 0x     b00 | ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7
 0xb4000077c2f33740 |  9945.00 KiB | 1080 (1088) x 2340 |      1 |        1 | 0x     933 | VRI[MessagingUnityPlayerActivity]@ce0a415#6(BLAST Consumer)6
 Total allocated by GraphicBufferAllocator (estimate): 51160.00 KB
 Imported gralloc buffers:
-+ name:ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7, id:4728758994363, size:5434.00KiB, w/h:787x1706, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
-+ name:ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7, id:4728758994364, size:5434.00KiB, w/h:787x1706, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
-+ name:ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7, id:4728758994362, size:5434.00KiB, w/h:787x1706, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
-+ name:ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7, id:4728758994361, size:5434.00KiB, w/h:787x1706, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7, id:4728758994363, size:5434.00KiB, w/h:787x1706, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7, id:4728758994364, size:5434.00KiB, w/h:787x1706, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7, id:4728758994362, size:5434.00KiB, w/h:787x1706, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0#7(BLAST Consumer)7, id:4728758994361, size:5434.00KiB, w/h:787x1706, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
 + name:VRI[MessagingUnityPlayerActivity]@ce0a415#6(BLAST Consumer)6, id:4728758994355, size:9945.00KiB, w/h:1080x2340, usage: 0x933, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
 + name:VRI[MessagingUnityPlayerActivity]@ce0a415#6(BLAST Consumer)6, id:4728758994360, size:9945.00KiB, w/h:1080x2340, usage: 0x933, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
 + name:VRI[MessagingUnityPlayerActivity]@ce0a415#6(BLAST Consumer)6, id:4728758994354, size:9945.00KiB, w/h:1080x2340, usage: 0x933, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
@@ -65,10 +65,10 @@ Total imported by gralloc: 51571.00KiB
 
 Profile data in ms:
 
-	com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity/android.view.ViewRootImpl@85f0953 (visibility=0)
+	com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity/android.view.ViewRootImpl@85f0953 (visibility=0)
 View hierarchy:
 
-  com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity/android.view.ViewRootImpl@85f0953
+  com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity/android.view.ViewRootImpl@85f0953
   15 views, 18.87 kB of render nodes
 
 

@@ -87,7 +87,7 @@ describe('scrubText — lo que NO debe tocar (falsos positivos)', () => {
   })
 
   test('no toca el bundle id ni el modelo del device', () => {
-    const line = 'com.evermoregames.evermorearcade.internal on SM-A155M / iPhone14,6'
+    const line = 'com.samplegames.samplearcade.internal on SM-A155M / iPhone14,6'
     expect(scrubText(line).text).toBe(line)
   })
 })

@@ -114,7 +114,7 @@ describe('buildReportSession', () => {
   test('arma el contrato del template (serie + summary + meta)', () => {
     const r = buildReportSession({
       samples: [sample(0), sample(1), sample(2)],
-      packageName: 'com.evermore.oda.qa',
+      packageName: 'com.sample.oda.qa',
       device: {
         serial: 'X',
         model: 'SM-A155M',
@@ -130,7 +130,7 @@ describe('buildReportSession', () => {
       intervalMs: 1000,
       trimmed: false,
     })
-    expect(r.bundleId).toBe('com.evermore.oda.qa')
+    expect(r.bundleId).toBe('com.sample.oda.qa')
     expect(r.device!.name).toBe('samsung SM-A155M')
     expect(r.durationS).toBe(3)
     expect(r.samplingHz).toBe(1)
@@ -189,15 +189,15 @@ describe('SessionLog', () => {
   test('roundtrip: escribir sesión, listarla y releerla', () => {
     dir = mkdtempSync(join(tmpdir(), 'sessions-'))
     const id = sessionId(new Date('2026-07-20T15:30:00Z'))
-    const log = new SessionLog(dir, id, '2026-07-20T15:30:00Z', 'com.evermore.oda.qa', null)
-    log.appendSample({ pkg: 'com.evermore.oda.qa', serial: 'S1', sample: sample(0) })
+    const log = new SessionLog(dir, id, '2026-07-20T15:30:00Z', 'com.sample.oda.qa', null)
+    log.appendSample({ pkg: 'com.sample.oda.qa', serial: 'S1', sample: sample(0) })
     log.appendEvent({ ts: 1, kind: 'app', pkg: 'com.otra.app', serial: 'S1' })
     log.appendSample({ pkg: 'com.otra.app', serial: 'S1', sample: sample(1) })
 
     const list = SessionLog.list(dir)
     expect(list).toHaveLength(1)
     expect(list[0]!.id).toBe(id)
-    expect(list[0]!.packages.sort()).toEqual(['com.evermore.oda.qa', 'com.otra.app'])
+    expect(list[0]!.packages.sort()).toEqual(['com.sample.oda.qa', 'com.otra.app'])
 
     const read = SessionLog.read(dir, id)!
     expect(read.entries).toHaveLength(2)

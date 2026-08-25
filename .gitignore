@@ -13,7 +13,7 @@ fixtures/**/raw/
 # capturas crudas de spikes: PII sin redactar (UDID, ECID, IMEI, teléfono)
 .tmp/
 
-# venv suelto de pruebas locales (el gestionado vive en ~/.evermore-profiler/pmd3-venv)
+# venv suelto de pruebas locales (el gestionado vive en ~/.sample-profiler/pmd3-venv)
 .venv-ios/
 
 # artefactos del e2e (traces y reporte HTML de Playwright)

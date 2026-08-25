@@ -36,7 +36,7 @@ Android de punta a punta? ¿Qué se rompe?
   reporte HTML, exportar logs.
 - Verificar que el binario compilado sirve la UI embebida (`src/server/embeddedUi.ts`);
   la memoria del proyecto tenía anotado que `bun build --compile` no embebía `src/ui`.
-- Rutas con espacios, `%USERPROFILE%`, y dónde caen `~/.evermore-profiler/sessions/`.
+- Rutas con espacios, `%USERPROFILE%`, y dónde caen `~/.sample-profiler/sessions/`.
 
 ## Pendiente que este ticket NO cierra
 

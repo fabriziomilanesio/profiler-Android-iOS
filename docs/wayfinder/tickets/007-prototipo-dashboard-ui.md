@@ -17,7 +17,7 @@ dashboard con ECharts y un generador de datos fake a 1 Hz:
 - Torta real de composición de memoria (java/native/graphics/code/otros).
 - Timeline en vivo multi-serie (CPU/RAM/temp/FPS) con ventana deslizante.
 - Resumen de red (↓rx ↑tx por segundo y acumulado).
-- Branding: logo evermore grande, Odaclick presente (placeholders si el ticket de logos
+- Branding: logo sample grande, Generic presente (placeholders si el ticket de logos
   no cerró — no bloquea).
 
 Validar con el humano: legibilidad de gauges, qué serie merece estar en la timeline por
@@ -32,7 +32,7 @@ que el UI real reusa. Linkear el prototipo como asset del ticket.
 
 ### Qué quedó
 
-- `index.html` — layout completo + tema oscuro paleta Odaclick (`#0B0B10`/`#EB008B`/`#00E6DA`),
+- `index.html` — layout completo + tema oscuro paleta Generic (`#0B0B10`/`#EB008B`/`#00E6DA`),
   fuentes Baloo 2 + Inter **vendoreadas** como woff2 (`vendor/fonts/`, @font-face con fallback
   system — cero dependencias de red).
 - `vendor/echarts.min.js` — ECharts 5 bajado de jsdelivr (1 MB).
@@ -46,10 +46,10 @@ que el UI real reusa. Linkear el prototipo como asset del ticket.
   timeline multi-serie con ventana deslizante de 120 s y toggles por leyenda, sparkline+números
   de red (↓rx ↑tx por segundo + acumulados). Chips de evento "GC"/"JANK" que flashean sobre los
   gauges de RAM/FPS cuando el simulador los emite.
-- Header: logo evermore **grande protagonista** (92 px, con glow magenta) + subtítulo "Android
+- Header: logo sample **grande protagonista** (92 px, con glow magenta) + subtítulo "Android
   Profiler", ficha del device fake (SM_G973F · Android 12 API 31 · 8 GB · Adreno 640 · SD 855 ·
-  1440×3040), selector de app fake (default `com.evermore.oda.qa`; cambiarla resetea la sesión),
-  badge **● REC** pulsante con timer mm:ss (click = pausa), logo Odaclick chico a la derecha.
+  1440×3040), selector de app fake (default `com.sample.oda.qa`; cambiarla resetea la sesión),
+  badge **● REC** pulsante con timer mm:ss (click = pausa), logo Generic chico a la derecha.
 - `smoke.js` — validación sin browser: `bun prototypes/dashboard/smoke.js` (verde, 5/5 corridas).
   Chequea rangos e invariantes del simulador en 600 ticks, sintaxis de los JS, y que todos los
   assets referenciados existan.
@@ -74,7 +74,7 @@ que el UI real reusa. Linkear el prototipo como asset del ticket.
    perfectamente centrado.
 5. Torta de memoria **a la izquierda** de la timeline (340 px fijos), gauges arriba como fila
    protagonista, red como footer delgado con sparkline — jerarquía: gauges > timeline > pie > red.
-6. Solo dark theme (paleta Odaclick); light no se prototipó.
+6. Solo dark theme (paleta Generic); light no se prototipó.
 
 ### Preguntas de feedback para el humano (pendiente — no bloquea el cierre)
 
@@ -87,7 +87,7 @@ que el UI real reusa. Linkear el prototipo como asset del ticket.
 4. ¿El gauge de RAM en GB sobre 8 GB del device es la lectura correcta, o preferís % o MB?
 5. ¿Los chips GC/JANK flasheando aportan o distraen? ¿Los querés también como marcas en la timeline?
 6. ¿Hace falta light theme o dark-only está bien para v1?
-7. ¿El balance de branding (evermore grande + Odaclick chico) está bien o el logo evermore pisa
+7. ¿El balance de branding (sample grande + Generic chico) está bien o el logo sample pisa
    demasiado espacio útil del header?
 
 ## Human feedback applied (2026-07-17)
@@ -105,9 +105,9 @@ Feedback recibido del humano sobre el prototipo — **estas decisiones son contr
 3. **Light mode por default.** Tema claro con los acentos de marca intactos (#EB008B primary,
    #00E6DA secondary — este último oscurecido a `#009E96` cuando es texto/línea sobre fondo claro,
    por contraste). Toggle chico light/dark en el header (default light) que reutiliza el tema
-   oscuro Odaclick existente; al togglear, los charts ECharts se **rebuild-ean con la paleta
+   oscuro Generic existente; al togglear, los charts ECharts se **rebuild-ean con la paleta
    nueva** (ejes, splitLines, tooltips, textos, track de los gauges) y se re-inyecta la data
-   buffereada, así nada se resetea visualmente. El logo Odaclick (wordmark blanco) va siempre
+   buffereada, así nada se resetea visualmente. El logo Generic (wordmark blanco) va siempre
    sobre un chip oscuro para que funcione en ambos temas.
 4. **Responsive arreglado** — verificado en 1440 / 1024 / 768 / 390 px sin overflow horizontal:
    gauges en grid `auto-fit minmax(150px, 1fr)` (4 columnas en desktop, 2 en 390), header se
@@ -137,7 +137,7 @@ Feedback sobre el mock en el browser real (~1660 px):
 2. **Header quedaba en 2 líneas; debe ser 1** → `flex-wrap: nowrap` en el header,
    el device-card absorbe/encoge (sus chips wrappean adentro) y `header-right` no se
    parte; el stack por filas solo aparece ≤ 820 px.
-3. **Logo Odaclick = solo el perro, transparente, sin chip de fondo** → se usa el ícono
+3. **Logo Generic = solo el perro, transparente, sin chip de fondo** → se usa el ícono
    oficial full-color del sitio (72×72, ver assets/brand/README.md); la variante
    recortada del logo grande quedó descartada (ojos blancos, era para fondo oscuro).
 

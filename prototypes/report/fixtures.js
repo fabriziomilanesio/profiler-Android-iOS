@@ -177,7 +177,7 @@
     var summary = summarize(series);
     return {
       id: cfg.id,
-      app: 'Evermore Arcade',
+      app: 'Sample App',
       bundleId: cfg.bundleId,
       label: cfg.label,
       device: DEVICE,
@@ -248,7 +248,7 @@
     return [
       makeSession({
         id: 'sess-qa',
-        bundleId: 'com.evermore.oda.qa',
+        bundleId: 'com.sample.oda.qa',
         label: 'QA build',
         seed: 1337,
         durationS: 300,
@@ -257,7 +257,7 @@
       }),
       makeSession({
         id: 'sess-prod',
-        bundleId: 'com.evermore.oda',
+        bundleId: 'com.sample.oda',
         label: 'Prod build',
         seed: 4242,
         durationS: 300,
@@ -266,7 +266,7 @@
       }),
       makeSession({
         id: 'sess-prod-rc',
-        bundleId: 'com.evermore.oda',
+        bundleId: 'com.sample.oda',
         label: 'Prod RC2',
         seed: 909,
         durationS: 300,

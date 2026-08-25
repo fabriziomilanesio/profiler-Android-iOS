@@ -992,7 +992,7 @@
     var a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download =
-      'evermore-logs-prototype' + (scope === 'filtered' ? '-filtered' : '') + '.' + format
+      'sample-logs-prototype' + (scope === 'filtered' ? '-filtered' : '') + '.' + format
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -1051,19 +1051,19 @@
   }
 
   var PACKAGES = [
-    { pkg: 'com.evermore.oda.qa', uses: 41, evermore: true },
-    { pkg: 'com.evermore.arcade.dev', uses: 12, evermore: true },
-    { pkg: 'com.evermore.arcade', uses: 3, evermore: true },
+    { pkg: 'com.sample.oda.qa', uses: 41, sample: true },
+    { pkg: 'com.sample.arcade.dev', uses: 12, sample: true },
+    { pkg: 'com.sample.arcade', uses: 3, sample: true },
     { pkg: 'com.miniclip.eightballpool', uses: 0 },
     { pkg: 'com.king.candycrushsaga', uses: 0 },
     { pkg: 'com.android.chrome', uses: 0, system: true },
     { pkg: 'com.samsung.android.game.gametools', uses: 0, system: true },
   ]
-  var currentPkg = 'com.evermore.oda.qa'
+  var currentPkg = 'com.sample.oda.qa'
   var appChipOn = true
 
   function renderAppList() {
-    var term = appChipOn ? 'evermore' : $('appSearch').value.trim().toLowerCase()
+    var term = appChipOn ? 'sample' : $('appSearch').value.trim().toLowerCase()
     var withSys = $('appSys').checked
     var shown = PACKAGES.filter(function (p) {
       if (p.system && !withSys) return false
@@ -1213,8 +1213,8 @@
     var list = $('sessList')
     list.innerHTML = ''
     ;[
-      { date: 'Today 09:12', sub: '42m 10s · com.evermore.oda.qa', current: true },
-      { date: 'Yesterday 18:40', sub: '1h 05m · com.evermore.arcade.dev', current: false },
+      { date: 'Today 09:12', sub: '42m 10s · com.sample.oda.qa', current: true },
+      { date: 'Yesterday 18:40', sub: '1h 05m · com.sample.arcade.dev', current: false },
     ].forEach(function (s) {
       var li = document.createElement('li')
       li.className = 'sess-item'

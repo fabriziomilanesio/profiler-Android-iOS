@@ -212,7 +212,7 @@ describe('parsePids (ps -A → main + hijos del package)', () => {
     '17276 com.android.chrome',
     '23490 com.android.chrome:privileged_process0',
     '23583 com.android.chrome:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:1',
-    '17833 com.evermore.oda.qa',
+    '17833 com.sample.oda.qa',
     '999 com.android.chromecustom', // prefijo parecido SIN ":" ⇒ no es hijo
   ].join('\n')
 
@@ -222,8 +222,8 @@ describe('parsePids (ps -A → main + hijos del package)', () => {
     expect(r.children).toEqual([23490, 23583])
   })
 
-  test('app single-process: main y cero hijos (caso Evermore)', () => {
-    const r = parsePids(ps, 'com.evermore.oda.qa')
+  test('app single-process: main y cero hijos (caso Sample)', () => {
+    const r = parsePids(ps, 'com.sample.oda.qa')
     expect(r.main).toBe(17833)
     expect(r.children).toEqual([])
   })
@@ -245,7 +245,7 @@ describe('parseFps (SurfaceFlinger --timestats averageFPS)', () => {
       'layerName = NotificationShade$_2162#1789',
       'totalFrames = 590',
       'averageFPS = 54.828',
-      'layerName = ca6669f SurfaceView[com.evermore.oda.qa/x]@0(BLAST)#1798',
+      'layerName = ca6669f SurfaceView[com.sample.oda.qa/x]@0(BLAST)#1798',
       'totalFrames = 342',
       'averageFPS = 39.758',
       'layerName = StatusBar$_2162#95',
@@ -253,12 +253,12 @@ describe('parseFps (SurfaceFlinger --timestats averageFPS)', () => {
     ].join('\n')
     // sin filtro tomaría 54.828 (NotificationShade) — con package toma el de la app
     expect(parseFps(multi)).toBeCloseTo(54.828, 2)
-    expect(parseFps(multi, 'com.evermore.oda.qa')).toBeCloseTo(39.758, 2)
+    expect(parseFps(multi, 'com.sample.oda.qa')).toBeCloseTo(39.758, 2)
   })
 
   test('package presente en el dump pero sin su layer (app idle) ⇒ null', () => {
     const multi = 'layerName = NotificationShade#1\naverageFPS = 60.0'
-    expect(parseFps(multi, 'com.evermore.oda.qa')).toBeNull()
+    expect(parseFps(multi, 'com.sample.oda.qa')).toBeNull()
   })
 
   test('formato desconocido ⇒ null', () => {
@@ -288,7 +288,7 @@ describe('parseRefreshRate (SurfaceFlinger --latency, 1ª línea = período ns)'
 
 describe('parseFrameStats (histograma present2present del mismo dump de timestats)', () => {
   const dump = read('session/final/timestats-dump.txt')
-  const PKG = 'com.evermore.oda.qa'
+  const PKG = 'com.sample.oda.qa'
 
   test('p50/p90/p99 y jank del layer real de la app a 90 Hz', () => {
     // histograma del layer: 21ms=21 22ms=367 32ms=12 33ms=767 44ms=10 58ms=1 (1178 frames)
@@ -305,7 +305,7 @@ describe('parseFrameStats (histograma present2present del mismo dump de timestat
 
   test('30 FPS clavados en panel de 90 Hz ⇒ 0% jank (umbral relativo, no 16.6 ms)', () => {
     const steady = [
-      'layerName = SurfaceView[com.evermore.oda.qa/x]@0(BLAST)#1',
+      'layerName = SurfaceView[com.sample.oda.qa/x]@0(BLAST)#1',
       'present2present histogram is as below:',
       '33ms=100',
     ].join('\n')
@@ -317,7 +317,7 @@ describe('parseFrameStats (histograma present2present del mismo dump de timestat
 
   test('el umbral depende del refresh real: 22 ms es jank a 90 Hz, no bajo 60 Hz', () => {
     const hist = [
-      'layerName = SurfaceView[com.evermore.oda.qa/x]@0(BLAST)#1',
+      'layerName = SurfaceView[com.sample.oda.qa/x]@0(BLAST)#1',
       'present2present histogram is as below:',
       '11ms=80 22ms=20',
     ].join('\n')
@@ -332,7 +332,7 @@ describe('parseFrameStats (histograma present2present del mismo dump de timestat
       'layerName = NotificationShade#1789',
       'present2present histogram is as below:',
       '16ms=500',
-      'layerName = ca6669f SurfaceView[com.evermore.oda.qa/x]@0(BLAST)#1798',
+      'layerName = ca6669f SurfaceView[com.sample.oda.qa/x]@0(BLAST)#1798',
       'present2present histogram is as below:',
       '16ms=90 33ms=10',
     ].join('\n')
@@ -357,7 +357,7 @@ describe('parseFrameStats (histograma present2present del mismo dump de timestat
 
   test('histograma vacío (todo en 0) / formato desconocido ⇒ todo null, sin throw', () => {
     const idle = [
-      'layerName = SurfaceView[com.evermore.oda.qa/x]@0(BLAST)#1',
+      'layerName = SurfaceView[com.sample.oda.qa/x]@0(BLAST)#1',
       'present2present histogram is as below:',
       '0ms=0 16ms=0 33ms=0',
     ].join('\n')

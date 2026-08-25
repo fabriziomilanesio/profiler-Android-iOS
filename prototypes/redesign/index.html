@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Evermore Android Profiler — REDESIGN prototype (wayfinder ticket 031).
+  Mobile Profiler — REDESIGN prototype (wayfinder ticket 031).
   Static + offline: open with a double click. Simulated 1 Hz data (sim.js) with a
   scripted FPS drop (red semaphore) and a synthetic crash (logs + app-died badge).
   Layout contract for ticket 032; see README.md in this folder for the decisions.
@@ -9,8 +9,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Evermore Android Profiler — redesign</title>
-    <link rel="icon" type="image/png" href="assets/evermore-appicon.png" />
+    <title>Mobile Profiler — redesign</title>
     <style>
       /* ---- Vendored fonts (offline, system fallback) ---- */
       @font-face {
@@ -483,7 +482,7 @@
         border-color: var(--accent2-ink);
         color: var(--text);
       }
-      .brand-odaclick img {
+      .brand-generic img {
         height: 36px;
         display: block;
       }
@@ -1532,7 +1531,6 @@
   <body data-theme="dark">
     <header>
       <div class="brand">
-        <img src="assets/evermore-logo.png" alt="Evermore Arcade" />
         <div class="brand-sub">Android Profiler</div>
       </div>
 
@@ -1565,14 +1563,14 @@
         <div class="app-name" id="appSelect">
           <label>Profiled app</label>
           <button class="pkg" id="appPkgBtn" type="button" title="Switch profiled app">
-            <span id="appPkg">com.evermore.oda.qa</span>
+            <span id="appPkg">com.sample.oda.qa</span>
             <span class="app-launched" id="appLaunched">🚀 launched</span>
             <span class="caret">▼</span>
           </button>
           <div class="pop" id="appPop" hidden>
             <div class="pop-controls">
               <input id="appSearch" type="search" placeholder="Search package…" autocomplete="off" spellcheck="false" />
-              <button class="chip active" id="appChip" type="button">Evermore</button>
+              <button class="chip active" id="appChip" type="button">Sample</button>
               <label class="app-sys"><input type="checkbox" id="appSys" /> system</label>
             </div>
             <ul class="pop-list" id="appList"></ul>
@@ -1613,7 +1611,7 @@
               <div class="menu-title">Settings</div>
               <div class="cfg-grid">
                 <label for="cfgFilter">App filter</label>
-                <input id="cfgFilter" type="text" value="evermore" autocomplete="off" spellcheck="false" />
+                <input id="cfgFilter" type="text" value="sample" autocomplete="off" spellcheck="false" />
                 <label for="cfgInterval">Sampling</label>
                 <select id="cfgInterval">
                   <option value="auto">Auto (1 s)</option>
@@ -1631,7 +1629,7 @@
                   <span>🌙</span>
                 </label>
                 <label for="cfgReports">Reports folder</label>
-                <input id="cfgReports" type="text" value="~/EvermoreReports" autocomplete="off" spellcheck="false" />
+                <input id="cfgReports" type="text" value="~/SampleReports" autocomplete="off" spellcheck="false" />
               </div>
               <div class="cfg-actions">
                 <button class="cfg-save" id="cfgSave" type="button">Save</button>
@@ -1641,9 +1639,6 @@
           </div>
         </div>
 
-        <div class="brand-odaclick">
-          <img src="assets/odaclick-dog.png" alt="Odaclick Game Studio" title="Odaclick Game Studio" />
-        </div>
       </div>
     </header>
 
@@ -1844,7 +1839,7 @@
     </section>
 
     <footer class="credits">
-      Disposable prototype (ticket 031) — simulated data at 1 Hz · <b>Evermore Android Profiler</b> · Odaclick Game Studio
+      Disposable prototype (ticket 031) — simulated data at 1 Hz · <b>Mobile Profiler</b>
     </footer>
 
     <script src="vendor/echarts.min.js"></script>

@@ -35,20 +35,20 @@ describe('serializeLogsTxt', () => {
       entry({
         level: 'E',
         tag: 'AndroidRuntime',
-        message: '\tat com.evermore.oda.GameLoop.tick(GameLoop.java:87)',
+        message: '\tat com.sample.oda.GameLoop.tick(GameLoop.java:87)',
         isCrash: true,
       }),
       entry({
         level: 'I',
         tag: 'am_anr',
-        message: '0,111,com.evermore.oda.qa,952680005,Input dispatching timed out',
+        message: '0,111,com.sample.oda.qa,952680005,Input dispatching timed out',
         isCrash: true,
       }),
     ]
     const lines = serializeLogsTxt(crash).split('\n')
     expect(lines[0]).toBe('[CRASH] 10:15:02.087 E/AndroidRuntime(111): FATAL EXCEPTION: main')
     expect(lines[1]).toBe(
-      '[CRASH] 10:15:02.087 E/AndroidRuntime(111): \tat com.evermore.oda.GameLoop.tick(GameLoop.java:87)',
+      '[CRASH] 10:15:02.087 E/AndroidRuntime(111): \tat com.sample.oda.GameLoop.tick(GameLoop.java:87)',
     )
     expect(lines[2]).toStartWith('[ANR] 10:15:02.087 I/am_anr(111): 0,111,')
   })
@@ -84,12 +84,12 @@ describe('logsExportFilename', () => {
   test('con sessionId usa el id de la sesión', () => {
     expect(
       logsExportFilename({ format: 'txt', filtered: false, sessionId: '2026-07-30T09-00-00', now }),
-    ).toBe('evermore-logs-2026-07-30T09-00-00.txt')
+    ).toBe('sample-logs-2026-07-30T09-00-00.txt')
   })
 
   test('sin sessionId usa el timestamp; filtered agrega el sufijo', () => {
     expect(logsExportFilename({ format: 'jsonl', filtered: true, sessionId: null, now })).toBe(
-      'evermore-logs-2026-07-31T18-30-11-filtered.jsonl',
+      'sample-logs-2026-07-31T18-30-11-filtered.jsonl',
     )
   })
 })

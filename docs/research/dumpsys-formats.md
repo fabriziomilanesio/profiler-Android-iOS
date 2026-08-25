@@ -1,12 +1,12 @@
 # Research: formatos de dumpsys y fuentes de métricas por API level (26→35) y OEM
 
 > Ticket: [002-research-formatos-dumpsys](../wayfinder/tickets/002-research-formatos-dumpsys.md) ·
-> Fecha: 2026-07-16 · Contexto: el profiler mide `com.evermore.oda.qa` (juego **Unity**) vía
+> Fecha: 2026-07-16 · Contexto: el profiler mide `com.sample.oda.qa` (juego **Unity**) vía
 > `adb shell` **sin root**, sampling ~1 Hz, en devices API 26→35 de OEMs variados.
 
 ## TL;DR — hallazgo crítico (Unity vs gfxinfo)
 
-**`dumpsys gfxinfo <pkg>` NO sirve para medir FPS de evermore.** gfxinfo/framestats lee las
+**`dumpsys gfxinfo <pkg>` NO sirve para medir FPS de sample.** gfxinfo/framestats lee las
 estadísticas de **HWUI** (el render thread del UI toolkit de Android). Unity renderiza con su
 propio contexto GL/Vulkan sobre un `SurfaceView` y **no pasa por HWUI**: el comando devuelve
 0 frames / sin sección `---PROFILEDATA---` en apps Unity (confirmado en foros de Unity y en
@@ -147,7 +147,7 @@ presentToPresent histogram is as below:
 0ms=0 ... 16ms=850 17ms=0 ... 33ms=100 ... 50ms=35 ... 66ms=10 ... 102ms=5 ...
 ```
 
-- Filtrar el layer cuyo nombre matchea `SurfaceView[com.evermore.oda.qa/...]`.
+- Filtrar el layer cuyo nombre matchea `SurfaceView[com.sample.oda.qa/...]`.
 - **FPS** = `averageFPS`; **percentiles p50/p90/p99** = acumular el histograma
   `presentToPresent` hasta 0.5/0.9/0.99 × `totalFrames` (la doc muestra el procedimiento);
   **jank%** = frames con presentToPresent > 1.5–2× el período de refresh ÷ totalFrames
@@ -174,7 +174,7 @@ usado por [alibaba/mobileperf](https://github.com/alibaba/mobileperf/blob/master
 - **Nombre de layer por versión:** API 26–30: `SurfaceView - com.pkg/Activity#0` (variantes
   con/sin sufijo `#0` o `@0`); API 31+ (BLAST): `SurfaceView[com.pkg/Activity]@0(BLAST)#<id>`
   con `<id>` cambiante por sesión. **Siempre descubrirlo en runtime** con
-  `dumpsys SurfaceFlinger --list | grep -F 'SurfaceView[com.evermore'` (o grep del pkg).
+  `dumpsys SurfaceFlinger --list | grep -F 'SurfaceView[com.sample'` (o grep del pkg).
 - Hay reportes de que en Android 12 el comando devuelve solo la primera línea si el nombre
   no es exacto (BLAST) ([issuetracker 247465689](https://issuetracker.google.com/issues/247465689))
   → por eso `--timestats` (que no requiere nombre exacto) es la primaria.
@@ -320,7 +320,7 @@ Decisión (v1 = "network solo resumen rx/tx" según el mapa):
 | ---------------------------- | --------------------------------------------------------- | ----------------------------------- | ------------------------------------------- | ------------------------------------------------------- |
 | RAM (PSS + composición)      | `dumpsys meminfo` → App Summary                           | ídem (+ col. Rss)                   | ídem                                        | Alta (App Summary estable desde API 24)                 |
 | FPS/jank/percentiles (Unity) | `SurfaceFlinger --latency <layer>` (probar `--timestats`) | `SurfaceFlinger --timestats`        | `SurfaceFlinger --timestats` (layers BLAST) | Media (probar en doctor; layer discovery en runtime)    |
-| FPS apps HWUI (no evermore)  | `gfxinfo` + `framestats`                                  | ídem                                | ídem                                        | Alta — pero **no ve frames Unity**                      |
+| FPS apps HWUI (no sample)  | `gfxinfo` + `framestats`                                  | ídem                                | ídem                                        | Alta — pero **no ve frames Unity**                      |
 | CPU% proceso                 | `/proc/<pid>/stat` + `/proc/stat`                         | ídem                                | ídem                                        | Alta (formato kernel, idéntico en OEMs)                 |
 | Temperatura                  | `/sys/class/thermal/*` + `dumpsys battery`                | `dumpsys thermalservice`            | `dumpsys thermalservice`                    | Media (sensores dependen del HAL del OEM)               |
 | GPU%                         | sysfs por SoC (kgsl / mali / samsung)                     | ídem                                | ídem                                        | Baja (best-effort, probar rutas)                        |
@@ -331,7 +331,7 @@ Decisión (v1 = "network solo resumen rx/tx" según el mapa):
 | Collector | Primaria                                                                | Fallback                                                                              | Nota doctor                                                        |
 | --------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `mem`     | App Summary de `dumpsys meminfo <pkg>`                                  | tabla detallada (fila TOTAL)                                                          | Graphics=0 ⇒ memtrack HAL ausente, marcar N/A                      |
-| `fps`     | `SurfaceFlinger --timestats` (enable al start, dump por muestra/cierre) | `--latency '<layer>'` con layer de `--list`; **nunca gfxinfo** para evermore          | verificar que aparece layer `SurfaceView[com.evermore.oda.qa/...]` |
+| `fps`     | `SurfaceFlinger --timestats` (enable al start, dump por muestra/cierre) | `--latency '<layer>'` con layer de `--list`; **nunca gfxinfo** para sample          | verificar que aparece layer `SurfaceView[com.sample.oda.qa/...]` |
 | `cpu`     | delta `/proc/<pid>/stat` vs `/proc/stat`                                | — (`top -b` solo sanity)                                                              | validar USER_HZ=100 y ncores                                       |
 | `temp`    | `dumpsys thermalservice` (mType 0/1/2/3)                                | `/sys/class/thermal/*` → `dumpsys battery`                                            | normalizar unidades sysfs (m°C vs deci-°C)                         |
 | `gpu`     | kgsl `gpubusy`                                                          | `gpu_busy_percentage` → `/sys/kernel/gpu/gpu_busy` → `mali0/device/utilization` → N/A | guardar ruta elegida en metadata                                   |

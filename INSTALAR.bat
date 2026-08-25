@@ -1,7 +1,7 @@
 @echo off
-title Evermore Mobile Profiler - Instalador
+title Mobile Profiler - Instalador
 echo.
-echo  Instalando Evermore Mobile Profiler (Bun + adb via winget)...
+echo  Instalando Mobile Profiler (Bun + adb via winget)...
 echo  Esto puede tardar unos minutos. No cierres esta ventana.
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-windows.ps1"

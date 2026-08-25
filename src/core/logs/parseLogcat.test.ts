@@ -103,6 +103,6 @@ describe('parseLogcatLine (threadtime,year)', () => {
   test('evento am_anr (buffer events) se parsea como entrada normal', () => {
     const anr = crashLines.map((l) => parseLogcatLine(l)).find((p) => p?.tag === 'am_anr')
     expect(anr?.pid).toBe(612)
-    expect(anr?.message).toContain('com.evermore.oda.qa')
+    expect(anr?.message).toContain('com.sample.oda.qa')
   })
 })

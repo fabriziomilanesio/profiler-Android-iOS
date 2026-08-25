@@ -4,7 +4,7 @@
 //
 // Flags: --package <pkg> · --port <n> · --inspect · --no-open · --adb <ruta> ·
 //        --install-platform-tools
-// Env:   EVERMORE_PROFILER_ADB (ruta explícita de adb)
+// Env:   MOBILE_PROFILER_ADB (ruta explícita de adb)
 import { accessSync, constants } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -21,7 +21,7 @@ import { AppStore } from './core/appStore'
 import { defaultSessionsDir } from './core/session/sessionLog'
 import { run } from './runtime/spawn'
 
-const DEFAULT_PACKAGE = 'com.evermore.oda.qa'
+const DEFAULT_PACKAGE = 'com.sample.oda.qa'
 
 interface CliArgs {
   command: 'preflight' | 'live'
@@ -112,7 +112,7 @@ async function resolveAdbPath(args: CliArgs): Promise<string> {
     platform: process.platform,
     env: process.env,
     isExecutable,
-    configPath: args.adbPath ?? process.env['EVERMORE_PROFILER_ADB'],
+    configPath: args.adbPath ?? process.env['MOBILE_PROFILER_ADB'],
   })
 
   if (discovery) {
@@ -256,11 +256,11 @@ async function runLive(
 }
 
 async function main(): Promise<void> {
-  console.log('Evermore Mobile Profiler v0.1.0')
+  console.log('Mobile Profiler v0.1.0')
   const args = parseArgs(process.argv.slice(2))
 
   // Auto-resume: sin --package se profilea la última app usada (AppStore);
-  // primera corrida sin historial ⇒ el default de Evermore QA.
+  // primera corrida sin historial ⇒ el default de Sample QA.
   const store = new AppStore()
   const packageName = args.packageName ?? store.data.last ?? DEFAULT_PACKAGE
   if (args.packageName === null && store.data.last) {

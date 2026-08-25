@@ -81,7 +81,7 @@ forma robusta con los datos que ya hay?
 ## Pendiente / ideas futuras
 
 - Los umbrales del throttling (42 °C / 60 s / 15 %) son a priori razonables para gama
-  baja; calibrarlos con sesiones reales largas de evermore cuando existan (mismo fog
+  baja; calibrarlos con sesiones reales largas de sample cuando existan (mismo fog
   que los semáforos no-FPS del mapa).
 - El tooltip del chart de correlación es por-grid (el crosshair sí está linkeado);
   unificarlo en uno solo cross-grid es cosmético y puede caer en el rediseño 031/032.

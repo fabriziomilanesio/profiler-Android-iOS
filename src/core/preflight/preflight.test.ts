@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { AdbDevice, AdbTransport, ShellResult } from '../adb/AdbTransport'
 import { Preflight, advance, type PreflightReport } from './preflight'
 
-const PKG = 'com.evermore.oda.qa'
+const PKG = 'com.sample.oda.qa'
 
 /**
  * Stub in-line del AdbTransport (NO es el fake-adb del ticket 009: acá alcanza

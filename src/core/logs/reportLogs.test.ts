@@ -42,7 +42,7 @@ function crashBlock(offsetMs: number): LogEntry[] {
       crash: true,
       tag: 'AndroidRuntime',
     }),
-    log(offsetMs + 10, 'E', '\tat com.evermore.oda.GameLoop.tick(GameLoop.java:87)', {
+    log(offsetMs + 10, 'E', '\tat com.sample.oda.GameLoop.tick(GameLoop.java:87)', {
       crash: true,
       tag: 'AndroidRuntime',
     }),
@@ -102,7 +102,7 @@ describe('buildReportLogs', () => {
       'error',
       'FATAL EXCEPTION: main',
       'java.lang.IllegalStateException: boom',
-      '\tat com.evermore.oda.GameLoop.tick(GameLoop.java:87)',
+      '\tat com.sample.oda.GameLoop.tick(GameLoop.java:87)',
     ])
     expect(out.totalByLevel.V).toBe(1)
     expect(out.totalByLevel.I).toBe(1)
@@ -156,7 +156,7 @@ describe('crashBlocks / buildLogMarks', () => {
   })
 
   test('am_anr: label "ANR: <reason>" desde el formato del evento', () => {
-    const anr = log(0, 'I', '0,111,com.evermore.oda.qa,952680005,Input dispatching timed out', {
+    const anr = log(0, 'I', '0,111,com.sample.oda.qa,952680005,Input dispatching timed out', {
       crash: true,
       tag: 'am_anr',
     })

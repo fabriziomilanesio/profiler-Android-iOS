@@ -58,10 +58,10 @@ export function parseIosApps(stdout: string, opts: { includeSystem?: boolean } =
       executable: typeof exec === 'string' && exec !== '' ? exec : null,
     })
   }
-  // Por nombre visible: el QA busca "Evermore", no "com.evermoregames…".
+  // Por nombre visible: el QA busca "Sample", no "com.samplegames…".
   //
   // Comparación en minúsculas y sin `localeCompare`: el orden de localeCompare depende del
-  // locale del host (con el de esta máquina, "com.pelado.app" cae antes que "Evermore"),
+  // locale del host (con el de esta máquina, "com.pelado.app" cae antes que "Sample"),
   // y un orden que cambia entre la máquina del QA y la de CI vuelve el test no portable.
   return apps.sort((a, b) => {
     const x = a.label.toLowerCase()

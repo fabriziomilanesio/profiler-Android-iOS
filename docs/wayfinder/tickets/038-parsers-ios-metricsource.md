@@ -84,7 +84,7 @@ con su dirección RSD — mismo shape que `adb devices`, así que `devices()` y
 ## Entregado (2026-08-10)
 
 Camino iOS vivo, verificado contra el device real (iPhone15,3 · iOS 26.5.2) con
-Evermore Arcade corriendo: **CPU 42,3 % · footprint 1023 MB · compressed 240 MB · FPS ·
+Sample App corriendo: **CPU 42,3 % · footprint 1023 MB · compressed 240 MB · FPS ·
 GPU**, todo entrando al dashboard por el mismo `pushSample()` que Android.
 
 - `parseGraphics.ts` — FPS + GPU device/renderer/tiler + memoria de GPU. **`0` de FPS se
@@ -97,8 +97,8 @@ GPU**, todo entrando al dashboard por el mismo `pushSample()` que Android.
   decenas de segundos, abrirlo por tick sería impagable) y un tick que combina el último
   valor de cada canal.
 - `deviceInfo.ts` — `resolveIosProcess` busca el proceso contra la lista REAL del device
-  ignorando mayúsculas: `com.evermoregames.evermorearcade` corre como `EvermoreArcade`, y
-  derivarlo del bundle daría `Evermorearcade`, que no matchea nunca.
+  ignorando mayúsculas: `com.samplegames.samplearcade` corre como `SampleApp`, y
+  derivarlo del bundle daría `Samplearcade`, que no matchea nunca.
 - El canal de gráficos arranca **con la app cerrada o abierta** (FPS y GPU son del
   compositor, no del proceso), y un watch cada 5 s engancha el canal de proceso cuando la
   app aparece — el equivalente de `refreshPid()`.

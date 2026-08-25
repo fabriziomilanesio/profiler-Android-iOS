@@ -14,7 +14,7 @@ import { LiveServer } from '../src/server/liveServer'
 const PORT = Number(process.env['E2E_PORT'] ?? 8788)
 const CONTROL_PORT = Number(process.env['E2E_CONTROL_PORT'] ?? 8789)
 const UDID = 'UDID-E2E'
-const PKG = 'com.evermore.arcade'
+const PKG = 'com.sample.arcade'
 
 const IOS_DEVICE: AdbDevice = {
   serial: UDID,
@@ -52,9 +52,9 @@ const live = (cmd: string): FakeStream[] =>
 const iosTransport = {
   isAvailable: async () => true,
   devices: async () => (plugged ? [IOS_DEVICE] : []),
-  processes: async () => (plugged ? [{ pid: 777, name: 'EvermoreArcade' }] : null),
-  appExecutable: async () => 'EvermoreArcade',
-  apps: async () => [{ id: PKG, label: 'Evermore Arcade', executable: 'EvermoreArcade' }],
+  processes: async () => (plugged ? [{ pid: 777, name: 'SampleApp' }] : null),
+  appExecutable: async () => 'SampleApp',
+  apps: async () => [{ id: PKG, label: 'Sample App', executable: 'SampleApp' }],
   systemInfo: async () => ({ ramTotalMb: 6144, cores: 6 }),
   stream: (
     _serial: string,

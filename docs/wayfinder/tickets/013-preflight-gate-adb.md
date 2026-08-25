@@ -16,7 +16,7 @@ Implementar el gate que impide fallar feo cuando falta algo:
    `~/Android/Sdk/platform-tools`).
 2. Si falta: panel de setup que ofrece **descargar platform-tools oficiales de Google**
    (`https://dl.google.com/android/repository/platform-tools-latest-{windows,darwin,linux}.zip`)
-   a `~/.evermore-profiler/platform-tools/` con progreso, y usa ese binario.
+   a `~/.sample-profiler/platform-tools/` con progreso, y usa ese binario.
 3. Cadena de checks en UI: adb OK → device conectado (y autorizado — detectar
    `unauthorized` y explicar el diálogo del teléfono) → app instalada. Cada eslabón dice
    qué falta y cómo resolverlo, y se re-chequea solo (poll/track-devices).
@@ -33,10 +33,10 @@ NoDevice limpio con exit 1):
 - **`discoverAdb.ts`** — resolución PURA de la ruta de adb, parametrizada por
   `(platform, env, isExecutable)` inyectados (testeada por OS sin tocar el FS). Orden de
   búsqueda como contrato: (a) config explícita → (b) `PATH` (con `Path`/`;`/`adb.exe` en
-  Windows) → (c) SDK típico por OS → (d) `~/.evermore-profiler/platform-tools/` (managed).
+  Windows) → (c) SDK típico por OS → (d) `~/.sample-profiler/platform-tools/` (managed).
   Devuelve `{ path, source }` o `null`.
 - **`installPlatformTools.ts`** — descarga el zip oficial de Google
-  (`platform-tools-latest-{darwin,windows,linux}.zip`) a `~/.evermore-profiler/`,
+  (`platform-tools-latest-{darwin,windows,linux}.zip`) a `~/.sample-profiler/`,
   descomprime ahí (el zip trae `platform-tools/` adentro) y devuelve la ruta del adb.
   Orquestación con `Downloader`/`Unzipper`/fs inyectados (tests con mocks, cero red).
   Implementaciones reales: `fetchDownloader` (fetch estándar, streaming con progreso) y
@@ -54,7 +54,7 @@ NoDevice limpio con exit 1):
   (no el fake-adb del ticket 009).
 - **CLI** (`src/cli.ts`) — reemplaza el chequeo básico: descubre adb, corre el preflight
   completo y muestra la cadena con ✓/✗/– + remedios. Flags `--package`, `--adb`,
-  `--install-platform-tools`; env `EVERMORE_PROFILER_ADB` como config explícita. Exit 0
+  `--install-platform-tools`; env `MOBILE_PROFILER_ADB` como config explícita. Exit 0
   solo en Ready.
 
 Decisiones:

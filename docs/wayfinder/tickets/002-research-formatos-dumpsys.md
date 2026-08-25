@@ -29,7 +29,7 @@ Cubrir:
 6. Network por-uid: `/proc/net/xt_qtaguid/stats` (deprecado ¿desde qué API?) vs
    `dumpsys netstats detail` vs `cat /proc/uid_stat/<uid>/` — qué usar por API level.
 
-Entregable: markdown `evermore/profiler/docs/research/dumpsys-formats.md` con tabla
+Entregable: markdown `sample/profiler/docs/research/dumpsys-formats.md` con tabla
 fuente-por-métrica-por-API y decisión de qué fuente primaria/fallback usa cada collector.
 
 ## Resolution (2026-07-16)
@@ -39,7 +39,7 @@ Doc completo: [`docs/research/dumpsys-formats.md`](../../research/dumpsys-format
 
 Conclusiones clave:
 
-1. **Veredicto Unity/gfxinfo (hallazgo #1): `dumpsys gfxinfo` NO ve los frames de evermore.**
+1. **Veredicto Unity/gfxinfo (hallazgo #1): `dumpsys gfxinfo` NO ve los frames de sample.**
    gfxinfo/framestats instrumenta HWUI; Unity renderiza GL/Vulkan sobre SurfaceView y no emite
    `---PROFILEDATA---` (confirmado en Unity Discussions y testerhome). El collector de FPS usa
    **`dumpsys SurfaceFlinger --timestats -clear -enable` / `-dump`** (método oficial de Google

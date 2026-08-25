@@ -90,14 +90,14 @@ describe('discoverAdb', () => {
     expect(result).toEqual({ path: '/home/dev/Android/Sdk/platform-tools/adb', source: 'sdk' })
   })
 
-  test('(d) fallback: platform-tools instalados por la tool en ~/.evermore-profiler', () => {
+  test('(d) fallback: platform-tools instalados por la tool en ~/.sample-profiler', () => {
     const result = discoverAdb(
       darwinOpts({
-        isExecutable: checkerOf('/Users/dev/.evermore-profiler/platform-tools/adb'),
+        isExecutable: checkerOf('/Users/dev/.sample-profiler/platform-tools/adb'),
       }),
     )
     expect(result).toEqual({
-      path: '/Users/dev/.evermore-profiler/platform-tools/adb',
+      path: '/Users/dev/.sample-profiler/platform-tools/adb',
       source: 'managed',
     })
   })
@@ -106,17 +106,17 @@ describe('discoverAdb', () => {
     const result = discoverAdb({
       platform: 'win32',
       env: { USERPROFILE: 'C:\\Users\\dev' },
-      isExecutable: checkerOf('C:\\Users\\dev\\.evermore-profiler\\platform-tools\\adb.exe'),
+      isExecutable: checkerOf('C:\\Users\\dev\\.sample-profiler\\platform-tools\\adb.exe'),
     })
     expect(result).toEqual({
-      path: 'C:\\Users\\dev\\.evermore-profiler\\platform-tools\\adb.exe',
+      path: 'C:\\Users\\dev\\.sample-profiler\\platform-tools\\adb.exe',
       source: 'managed',
     })
   })
 
   test('precedencia: PATH gana sobre SDK y SDK gana sobre managed', () => {
     const sdk = '/Users/dev/Library/Android/sdk/platform-tools/adb'
-    const managed = '/Users/dev/.evermore-profiler/platform-tools/adb'
+    const managed = '/Users/dev/.sample-profiler/platform-tools/adb'
     expect(
       discoverAdb(darwinOpts({ isExecutable: checkerOf('/usr/bin/adb', sdk, managed) })),
     ).toEqual({ path: '/usr/bin/adb', source: 'path' })

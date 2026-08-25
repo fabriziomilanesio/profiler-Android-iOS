@@ -1,7 +1,7 @@
 /**
  * app.js — ECharts wiring + 1 Hz loop for the prototype (ticket 007). DISPOSABLE.
  * Color thresholds here are visual placeholders: the map says they get calibrated
- * with real evermore sessions, not a priori.
+ * with real sample sessions, not a priori.
  *
  * Human feedback applied (2026-07-17):
  *  - All UI text in English.

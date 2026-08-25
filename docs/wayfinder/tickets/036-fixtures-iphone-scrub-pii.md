@@ -10,7 +10,7 @@ blocked-by: [033]
 
 ## Question
 
-Capturar los payloads crudos del iPhone real con evermorearcade corriendo, y dejarlos
+Capturar los payloads crudos del iPhone real con samplearcade corriendo, y dejarlos
 commiteables sin filtrar PII. ¿Qué se captura, y cómo se garantiza el scrub?
 
 ## Contexto (grilling 2026-08-10)

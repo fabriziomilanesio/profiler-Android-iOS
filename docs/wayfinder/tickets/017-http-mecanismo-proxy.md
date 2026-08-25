@@ -24,7 +24,7 @@ Evaluar opciones y decidir:
 
 Decidir además, informado por el gate 016:
 
-- **Gestión del CA:** generar la CA una vez, guardarla en `~/.evermore-profiler/`, y el
+- **Gestión del CA:** generar la CA una vez, guardarla en `~/.sample-profiler/`, y el
   flujo para instalarla en el device (`adb push` + install del cert, o instrucciones si
   requiere acción manual en Ajustes).
 - **Setear/limpiar el proxy del device** por adb al empezar/terminar la captura
@@ -45,7 +45,7 @@ CA/certs vía `node-forge` v1.4.0 (BSD-3). Cero deps del usuario; **shell-out a 
 por violar single-binary. Salvedad dura: bug de Bun (`oven-sh/bun#17932`: `SNICallback`/`ALPNCallback`
 no disparan en TLS server) golpea la generación de cert por-host → **spike bloqueante bajo Bun en
 018**; fallbacks = certs eager por-host o correr el subsistema bajo Node (código agnóstico). CA:
-generada 1 vez en `~/.evermore-profiler/ca/`; en **Android 11+ instalar el user CA es MANUAL**
+generada 1 vez en `~/.sample-profiler/ca/`; en **Android 11+ instalar el user CA es MANUAL**
 (no automatizable sin root) y el APK QA necesita `network_security_config` que confíe en user CAs.
 Proxy vía `AdbTransport` (`settings put/delete global http_proxy`, con restore idempotente del estado
 previo persistido a disco + signal handlers). Flows en `network.jsonl` aparte (modelo estilo HAR 1.2,

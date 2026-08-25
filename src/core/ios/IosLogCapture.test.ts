@@ -18,7 +18,7 @@ function fake() {
 }
 
 const LINE = (pid: number): string =>
-  `2026-08-10 17:51:15.627744 EvermoreArcade{Unity}[${pid}] <ERROR>: algo falló`
+  `2026-08-10 17:51:15.627744 SampleApp{Unity}[${pid}] <ERROR>: algo falló`
 
 function make(opts: { pid?: number | null; processName?: string | null } = {}) {
   const transport = fake()
@@ -36,13 +36,13 @@ describe('IosLogCapture', () => {
   test('filtra EN EL DEVICE cuando conoce el nombre del proceso', () => {
     // Sin esto `syslog live` empuja el sistema entero por USB y el costo lo paga el
     // teléfono — choca con la regla de "cero overhead nuevo" de la iteración 2.
-    const { transport, cap } = make({ processName: 'EvermoreArcade' })
+    const { transport, cap } = make({ processName: 'SampleApp' })
     cap.start()
     expect(transport.streams[0]?.args).toEqual([
       'syslog',
       'live',
       '--process-name',
-      'EvermoreArcade',
+      'SampleApp',
     ])
   })
 

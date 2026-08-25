@@ -371,7 +371,7 @@
         return r.blob().then(function (blob) {
           var a = document.createElement('a')
           a.href = URL.createObjectURL(blob)
-          a.download = m ? m[1] : 'evermore-logs.' + payload.format
+          a.download = m ? m[1] : 'sample-logs.' + payload.format
           ;(container || document.body).appendChild(a)
           a.click()
           a.remove()

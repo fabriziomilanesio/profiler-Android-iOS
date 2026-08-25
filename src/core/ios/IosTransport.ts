@@ -3,7 +3,7 @@
 //
 // Descubrimiento del intérprete, en orden:
 //   1. el que se le pase por constructor (config explícita)
-//   2. el venv gestionado en ~/.evermore-profiler/pmd3-venv  ← lo que instala el spike
+//   2. el venv gestionado en ~/.sample-profiler/pmd3-venv  ← lo que instala el spike
 //      y lo que va a instalar el installer del ticket 041
 //   3. `python3` del PATH
 //
@@ -27,7 +27,7 @@ const DEFAULT_TIMEOUT_MS = 30_000
  * En Windows el intérprete del venv vive en `Scripts\python.exe`; en POSIX, en `bin/python`.
  */
 export function managedVenvPython(home: string = homedir(), os: string = platform()): string {
-  const base = join(home, '.evermore-profiler', 'pmd3-venv')
+  const base = join(home, '.sample-profiler', 'pmd3-venv')
   return os === 'win32' ? join(base, 'Scripts', 'python.exe') : join(base, 'bin', 'python')
 }
 

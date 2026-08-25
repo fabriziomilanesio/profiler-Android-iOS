@@ -9,7 +9,7 @@ import { Sampler, SHELL_COMMANDS } from './sampler'
 
 const FIX = join(import.meta.dir, '../../../fixtures/sm-a155m-api36')
 const read = (p: string): string => readFileSync(join(FIX, p), 'utf8')
-const PKG = 'com.evermore.oda.qa'
+const PKG = 'com.sample.oda.qa'
 
 /** Transport que responde por substring del comando con outputs de fixture. */
 function fixtureTransport(routes: Array<[RegExp, string | (() => ShellResult)]>): AdbTransport {
@@ -49,7 +49,7 @@ function happyRoutes(): Array<[RegExp, string]> {
         read('oneshot/proc-meminfo.txt') +
         '\n' +
         read('oneshot/proc-pid-stat.txt') +
-        '\nName:\tevermore.oda.qa\nVmRSS:\t  204800 kB\n',
+        '\nName:\tsample.oda.qa\nVmRSS:\t  204800 kB\n',
     ],
   ]
 }

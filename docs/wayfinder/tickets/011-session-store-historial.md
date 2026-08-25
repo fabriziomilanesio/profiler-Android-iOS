@@ -9,7 +9,7 @@ blocked-by: [3, 4]
 
 ## Question
 
-Implementar la persistencia (`~/.evermore-profiler/sessions/`, JSONL + `meta.json` según
+Implementar la persistencia (`~/.sample-profiler/sessions/`, JSONL + `meta.json` según
 el schema del ticket 3) y la vista **Historial** del UI: listar sesiones (fecha, app,
 duración, device, resumen avg/pico), abrir una para verla con los mismos componentes del
 dashboard, borrar con confirmación, y seleccionar 2+ para comparar/exportar.

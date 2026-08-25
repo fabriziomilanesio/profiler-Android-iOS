@@ -8,10 +8,6 @@ import liveJs from '../ui/live.js' with { type: 'file' }
 import capabilitiesJs from '../ui/capabilities.js' with { type: 'file' }
 import logsCoreJs from '../ui/logsCore.js' with { type: 'file' }
 import logsPanelJs from '../ui/logsPanel.js' with { type: 'file' }
-import odaclickLogo from '../ui/assets/odaclick-logo.png' with { type: 'file' }
-import evermoreAppicon from '../ui/assets/evermore-appicon.png' with { type: 'file' }
-import evermoreLogo from '../ui/assets/evermore-logo.png' with { type: 'file' }
-import odaclickDog from '../ui/assets/odaclick-dog.png' with { type: 'file' }
 import echarts from '../ui/vendor/echarts.min.js' with { type: 'file' }
 import motion from '../ui/vendor/motion.min.js' with { type: 'file' }
 import inter400 from '../ui/vendor/fonts/inter-latin-400-normal.woff2' with { type: 'file' }
@@ -32,10 +28,6 @@ export const EMBEDDED_UI: Record<string, string> = {
   'capabilities.js': capabilitiesJs,
   'logsCore.js': logsCoreJs,
   'logsPanel.js': logsPanelJs,
-  'assets/odaclick-logo.png': odaclickLogo,
-  'assets/evermore-appicon.png': evermoreAppicon,
-  'assets/evermore-logo.png': evermoreLogo,
-  'assets/odaclick-dog.png': odaclickDog,
   'vendor/echarts.min.js': echarts,
   'vendor/motion.min.js': motion,
   'vendor/fonts/inter-latin-400-normal.woff2': inter400,

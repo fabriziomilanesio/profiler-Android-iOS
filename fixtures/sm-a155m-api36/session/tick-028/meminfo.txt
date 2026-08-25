@@ -1,7 +1,7 @@
 Applications Memory Usage (in Kilobytes):
 Uptime: 34255075 Realtime: 377272061
 
-** MEMINFO in pid 18078 [com.evermore.oda.qa] **
+** MEMINFO in pid 18078 [com.sample.oda.qa] **
                    Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
                  Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
                 ------   ------   ------   ------   ------   ------   ------   ------
@@ -58,15 +58,15 @@ Uptime: 34255075 Realtime: 377272061
  DATABASES
       pgsz     dbsz   Lookaside(b) cache hits cache misses cache size  Dbname
 PER CONNECTION STATS
-         4       84             95   225   117    10  /data/user/0/com.evermore.oda.qa/databases/ttopensdk.db
-         4       56            122    56   153    17  /data/user/0/com.evermore.oda.qa/databases/com.google.android.datatransport.events
-         4      104            114     5   194     7  /data/user/0/com.evermore.oda.qa/no_backup/androidx.work.workdb
+         4       84             95   225   117    10  /data/user/0/com.sample.oda.qa/databases/ttopensdk.db
+         4       56            122    56   153    17  /data/user/0/com.sample.oda.qa/databases/com.google.android.datatransport.events
+         4      104            114     5   194     7  /data/user/0/com.sample.oda.qa/no_backup/androidx.work.workdb
          4        8                    0     0     0    (attached) temp
-         4      104             21     1   100     1  /data/user/0/com.evermore.oda.qa/no_backup/androidx.work.workdb (3)
-         4      228            123   657   256    24  /data/user/0/com.evermore.oda.qa/databases/firestore.%5BDEFAULT%5D.evermore-qa-oda.%28default%29
+         4      104             21     1   100     1  /data/user/0/com.sample.oda.qa/no_backup/androidx.work.workdb (3)
+         4      228            123   657   256    24  /data/user/0/com.sample.oda.qa/databases/firestore.%5BDEFAULT%5D.sample-qa-oda.%28default%29
 POOL STATS
      cache hits  cache misses    cache size  Dbname
-            225           118           343  /data/user/0/com.evermore.oda.qa/databases/ttopensdk.db
-             56           154           210  /data/user/0/com.evermore.oda.qa/databases/com.google.android.datatransport.events
-             12           322           334  /data/user/0/com.evermore.oda.qa/no_backup/androidx.work.workdb
-            657           257           914  /data/user/0/com.evermore.oda.qa/databases/firestore.%5BDEFAULT%5D.evermore-qa-oda.%28default%29
+            225           118           343  /data/user/0/com.sample.oda.qa/databases/ttopensdk.db
+             56           154           210  /data/user/0/com.sample.oda.qa/databases/com.google.android.datatransport.events
+             12           322           334  /data/user/0/com.sample.oda.qa/no_backup/androidx.work.workdb
+            657           257           914  /data/user/0/com.sample.oda.qa/databases/firestore.%5BDEFAULT%5D.sample-qa-oda.%28default%29

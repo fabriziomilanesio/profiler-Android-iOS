@@ -43,7 +43,7 @@ sfPredictionErrors histogram is as below:
 displayRefreshRate = 90 fps
 renderRate = 90 fps
 uid = 10340
-layerName = ca6669f SurfaceView[com.evermore.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0(BLAST)#1523
+layerName = ca6669f SurfaceView[com.sample.oda.qa/com.google.firebase.MessagingUnityPlayerActivity]@0(BLAST)#1523
 packageName = 
 gameMode = Unsupported
 totalFrames = 1178

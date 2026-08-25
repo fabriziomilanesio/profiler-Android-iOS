@@ -16,7 +16,7 @@ a las métricas de FPS/frame-time del dashboard. ¿Dónde exactamente se pinta e
 
 ## Contexto (grilling 2026-07-31)
 
-- Target editable en ☰ Configuración, **default 30 FPS** (gama baja donde testea Evermore),
+- Target editable en ☰ Configuración, **default 30 FPS** (gama baja donde testea Sample),
   persistido en `config.json` como el resto (`appStore`).
 - Esquema decidido: **verde ≥ target · amarillo ≥ 80% del target · rojo abajo**.
 - El reporte (026) declara el target usado en la ventana exportada.
@@ -31,7 +31,7 @@ a las métricas de FPS/frame-time del dashboard. ¿Dónde exactamente se pinta e
   (negativo/NaN) o target inválido ⇒ `null`, nunca rojo — "no sé" no es "mal". Es la
   función que el reporte del 026 importa para el veredicto de la ventana exportada.
 - **Config persistida**: `AppStoreData.fpsTarget` (default **30**, rango válido 1–240,
-  se redondea) en `~/.config/evermore-profiler/config.json`. Migración por el patrón de
+  se redondea) en `~/.config/sample-profiler/config.json`. Migración por el patrón de
   siempre de `parseAppStore` (campo a campo): config pre-025 sin el campo ⇒ 30 sin
   romper nada; basura en el JSON editado a mano ⇒ default. `AppStore.set()` lo valida
   igual que `intervalMs`.

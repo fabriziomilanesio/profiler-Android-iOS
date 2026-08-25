@@ -15,7 +15,7 @@
 param(
   [switch]$Install,
   [int]$Seconds = 60,
-  [string]$Bundle = "com.evermoregames.evermorearcade",
+  [string]$Bundle = "com.samplegames.samplearcade",
   [string]$Process = "",
   [string]$Udid = ""
 )
@@ -38,7 +38,7 @@ function Step($name, $status, $detail = "") {
 
 # Venv gestionado, igual que en macOS: la tool se ocupa de su toolchain en vez de
 # ensuciar el Python del sistema. En Windows el intérprete vive en Scripts\, no en bin\.
-$venv = Join-Path $env:USERPROFILE ".evermore-profiler\pmd3-venv"
+$venv = Join-Path $env:USERPROFILE ".sample-profiler\pmd3-venv"
 $venvPy = Join-Path $venv "Scripts\python.exe"
 
 Write-Host "`nSpike iOS en Windows — ticket 033" -ForegroundColor Cyan

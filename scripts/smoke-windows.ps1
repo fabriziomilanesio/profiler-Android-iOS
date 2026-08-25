@@ -10,7 +10,7 @@
 #
 # Opcional:
 #   -SkipBuild        usa el dist\profiler.exe que ya exista
-#   -Package <id>     app a profilear (default com.evermore.oda.qa)
+#   -Package <id>     app a profilear (default com.sample.oda.qa)
 #   -Seconds <n>      duración de la sesión en vivo (default 25)
 #
 # No modifica nada del repo: todo sale a .tmp\smoke-windows\<timestamp>\.
@@ -18,7 +18,7 @@
 
 param(
   [switch]$SkipBuild,
-  [string]$Package = "com.evermore.oda.qa",
+  [string]$Package = "com.sample.oda.qa",
   [int]$Seconds = 25
 )
 
@@ -166,7 +166,7 @@ if (Test-Path $exe) {
   else { Step "corre desde una ruta con espacios" "FAIL" "ver spaced-path.txt" }
 }
 
-$sessions = Join-Path $env:USERPROFILE ".evermore-profiler\sessions"
+$sessions = Join-Path $env:USERPROFILE ".sample-profiler\sessions"
 if (Test-Path $sessions) {
   $n = (Get-ChildItem $sessions -ErrorAction SilentlyContinue).Count
   Step "sesiones en el perfil del usuario" "PASS" "$sessions ($n entradas)"

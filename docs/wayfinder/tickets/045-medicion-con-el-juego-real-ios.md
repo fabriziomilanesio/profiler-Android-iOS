@@ -11,7 +11,7 @@ blocked-by: [033]
 ## Question
 
 El spike 033 contestó la pregunta de viabilidad (**sí, sin privilegios**) pero midió contra
-procesos del sistema, no contra evermorearcade. Quedan tres cosas que sólo se responden con
+procesos del sistema, no contra samplearcade. Quedan tres cosas que sólo se responden con
 el juego instalado y corriendo en el iPhone.
 
 ## Contexto
@@ -37,14 +37,14 @@ probar los canales, no para calibrar.
    comparable con el de Android.
 4. **El nombre de proceso del juego.** iOS 26 **no expone `bundleIdentifier`** entre los
    atributos de sysmontap (verificado), así que el filtro va por `name`. Hay que confirmar
-   con qué nombre aparece una build Unity de evermorearcade, y si levanta procesos hijos
+   con qué nombre aparece una build Unity de samplearcade, y si levanta procesos hijos
    (el sampler de Android agrega main + hijos; en iOS habría que hacer lo mismo vía
    `ppid`/`parentUniqueID`).
 
 ## Prerequisito humano
 
 ⚠️ **Corrección (2026-08-10, misma noche)**: el spike concluyó "el juego no está instalado"
-y era **falso**. Está instalado como **`com.evermoregames.evermorearcade`** (producción);
+y era **falso**. Está instalado como **`com.samplegames.samplearcade`** (producción);
 lo que no está es el `.internal` de `ProjectSettings`, que era el bundle que se filtraba.
 El canal sysmontap enumera 338 procesos sin problema — sólo hay que **abrir la app** en el
 iPhone para que su proceso aparezca.

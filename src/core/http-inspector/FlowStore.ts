@@ -20,7 +20,7 @@ export interface Har {
   log: HarLog
 }
 
-const CREATOR = { name: 'evermore-android-profiler', version: '0.1.0' } as const
+const CREATOR = { name: 'sample-android-profiler', version: '0.1.0' } as const
 
 /** Resultado del truncado de un body: mimeType + texto (posiblemente base64) + size real. */
 export interface TruncatedBody {

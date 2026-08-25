@@ -29,10 +29,10 @@ function fontsCss(): string {
   ].join('\n')
 }
 
-/** Nombre de archivo del reporte: evermore-report-<app>-<fecha>.html */
+/** Nombre de archivo del reporte: sample-report-<app>-<fecha>.html */
 export function reportFilename(session: ReportSession, now: Date): string {
   const stamp = now.toISOString().replace(/:/g, '-').replace(/\..*$/, '')
-  return `evermore-report-${session.bundleId}-${stamp}.html`
+  return `sample-report-${session.bundleId}-${stamp}.html`
 }
 
 export function generateReportHtml(
@@ -52,16 +52,6 @@ export function generateReportHtml(
   out = fill(out, '__TITLE__', `${session.bundleId} · ${session.startedAt.slice(0, 10)}`)
   out = fill(out, '__THEME__', theme)
   out = fill(out, '__FONTS_CSS__', fontsCss())
-  out = fill(
-    out,
-    '__LOGO_EVERMORE__',
-    dataUri('image/png', EMBEDDED_UI['assets/evermore-logo.png']!),
-  )
-  out = fill(
-    out,
-    '__LOGO_ODACLICK__',
-    dataUri('image/png', EMBEDDED_UI['assets/odaclick-dog.png']!),
-  )
   out = fill(
     out,
     '__GENERATED__',

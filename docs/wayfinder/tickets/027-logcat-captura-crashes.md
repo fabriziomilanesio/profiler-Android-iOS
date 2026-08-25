@@ -49,7 +49,7 @@ tid?, source: 'logcat' | 'game', isCrash? }`. `source: 'game'` reservado para el
   - `logRing.ts` — ring buffer circular en memoria, cap **50k entradas** (~12 MB a
     ~250 B/entrada — mismo espíritu que el cap de 8 h del SessionBuffer), push O(1).
   - `logSink.ts` — persistencia NDJSON hermana de la sesión: `<id>.logs.jsonl` en el
-    MISMO `~/.config/evermore-profiler/sessions/` que el `<id>.jsonl`; se crea recién
+    MISMO `~/.config/sample-profiler/sessions/` que el `<id>.jsonl`; se crea recién
     en el primer append; `LogSink.read()` para sesiones pasadas (lo usa el 029).
   - `logcatCapture.ts` — ciclo de vida: **app stream** `logcat -b main,system
 --pid=<pid> -v threadtime -v year -T 1` (solo la app; Unity loguea por tag

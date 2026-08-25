@@ -19,7 +19,7 @@ batería el **drenaje %** durante la sesión (nivel inicial − final) + mA prom
 duración, app/bundle id, ficha del device.
 
 Cubrir en el prototipo (`prototypes/report/`, HTML standalone offline, ECharts + fuentes
-vendoreadas, branding evermore/Odaclick, mismo look que el dashboard, **light default**):
+vendoreadas, branding sample/Generic, mismo look que el dashboard, **light default**):
 
 1. **Modo 1 sesión:** tarjetas de resumen por métrica (número grande avg + pico/mín chico),
    la torta de composición de memoria promedio, timelines de la sesión completa, y una fila
@@ -91,7 +91,7 @@ batería/temp/RAM/CPU/GPU = mejor; más FPS = mejor.
 ### (b) Qué quedó en el prototipo
 
 - `fixtures.js` — 3 sesiones **determinísticas** (PRNG seedeado) de la misma app con distinto
-  bundle id: `com.evermore.oda.qa` (intensity 1.18), `com.evermore.oda` (0.92) y una RC (1.02).
+  bundle id: `com.sample.oda.qa` (intensity 1.18), `com.sample.oda` (0.92) y una RC (1.02).
   QA drena más batería, corre más caliente y usa más RAM que prod → la comparación tiene señal.
   Corre en browser (`ReportFixtures`) y en Bun.
 - `report.html` + `report.js` — dos modos por toggle en el header:
