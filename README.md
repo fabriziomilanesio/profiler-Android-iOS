@@ -1,7 +1,7 @@
 # Mobile Profiler
 
 Herramienta cross-platform (Windows/macOS/Linux) para **profilear apps móviles en vivo:
-Android vía ADB e iOS vía pymobiledevice3**. Pensada para las apps de Sample pero sirve para
+Android vía ADB e iOS vía pymobiledevice3**. Pensada para las apps de Sample, pero sirve para
 cualquiera: levantás el dashboard (con o sin teléfono conectado — se engancha solo cuando
 aparece), elegís **device** y **app** desde selectores en el dashboard (las apps filtradas por
 "sample" por default), ves las métricas en tiempo real, inspeccionás el tráfico de red,
@@ -31,7 +31,7 @@ existe pero falló en este tick se muestra en N/A.
 | CPU del device                | ✅ `/proc/stat`                    | ❌ fuera del v1 (sería un comando por tick)                                     |
 | Memoria de la app             | ✅ **PSS** + java/native/graphics  | ✅ **footprint** + comprimida + RSS                                             |
 | RAM usada del device          | ✅                                 | ❌ (sí la RAM **total**, para las barras)                                       |
-| GPU                           | ✅ % de uso                        | ✅ % + desglose renderer/tiler                                                  |
+| GPU                           | ✅ % vía sysfs o `dumpsys gpu`     | ✅ % + desglose renderer/tiler                                                  |
 | Temperatura                   | ✅ SoC **y** batería               | ✅ sólo batería (el SoC necesita entitlements privados)                         |
 | Batería (nivel/mA/carga)      | ✅                                 | ✅                                                                              |
 | Red                           | ✅ device-wide                     | ❌ fuera del v1                                                                 |
@@ -62,6 +62,14 @@ existe pero falló en este tick se muestra en N/A.
 > juego en gama baja (contiende con el proceso vía mmap_lock) — observer effect que este
 > esquema elimina. El intervalo del carril rápido es **Auto** por default: 2 s en devices
 > con < 4 GB de RAM, 1 s en el resto; se puede fijar a mano en Configuración (☰).
+
+> **GPU en Android.** El profiler detecta en tiempo de ejecución la fuente disponible para
+> cada fabricante/SoC. Primero prueba los contadores `sysfs` habituales de Qualcomm (KGSL),
+> Samsung/Exynos, MediaTek y Mali. Si Android bloquea esas rutas —como ocurre en algunos
+> equipos Unisoc, incluido el Moto G35 5G— usa `dumpsys gpu` como fallback y calcula el uso a
+> partir del delta de tiempo activo entre muestras. La primera muestra puede aparecer como
+> N/A porque todavía no existe un intervalo con el que calcular el porcentaje; las siguientes
+> se muestran normalmente. No requiere root ni instalar componentes en el teléfono.
 
 **El dashboard** (rediseño 2026-07 — tickets 031/032) se organiza por temas, legible de un
 vistazo y **dark por default** (light a un toggle, ☀️ en el header o en ☰ Configuración;
@@ -115,8 +123,8 @@ el túnel de iOS 17.4+ corren después en modo usuario.
 curl -fsSL https://bun.sh/install | bash        # macOS: también `brew install oven-sh/bun/bun`
 
 # 2. Clonar e instalar deps:
-git clone git@github.com:Generic/sample-mobile-profiler.git
-cd sample-mobile-profiler
+git clone https://github.com/josecordon/mobile-profiler-generic.git
+cd mobile-profiler-generic
 bun install
 
 # 3. Arrancar — abre el dashboard solo en el browser:
@@ -189,8 +197,8 @@ simplemente no se detectan y el resto anda igual.
 ## Instalación
 
 ```bash
-git clone git@github.com:Generic/sample-mobile-profiler.git
-cd sample-mobile-profiler
+git clone https://github.com/josecordon/mobile-profiler-generic.git
+cd mobile-profiler-generic
 bun install
 ```
 
@@ -361,7 +369,9 @@ La salida cruda va a `.tmp/` (gitignoreado) porque tiene PII. Detalle del stack 
   fixtures reales en `fixtures/`.
 - `src/core/sampler/` — loop de sampling en dos carriles: rápido por tick (cats de
   `/proc`/`/sys` + FPS + RSS) y lento amortizado (`dumpsys` pesados cada 10–15 s con
-  carry-forward). Best-effort: lo que falla queda N/A, no rompe.
+  carry-forward). Para GPU detecta una fuente `sysfs` compatible y cae a los contadores de
+  `dumpsys gpu` cuando el fabricante bloquea el acceso. Best-effort: lo que falla queda N/A,
+  no rompe.
 - `src/core/appStore.ts` — configuración persistente (selector de apps, tema, intervalo,
   carpeta de reportes) en `~/.config/sample-profiler/config.json`.
 - `src/core/session/` — buffer de sesión en memoria (cap ~8 h), historial JSONL en disco y
