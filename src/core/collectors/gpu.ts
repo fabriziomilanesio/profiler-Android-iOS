@@ -10,6 +10,12 @@ export const GPU_SOURCES = [
 export type GpuSource = (typeof GPU_SOURCES)[number]
 export type GpuFormat = GpuSource['format']
 
+export interface GpuWorkSnapshot {
+  atMs: number
+  /** Nanosegundos activos acumulados, por GPU y UID. */
+  activeNs: Map<string, number>
+}
+
 /** Convierte la salida del sysfs del vendor a utilización 0–100. */
 export function parseGpu(raw: string, format: GpuFormat = 'percent'): number | null {
   const s = raw.trim()
@@ -37,4 +43,47 @@ export function parseGpu(raw: string, format: GpuFormat = 'percent'): number | n
 
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, value))
+}
+
+/**
+ * Fallback Android estándar para devices cuyo sysfs está protegido (p. ej. Unisoc).
+ * `dumpsys gpu` expone contadores acumulados por GPU/UID; hacen falta dos snapshots.
+ */
+export function parseGpuWorkSnapshot(raw: string, atMs: number): GpuWorkSnapshot | null {
+  const lines = raw.split(/\r?\n/)
+  const header = lines.findIndex((line) =>
+    line.includes('gpu_id uid total_active_duration_ns total_inactive_duration_ns'),
+  )
+  if (header < 0) return null
+
+  const activeNs = new Map<string, number>()
+  for (const line of lines.slice(header + 1)) {
+    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\d+)$/)
+    if (!match || match[1] === undefined || match[2] === undefined || match[3] === undefined) {
+      continue
+    }
+    const active = Number(match[3])
+    if (Number.isFinite(active)) activeNs.set(`${match[1]}:${match[2]}`, active)
+  }
+  return { atMs, activeNs }
+}
+
+/** Utilización device-wide a partir del incremento de tiempo activo / tiempo de pared. */
+export function gpuWorkUtilization(
+  previous: GpuWorkSnapshot,
+  current: GpuWorkSnapshot,
+): number | null {
+  const elapsedNs = (current.atMs - previous.atMs) * 1_000_000
+  if (!Number.isFinite(elapsedNs) || elapsedNs <= 0) return null
+
+  let activeDeltaNs = 0
+  let comparableCounters = 0
+  for (const [key, active] of current.activeNs) {
+    const before = previous.activeNs.get(key)
+    if (before === undefined) continue
+    comparableCounters++
+    if (active >= before) activeDeltaNs += active - before
+  }
+  if (comparableCounters === 0) return null
+  return clampPercent((activeDeltaNs / elapsedNs) * 100)
 }

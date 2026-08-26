@@ -10,7 +10,7 @@ import { parseDeviceMemUsedMb } from './deviceMem'
 import { parsePids } from '../sampler/sampler'
 import { parseFps, parseFrameStats, parseRefreshRate } from './fps'
 import { parseTemp } from './temp'
-import { parseGpu } from './gpu'
+import { gpuWorkUtilization, parseGpu, parseGpuWorkSnapshot } from './gpu'
 import { parseBattery } from './battery'
 import { parseDeviceInfo } from './deviceInfo'
 import { parseNetDev, netThroughputKb } from './netdev'
@@ -405,6 +405,41 @@ describe('parseGpu (sysfs por vendor)', () => {
   test('.err.txt / vacío / no numérico ⇒ null', () => {
     expect(parseGpu('cat: ...: No such file or directory')).toBeNull()
     expect(parseGpu('')).toBeNull()
+  })
+})
+
+describe('dumpsys gpu (fallback de GPU work)', () => {
+  const dump = (activeA: number, activeB: number) =>
+    [
+      'Memory snapshot for GPU 0:',
+      'Global total: 1234',
+      '',
+      'GPU work information.',
+      'gpu_id uid total_active_duration_ns total_inactive_duration_ns',
+      `0 1000 ${activeA} 900000000`,
+      `0 10216 ${activeB} 800000000`,
+    ].join('\n')
+
+  test('parsea contadores por GPU/UID e ignora el bloque de memoria', () => {
+    const snapshot = parseGpuWorkSnapshot(dump(100, 200), 1000)
+    expect(snapshot?.activeNs).toEqual(
+      new Map([
+        ['0:1000', 100],
+        ['0:10216', 200],
+      ]),
+    )
+  })
+
+  test('calcula utilización por delta de tiempo activo sobre tiempo de pared', () => {
+    const first = parseGpuWorkSnapshot(dump(100_000_000, 200_000_000), 1000)!
+    const second = parseGpuWorkSnapshot(dump(200_000_000, 350_000_000), 2000)!
+    expect(gpuWorkUtilization(first, second)).toBe(25)
+  })
+
+  test('sin header o sin intervalo comparable devuelve null', () => {
+    expect(parseGpuWorkSnapshot('GPU unsupported', 1000)).toBeNull()
+    const sameTime = parseGpuWorkSnapshot(dump(1, 2), 1000)!
+    expect(gpuWorkUtilization(sameTime, sameTime)).toBeNull()
   })
 })
 

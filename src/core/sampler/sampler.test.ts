@@ -214,6 +214,32 @@ describe('Sampler', () => {
     ])
   })
 
+  test('GPU cae a dumpsys gpu cuando sysfs está bloqueado (Moto G35/Unisoc)', async () => {
+    let clock = 1_000
+    let activeNs = 1_000_000_000
+    const gpuDump = () => ({
+      stdout: [
+        'GPU work information.',
+        'gpu_id uid total_active_duration_ns total_inactive_duration_ns',
+        `0 10216 ${activeNs} 9000000000`,
+      ].join('\n'),
+      stderr: '',
+      exitCode: 0,
+    })
+    const routes: Array<[RegExp, string | (() => ShellResult)]> = [
+      [/dumpsys gpu$/, gpuDump],
+      ...happyRoutes().filter(([route]) => !/sys.*gpu_busy/.test(route.source)),
+    ]
+    const { t, calls } = logged(fixtureTransport(routes))
+    const sampler = new Sampler(t, 'REDACTED-SERIAL', PKG, 18078, { now: () => clock })
+
+    expect((await sampler.sampleOnce()).gpu).toBeNull() // baseline acumulado
+    clock += 1000
+    activeNs += 400_000_000
+    expect((await sampler.sampleOnce()).gpu).toBeCloseTo(40, 3)
+    expect(calls.filter((command) => command === 'dumpsys gpu')).toHaveLength(2)
+  })
+
   test('un shell que tira excepción no rompe el Sample entero', async () => {
     const t = fixtureTransport(happyRoutes())
     // envolver shell para que thermal explote
@@ -231,6 +257,7 @@ describe('Sampler', () => {
   test('SHELL_COMMANDS expone los comandos (documentación viva de las fuentes)', () => {
     expect(SHELL_COMMANDS.gpu).toContain('cat /sys/class/kgsl/kgsl-3d0/gpubusy')
     expect(SHELL_COMMANDS.gpu).toContain('cat /sys/kernel/gpu/gpu_busy')
+    expect(SHELL_COMMANDS.gpuWork).toBe('dumpsys gpu')
     expect(SHELL_COMMANDS.fps).toContain('timestats')
     expect(SHELL_COMMANDS.cpu([42])).toContain('/proc/42/status') // VmRSS en el cat combinado
   })

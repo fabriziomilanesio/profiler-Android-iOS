@@ -27,7 +27,14 @@ import { parseCpu, parseDeviceCpu, type CpuSnapshot } from '../collectors/cpu'
 import { parseDeviceMemUsedMb } from '../collectors/deviceMem'
 import { parseFps, parseFrameStats, NULL_FRAME } from '../collectors/fps'
 import { parseTemp } from '../collectors/temp'
-import { GPU_SOURCES, parseGpu, type GpuSource } from '../collectors/gpu'
+import {
+  GPU_SOURCES,
+  gpuWorkUtilization,
+  parseGpu,
+  parseGpuWorkSnapshot,
+  type GpuSource,
+  type GpuWorkSnapshot,
+} from '../collectors/gpu'
 import { parseBattery } from '../collectors/battery'
 import { parseNetDev, netThroughputKb, type NetSnapshot } from '../collectors/netdev'
 
@@ -49,6 +56,8 @@ export const SHELL_COMMANDS = {
   pids: 'ps -A -o PID,NAME',
   // Se prueban una vez, en orden, y se reutiliza la primera fuente legible.
   gpu: GPU_SOURCES.map(({ path }) => `cat ${path}`),
+  /** Fallback sin root cuando el vendor bloquea sysfs (Android GPU service). */
+  gpuWork: 'dumpsys gpu',
   temp: 'dumpsys thermalservice',
   // -dump -clear: reporta averageFPS desde el último clear y resetea, así cada tick
   // mide ~el último segundo. Sin -clear, averageFPS acumula toda la sesión y a los
@@ -170,6 +179,8 @@ export class Sampler {
   private lastBattery: BatterySample = NULL_BATTERY
   /** undefined = todavía sin probar; null = ninguna fuente disponible. */
   private gpuSource: GpuSource | null | undefined
+  private prevGpuWork: GpuWorkSnapshot | null = null
+  private gpuWorkSupported: boolean | undefined
   /** el último cat combinado no vio al pid main ⇒ forzar ps en el próximo refreshPid */
   private pidMissing = false
 
@@ -232,7 +243,7 @@ export class Sampler {
               ),
             )
           : Promise.resolve([] as string[]),
-        best(async () => this.readGpu(), null),
+        best(async () => this.readGpu(now), null),
         runSlow
           ? best<string | null>(async () => (await shell(SHELL_COMMANDS.temp)).stdout, '')
           : Promise.resolve(null),
@@ -310,8 +321,8 @@ export class Sampler {
   }
 
   /** Detecta el sysfs del driver una vez y luego lee solo esa ruta en cada tick. */
-  private async readGpu(): Promise<number | null> {
-    if (this.gpuSource === null) return null
+  private async readGpu(now: number): Promise<number | null> {
+    if (this.gpuSource === null) return this.readGpuWork(now)
 
     if (this.gpuSource === undefined) {
       for (const source of GPU_SOURCES) {
@@ -323,12 +334,34 @@ export class Sampler {
         return value
       }
       this.gpuSource = null
-      return null
+      return this.readGpuWork(now)
     }
 
     const result = await this.transport.shell(this.serial, `cat ${this.gpuSource.path}`)
     if (result.exitCode !== 0) return null
     return parseGpu(result.stdout, this.gpuSource.format)
+  }
+
+  /**
+   * `dumpsys gpu` es más caro que sysfs, por eso solo se usa si ningún cat funciona.
+   * Sus contadores son acumulados: la primera lectura establece baseline y devuelve N/A.
+   */
+  private async readGpuWork(now: number): Promise<number | null> {
+    if (this.gpuWorkSupported === false) return null
+    const result = await this.transport.shell(this.serial, SHELL_COMMANDS.gpuWork)
+    if (result.exitCode !== 0) {
+      this.gpuWorkSupported = false
+      return null
+    }
+    const current = parseGpuWorkSnapshot(result.stdout, now)
+    if (!current) {
+      this.gpuWorkSupported = false
+      return null
+    }
+    this.gpuWorkSupported = true
+    const value = this.prevGpuWork ? gpuWorkUtilization(this.prevGpuWork, current) : null
+    this.prevGpuWork = current
+    return value
   }
 
   private async readProcSnapshot(): Promise<ProcSnapshot | null> {
