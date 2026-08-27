@@ -23,6 +23,26 @@ test.describe('dual comparison QoL', () => {
     expect(devices.secondary).toBeNull()
   })
 
+  test('also mirrors B when A switches to the device already selected there', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('#recLabel')).toHaveText('LIVE')
+    await page.locator('#dualToggle').click()
+
+    const primary = page.locator('iframe[data-pane="primary"]').contentFrame()
+    const secondary = page.locator('iframe[data-pane="secondary"]').contentFrame()
+    await secondary.locator('#devBtn').click()
+    await secondary.locator('#devList button').filter({ hasText: 'UDID-E2E-B' }).click()
+    await expect(secondary.locator('#devName')).toContainText('iPhone 15 Pro Max')
+
+    await primary.locator('#devBtn').click()
+    await primary.locator('#devList button').filter({ hasText: 'UDID-E2E-B' }).click()
+    await expect(page.locator('[data-pane-label="secondary"]')).toHaveText('Device B · Mirror of A')
+    await expect(secondary.locator('body')).toHaveClass(/dual-pane-mirror/)
+    await expect(secondary.locator('#devName')).toHaveText(
+      await primary.locator('#devName').innerText(),
+    )
+  })
+
   test('coordinates iOS availability, sticky cards and equal panel scale', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/')

@@ -208,6 +208,10 @@ export class LiveServer {
   /** debounce: recién tras N refresh consecutivos sin proceso se declara muerta. */
   private deadTicks = 0
   private switching = false
+  /** Snapshot compartido por todos los paneles: evita lanzar varios procesos de discovery
+   * iOS cuando A y B abren el selector al mismo tiempo. */
+  private deviceListCache: { devices: AdbDevice[]; updatedAt: number } | null = null
+  private deviceListRefresh: Promise<AdbDevice[]> | null = null
   /** serial del device activo; null = modo espera (el watcher engancha al primero). */
   private serial: string | null
   private deviceWatch: ReturnType<typeof setInterval> | null = null
@@ -337,7 +341,7 @@ export class LiveServer {
           return this.handleSelectApp(req)
         }
         if (url.pathname === '/api/devices' && req.method === 'GET') {
-          return this.handleListDevices()
+          return this.handleListDevices(url)
         }
         if (url.pathname === '/api/device' && req.method === 'POST') {
           return this.handleSelectDevice(req)
@@ -1151,15 +1155,64 @@ export class LiveServer {
    * plataforma. Los iOS llegan con `platform: 'ios'`; los de adb no traen el campo y la
    * UI los asume Android.
    */
-  private async handleListDevices(): Promise<Response> {
-    const [android, ios] = await Promise.all([
+  private refreshDeviceList(): Promise<AdbDevice[]> {
+    if (this.deviceListRefresh) return this.deviceListRefresh
+    const refresh = Promise.all([
       this.opts.transport.devices().catch(() => [] as AdbDevice[]),
       this.opts.iosTransport?.devices().catch(() => [] as AdbDevice[]) ?? Promise.resolve([]),
     ])
+      .then(([android, ios]) => {
+        const devices = [...android, ...ios]
+        this.deviceListCache = { devices, updatedAt: Date.now() }
+        return devices
+      })
+      .finally(() => {
+        if (this.deviceListRefresh === refresh) this.deviceListRefresh = null
+      })
+    this.deviceListRefresh = refresh
+    return refresh
+  }
+
+  /** Fichas ya conocidas: permiten abrir el selector inmediatamente mientras discovery
+   * actualiza la lista completa en background. */
+  private knownDevices(): AdbDevice[] {
+    const known = [this.device, this.secondary.device].filter(
+      (device): device is DeviceInfo => device !== null,
+    )
+    return known
+      .filter(
+        (device, index) => known.findIndex((other) => other.serial === device.serial) === index,
+      )
+      .map((device) => ({
+        serial: device.serial,
+        state: 'device',
+        description:
+          `model:${(device.model ?? device.serial).replace(/\s+/g, '_')}` +
+          (device.platform === 'ios' && device.androidRelease
+            ? ` ios:${device.androidRelease}`
+            : ''),
+        ...(device.platform ? { platform: device.platform } : {}),
+      }))
+  }
+
+  private async handleListDevices(url: URL): Promise<Response> {
+    const force = url.searchParams.get('refresh') === '1'
+    const cacheFresh =
+      this.deviceListCache !== null && Date.now() - this.deviceListCache.updatedAt < 3000
+    let devices: AdbDevice[]
+    if (force) {
+      devices = await this.refreshDeviceList()
+    } else if (cacheFresh) {
+      devices = this.deviceListCache!.devices
+    } else {
+      void this.refreshDeviceList()
+      devices = this.deviceListCache?.devices ?? this.knownDevices()
+    }
     return Response.json({
-      devices: [...android, ...ios],
+      devices,
       current: this.serial,
       secondary: this.secondary.serial,
+      refreshing: this.deviceListRefresh !== null,
     })
   }
 
@@ -1236,8 +1289,10 @@ export class LiveServer {
           if (serial === this.serial) {
             return Response.json({ ok: true, device: this.device, app: this.appStatus })
           }
+          const mirrorSecondary = serial === this.secondary.serial
+          if (mirrorSecondary) await this.stopSecondary()
           const result = await this.switchToIosDevice(iosTarget)
-          return Response.json({ ok: true, ...result })
+          return Response.json({ ok: true, mirrorSecondary, ...result })
         }
         return Response.json({ error: 'device no conectado' }, { status: 404 })
       }
@@ -1247,8 +1302,10 @@ export class LiveServer {
       if (serial === this.serial) {
         return Response.json({ ok: true, device: this.device, app: this.appStatus })
       }
+      const mirrorSecondary = serial === this.secondary.serial
+      if (mirrorSecondary) await this.stopSecondary()
       const result = await this.switchDevice(serial)
-      return Response.json({ ok: true, ...result })
+      return Response.json({ ok: true, mirrorSecondary, ...result })
     } catch (err) {
       return Response.json({ error: String(err) }, { status: 500 })
     } finally {

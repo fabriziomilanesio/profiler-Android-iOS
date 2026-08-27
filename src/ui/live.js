@@ -128,7 +128,7 @@
   // Logs e inspector pertenecen a la sesión A; B sólo presenta sus métricas.
   if (isEmbeddedPane && pane === 'secondary') {
     var secondaryStyle = document.createElement('style')
-    secondaryStyle.textContent = '#logs,#inspector{display:none!important}'
+    secondaryStyle.textContent = '#logs,#inspToggle,#inspWarn,#inspector{display:none!important}'
     document.head.appendChild(secondaryStyle)
   }
 
@@ -209,7 +209,7 @@
             frame.contentWindow.postMessage(
               {
                 type: 'dual-layout',
-                hideInspector: true,
+                hideInspector: state.hasIos,
                 frameTimesComparable: state.frameTimesComparable,
                 launchStatusComparable: state.launchStatusComparable,
                 stickyDevices: sticky.checked,
@@ -226,12 +226,18 @@
           }
 
           onPaneDevice = function (event) {
-            if (
-              event.origin !== location.origin ||
-              !event.data ||
-              event.data.type !== 'dual-device'
-            )
+            if (event.origin !== location.origin || !event.data) return
+            if (event.data.type === 'dual-mirror-secondary') {
+              var primaryFrame = root.querySelector('iframe[data-pane="primary"]')
+              var secondaryFrame = root.querySelector('iframe[data-pane="secondary"]')
+              if (!primaryFrame || !secondaryFrame || event.source !== primaryFrame.contentWindow)
+                return
+              secondaryFrame.contentWindow.location.replace(
+                '/?pane=primary&slot=secondary&mirror=1',
+              )
               return
+            }
+            if (event.data.type !== 'dual-device') return
             var reportedPane =
               event.data.pane === 'secondary'
                 ? 'secondary'
@@ -449,17 +455,25 @@
     refresh: document.getElementById('devRefresh'),
   }
   var devSwitching = false
+  var devRefreshTimer = null
 
-  function loadDevices() {
+  function loadDevices(force) {
+    if (devRefreshTimer) clearTimeout(devRefreshTimer)
+    devRefreshTimer = null
     devSel.empty.hidden = false
     devSel.empty.textContent = 'Looking for devices…'
     devSel.list.innerHTML = ''
-    fetch('/api/devices')
+    fetch('/api/devices' + (force === true ? '?refresh=1' : ''))
       .then(function (r) {
         return r.json()
       })
       .then(function (data) {
         renderDeviceList(data)
+        if (data.refreshing && !devSel.pop.hidden) {
+          devRefreshTimer = setTimeout(function () {
+            loadDevices(false)
+          }, 600)
+        }
       })
       .catch(function () {
         devSel.empty.textContent = 'Could not list the devices.'
@@ -520,6 +534,9 @@
         return r.json()
       })
       .then(function (body) {
+        if (pane === 'primary' && body.mirrorSecondary === true && isEmbeddedPane) {
+          window.parent.postMessage({ type: 'dual-mirror-secondary' }, location.origin)
+        }
         if (pane !== 'secondary') return
         if (body.mirror === true && !isMirrorPane) {
           location.replace('/?pane=primary&slot=secondary&mirror=1')
@@ -538,6 +555,8 @@
 
   function closeDevPop() {
     devSel.pop.hidden = true
+    if (devRefreshTimer) clearTimeout(devRefreshTimer)
+    devRefreshTimer = null
   }
 
   devSel.btn.addEventListener('click', function (e) {
@@ -545,12 +564,12 @@
     devSel.pop.hidden = !devSel.pop.hidden
     if (!devSel.pop.hidden) {
       animPopoverIn(devSel.pop)
-      loadDevices()
+      loadDevices(false)
     }
   })
   devSel.refresh.addEventListener('click', function (e) {
     e.stopPropagation()
-    loadDevices()
+    loadDevices(true)
   })
   devSel.pop.addEventListener('click', function (e) {
     e.stopPropagation()

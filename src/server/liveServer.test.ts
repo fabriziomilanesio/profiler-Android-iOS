@@ -37,13 +37,19 @@ function fakeTransport(
   t: AdbTransport
   cmds: string[]
   streams: FakeStream[]
+  deviceQueries: string[]
 } {
   const cmds: string[] = []
   const streams: FakeStream[] = []
+  const deviceQueries: string[] = []
   const t: AdbTransport = {
     isAvailable: async () => true,
     version: async () => '1.0.41',
-    devices: async () => deviceList,
+    devices: async () => {
+      deviceQueries.push('devices')
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      return deviceList
+    },
     trackDevices: () => () => {},
     streamShell: (_serial, command, onLine) => {
       const s: FakeStream = { command, onLine, stopped: false }
@@ -71,7 +77,7 @@ function fakeTransport(
       return ok('')
     },
   }
-  return { t, cmds, streams }
+  return { t, cmds, streams, deviceQueries }
 }
 
 function memoryStore(): {
@@ -101,7 +107,7 @@ async function startServer(
   serial: string | null = 'FAKE-SERIAL',
   extra: { sessionsDir?: string; reportsDir?: string } = {},
 ) {
-  const { t, cmds, streams } = fakeTransport(running, installed, deviceList)
+  const { t, cmds, streams, deviceQueries } = fakeTransport(running, installed, deviceList)
   const store = memoryStore()
   if (extra.reportsDir) store.data.reportsDir = extra.reportsDir
   const server = new LiveServer({
@@ -117,7 +123,7 @@ async function startServer(
     sessionsDir: extra.sessionsDir,
   })
   const { url } = await server.start()
-  return { server, url, cmds, streams, store }
+  return { server, url, cmds, streams, deviceQueries, store }
 }
 
 describe('LiveServer /api/packages', () => {
@@ -215,6 +221,7 @@ interface DevicesBody {
   devices: AdbDevice[]
   current: string
   secondary: string | null
+  refreshing: boolean
 }
 interface DeviceSwitchBody {
   ok: boolean
@@ -227,11 +234,24 @@ describe('LiveServer /api/devices', () => {
   test('lista los devices de adb en el momento + el activo', async () => {
     const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
     try {
-      const res = await fetch(`${url}/api/devices`)
+      const res = await fetch(`${url}/api/devices?refresh=1`)
       expect(res.status).toBe(200)
       const body = (await res.json()) as DevicesBody
       expect(body.devices).toEqual(DEVICES)
       expect(body.current).toBe('FAKE-SERIAL')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('dos selectores concurrentes comparten una sola consulta de discovery', async () => {
+    const { server, url, deviceQueries } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      await Promise.all([
+        fetch(`${url}/api/devices?refresh=1`),
+        fetch(`${url}/api/devices?refresh=1`),
+      ])
+      expect(deviceQueries).toEqual(['devices'])
     } finally {
       await server.stop()
     }
@@ -256,6 +276,31 @@ describe('LiveServer /api/device', () => {
       expect(streams.filter((stream) => !stream.stopped).length).toBe(streamsBefore)
 
       const devices = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(devices.secondary).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('si A cambia al device de B, B se convierte en espejo y libera su carril', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const secondary = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(secondary.status).toBe(200)
+
+      const primary = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'primary' }),
+      })
+      expect(primary.status).toBe(200)
+      const body = (await primary.json()) as DeviceSwitchBody & { mirrorSecondary: boolean }
+      expect(body.mirrorSecondary).toBe(true)
+
+      const devices = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(devices.current).toBe('SERIAL-B')
       expect(devices.secondary).toBeNull()
     } finally {
       await server.stop()
