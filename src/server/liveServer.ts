@@ -1209,6 +1209,17 @@ export class LiveServer {
     this.switching = true
     try {
       if (pane === 'secondary') {
+        // QA mirror: B puede apuntar al mismo device que A, pero nunca abrimos un segundo
+        // sampler/stream contra el teléfono. La UI recarga B leyendo el carril primario.
+        if (serial === this.serial) {
+          await this.stopSecondary()
+          return Response.json({
+            ok: true,
+            mirror: true,
+            device: this.device,
+            app: this.appStatus,
+          })
+        }
         if (serial === this.secondary.serial) {
           return Response.json({ ok: true, device: this.secondary.device, app: this.secondary.app })
         }

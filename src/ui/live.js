@@ -17,8 +17,10 @@
   // carril independiente y reporta su plataforma al contenedor para decidir qué métricas
   // son realmente comparables.
   var searchParams = new URLSearchParams(location.search)
-  var pane = searchParams.get('pane') === 'secondary' ? 'secondary' : 'primary'
-  var paneQuery = 'pane=' + pane
+  var dataPane = searchParams.get('pane') === 'secondary' ? 'secondary' : 'primary'
+  var pane = searchParams.get('slot') === 'secondary' ? 'secondary' : dataPane
+  var isMirrorPane = pane === 'secondary' && dataPane === 'primary'
+  var paneQuery = 'pane=' + dataPane
   var isEmbeddedPane = searchParams.has('pane')
   var dualInspectorStyle = null
   var dualFrameTimesStyle = null
@@ -28,6 +30,7 @@
 
   if (isEmbeddedPane) {
     document.body.classList.add('dual-pane', 'dual-pane-' + pane)
+    if (isMirrorPane) document.body.classList.add('dual-pane-mirror')
   }
 
   function setDualInspectorHidden(hidden) {
@@ -187,8 +190,8 @@
             '<input id="dualStickyDevices" type="checkbox"><span class="dual-sticky-track"></span><span>Pin device cards</span></label>' +
             '<button class="dual-exit" type="button">Exit dual mode</button></div>' +
             '<div class="dual-panels">' +
-            '<section class="dual-panel"><div class="dual-panel-label">Device A</div><iframe data-pane="primary" title="Device A metrics" src="/?pane=primary"></iframe></section>' +
-            '<section class="dual-panel"><div class="dual-panel-label">Device B</div><iframe data-pane="secondary" title="Device B metrics" src="/?pane=secondary"></iframe></section>' +
+            '<section class="dual-panel"><div class="dual-panel-label" data-pane-label="primary">Device A</div><iframe data-pane="primary" title="Device A metrics" src="/?pane=primary"></iframe></section>' +
+            '<section class="dual-panel"><div class="dual-panel-label" data-pane-label="secondary">Device B</div><iframe data-pane="secondary" title="Device B metrics" src="/?pane=secondary"></iframe></section>' +
             '</div>'
 
           var platforms = { primary: null, secondary: null }
@@ -239,6 +242,10 @@
             var frame = root.querySelector('iframe[data-pane="' + reportedPane + '"]')
             if (!frame || event.source !== frame.contentWindow) return
             platforms[reportedPane] = event.data.platform
+            if (reportedPane === 'secondary') {
+              var paneLabel = root.querySelector('[data-pane-label="secondary"]')
+              paneLabel.textContent = event.data.mirror ? 'Device B · Mirror of A' : 'Device B'
+            }
             updateComparison()
           }
           window.addEventListener('message', onPaneDevice)
@@ -390,7 +397,7 @@
     appSwitching = true
     appSel.pkgLabel.textContent = p + ' — switching…'
     closeAppPop()
-    fetch('/api/app', { method: 'POST', body: JSON.stringify({ package: p, pane: pane }) })
+    fetch('/api/app', { method: 'POST', body: JSON.stringify({ package: p, pane: dataPane }) })
       .then(function (r) {
         if (!r.ok) throw new Error('switch failed')
         // el estado real llega por WS ({type:"app"}) — acá no hay nada más que hacer
@@ -467,7 +474,7 @@
       var li = document.createElement('li')
       var b = document.createElement('button')
       b.type = 'button'
-      var isCurrent = d.serial === (pane === 'secondary' ? data.secondary : data.current)
+      var isCurrent = d.serial === (dataPane === 'secondary' ? data.secondary : data.current)
       if (isCurrent) b.className = 'current'
       // "model:SM_A155M product:a15ub ..." → SM A155M
       var modelMatch = (d.description || '').match(/model:(\S+)/)
@@ -510,7 +517,16 @@
     fetch('/api/device', { method: 'POST', body: JSON.stringify({ serial: serial, pane: pane }) })
       .then(function (r) {
         if (!r.ok) throw new Error('switch failed')
-        // la ficha nueva llega por WS ({type:"device"} + {type:"app"})
+        return r.json()
+      })
+      .then(function (body) {
+        if (pane !== 'secondary') return
+        if (body.mirror === true && !isMirrorPane) {
+          location.replace('/?pane=primary&slot=secondary&mirror=1')
+        } else if (body.mirror !== true && isMirrorPane) {
+          location.replace('/?pane=secondary&slot=secondary')
+        }
+        // Sin recarga, la ficha nueva llega por WS ({type:"device"} + {type:"app"}).
       })
       .catch(function () {
         if (device) ProfilerDashboard.setDevice(device, pkg)
@@ -987,7 +1003,7 @@
           msg.type === 'sample' ||
           msg.type === 'app' ||
           msg.type === 'connection') &&
-        (msg.pane || 'primary') !== pane
+        (msg.pane || 'primary') !== dataPane
       ) {
         return
       }
@@ -1016,6 +1032,7 @@
             {
               type: 'dual-device',
               pane: pane,
+              mirror: isMirrorPane,
               // Compatibilidad con fichas Android históricas: plataforma ausente = Android.
               platform: device.platform === 'ios' ? 'ios' : 'android',
               serial: device.serial,

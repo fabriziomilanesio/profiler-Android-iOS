@@ -214,9 +214,11 @@ const DEVICES: AdbDevice[] = [
 interface DevicesBody {
   devices: AdbDevice[]
   current: string
+  secondary: string | null
 }
 interface DeviceSwitchBody {
   ok: boolean
+  mirror?: boolean
   device: { serial: string }
   app: { packageName: string; pid: number | null; launched: boolean }
 }
@@ -237,6 +239,29 @@ describe('LiveServer /api/devices', () => {
 })
 
 describe('LiveServer /api/device', () => {
+  test('el mismo device en B activa un espejo sin comandos ni streams adicionales', async () => {
+    const { server, url, cmds, streams } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const commandsBefore = cmds.length
+      const streamsBefore = streams.filter((stream) => !stream.stopped).length
+      const res = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'FAKE-SERIAL', pane: 'secondary' }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as DeviceSwitchBody
+      expect(body.mirror).toBe(true)
+      expect(body.device.serial).toBe('FAKE-SERIAL')
+      expect(cmds.length).toBe(commandsBefore)
+      expect(streams.filter((stream) => !stream.stopped).length).toBe(streamsBefore)
+
+      const devices = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(devices.secondary).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
   test('serial no conectado ⇒ 404; unauthorized ⇒ 409', async () => {
     const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
     try {

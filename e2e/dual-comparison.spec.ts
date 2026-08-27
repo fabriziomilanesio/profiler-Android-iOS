@@ -1,6 +1,28 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('dual comparison QoL', () => {
+  test('mirrors device A in B without starting a secondary lane', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('#recLabel')).toHaveText('LIVE')
+    await page.locator('#dualToggle').click()
+
+    const primary = page.locator('iframe[data-pane="primary"]').contentFrame()
+    const secondaryFrame = page.locator('iframe[data-pane="secondary"]')
+    const secondary = secondaryFrame.contentFrame()
+    await expect(primary.locator('#devName')).not.toHaveText('Waiting for device…')
+    await secondary.locator('#devBtn').click()
+    await secondary.locator('#devList button').filter({ hasText: 'UDID-E2E' }).first().click()
+
+    await expect(secondary.locator('body')).toHaveClass(/dual-pane-mirror/)
+    await expect(page.locator('[data-pane-label="secondary"]')).toHaveText('Device B · Mirror of A')
+    await expect(secondary.locator('#devName')).toHaveText(
+      await primary.locator('#devName').innerText(),
+    )
+
+    const devices = await page.evaluate(async () => (await fetch('/api/devices')).json())
+    expect(devices.secondary).toBeNull()
+  })
+
   test('coordinates iOS availability, sticky cards and equal panel scale', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/')
