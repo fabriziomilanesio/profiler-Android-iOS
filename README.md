@@ -84,6 +84,12 @@ vivo** (`PERF GOOD / WATCH / POOR`, mismo semáforo que el reporte, sobre el FPS
 los últimos 60 s + % de ticks en verde; los crashes de la sesión suman un chip rojo;
 `WARMING UP` mientras junta datos).
 
+**Paneles colapsables**: FPS, GPU, Live timeline, Memory, System y Network arrancan
+expandidos y se pueden plegar o desplegar haciendo click en su encabezado. El título queda
+siempre visible para recuperar el panel rápidamente; al volver a abrir un gráfico, el
+dashboard recalcula su tamaño automáticamente. Esto permite dejar a la vista sólo las
+métricas relevantes para la prueba en curso.
+
 **Stack:** TypeScript + [Bun](https://bun.sh) · UI web local (WebSocket) · Apache ECharts.
 
 ---
@@ -231,12 +237,12 @@ qué backend se usa. Los `unauthorized`/`offline` (y los iPhone sin "Confiar" ac
 pero no son elegibles. Al cambiar de device, la ficha, el sampler, los logs y el inspector se
 recablean en caliente y la app actual se re-engancha en el device nuevo.
 
-**Comparación dual**: el botón **⇄ Dual comparison** abre dos paneles verticales dentro de la
+**Comparación dual**: el botón **⇄ Dual comparison** abre dos paneles independientes en la
 misma ventana. El panel A conserva el device actual; elegí un segundo device desde el selector
-del panel B para iniciar un sampler independiente. Se pueden combinar Android y iOS. Cada panel
-recibe sólo sus propias métricas en tiempo real, por lo que un device lento no frena al otro. Al
-salir con **Exit dual mode**, se elimina el panel B y se liberan sus streams, mientras el panel A
-queda exactamente como estaba.
+del panel B para iniciar otro sampler. Se pueden combinar Android y iOS, y cada panel recibe
+sólo sus propias métricas en tiempo real, por lo que un device lento no frena al otro. En
+pantallas angostas los paneles se apilan verticalmente. Al salir con **Exit dual mode**, se
+elimina el panel B y se liberan sus streams, mientras el panel A queda como estaba.
 
 **Selector de apps**: no hace falta pasar `--package`. Sin flag, arranca con la **última app
 usada** (primera vez: `com.sample.oda.qa`) y desde el dashboard cambiás en caliente con el
