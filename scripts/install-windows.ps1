@@ -7,10 +7,14 @@
 # El teléfono no tiene que estar conectado durante la instalación. Si lo está, se verifica
 # además el enlace USB y se informa el estado de Modo Desarrollador de iOS.
 
-param([switch]$CheckOnly)
+param(
+  [switch]$CheckOnly,
+  # INSTALAR.bat pasa su propia carpeta. El nombre elegido por el usuario es irrelevante;
+  # si este script se ejecuta directamente, la raíz se descubre desde su ubicación.
+  [string]$ProjectRoot
+)
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = Split-Path -Parent $PSScriptRoot
 $managedRoot = Join-Path $env:USERPROFILE '.sample-profiler'
 $venv = Join-Path $managedRoot 'pmd3-venv'
 $venvPy = Join-Path $venv 'Scripts\python.exe'
@@ -18,6 +22,28 @@ $script:WingetExe = $null
 
 function Test-Command($name) {
   return [bool](Get-Command $name -ErrorAction SilentlyContinue)
+}
+
+function Find-ProjectRoot([string[]]$startingPaths) {
+  foreach ($startingPath in $startingPaths) {
+    if ([string]::IsNullOrWhiteSpace($startingPath)) { continue }
+
+    $candidate = [IO.Path]::GetFullPath($startingPath)
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+      $candidate = Split-Path -Parent $candidate
+    }
+
+    while ($candidate) {
+      if (Test-Path -LiteralPath (Join-Path $candidate 'package.json') -PathType Leaf) {
+        return $candidate
+      }
+      $parent = Split-Path -Parent $candidate
+      if (-not $parent -or $parent -eq $candidate) { break }
+      $candidate = $parent
+    }
+  }
+
+  throw 'No se encontró package.json. Conservá INSTALAR.bat junto a la carpeta scripts del proyecto.'
 }
 
 function Refresh-ProcessPath {
@@ -350,6 +376,7 @@ if (-not $pmdOk) { Write-Warning 'Python/pymobiledevice3 no quedó operativo; iO
 $appleOk = Install-AppleDevices
 if ($pmdOk -and $appleOk) { Show-IosDeviceStatus $venvPy }
 
+$repoRoot = Find-ProjectRoot @($ProjectRoot, $PSScriptRoot, $PSCommandPath)
 $depsOk = $false
 if ($bunExe -and (Test-Path -LiteralPath (Join-Path $repoRoot 'package.json'))) {
   Write-Host "`nDependencias del proyecto:" -ForegroundColor Magenta
