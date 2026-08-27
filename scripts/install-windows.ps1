@@ -110,6 +110,42 @@ function Find-Adb {
   return $null
 }
 
+function Start-AdbServer($adbExe) {
+  # En Windows PowerShell 5.1, adb escribe mensajes informativos de arranque en stderr.
+  # Con ErrorActionPreference=Stop eso se convierte en NativeCommandError aunque adb
+  # termine correctamente. Capturamos ambos streams y decidimos por el exit code real.
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $output = @(& $adbExe start-server 2>&1)
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+
+  if ($exitCode -eq 0) { return $true }
+
+  $detail = (($output | ForEach-Object {
+        if ($_ -is [Management.Automation.ErrorRecord]) { $_.Exception.Message }
+        else { $_.ToString() }
+      }) -join [Environment]::NewLine).Trim()
+  if ($detail) {
+    Write-Warning @"
+ADB está instalado, pero no se pudo iniciar su servidor (exit code $exitCode).
+$detail
+El instalador continuará verificando las demás dependencias. Android no estará listo hasta
+que ADB pueda iniciar correctamente.
+"@
+  } else {
+    Write-Warning @"
+ADB está instalado, pero no se pudo iniciar su servidor (exit code $exitCode).
+El instalador continuará verificando las demás dependencias. Android no estará listo hasta
+que ADB pueda iniciar correctamente.
+"@
+  }
+  return $false
+}
+
 function Test-Python($command) {
   if (-not $command) { return $false }
   try {
@@ -319,15 +355,24 @@ else { Write-Warning 'Bun no responde después de instalarlo.' }
 $null = Install-WingetPackage 'Google.PlatformTools' 'Android Platform-Tools'
 Refresh-ProcessPath
 $adbExe = Find-Adb
+$adbReady = $false
 if (-not $adbExe) {
   try { $adbExe = Install-PlatformToolsDirect } catch { Write-Warning $_.Exception.Message }
 }
 if ($adbExe) {
   $adbVersion = (& $adbExe version | Select-Object -First 1)
   Write-Host "  ok  $adbVersion" -ForegroundColor Green
-  & $adbExe start-server 2>&1 | Out-Null
+  $adbReady = Start-AdbServer $adbExe
 } else {
-  Write-Warning 'adb no quedó disponible; Android no funcionará.'
+  Write-Warning @'
+No se pudo instalar ni encontrar adb (Android Platform-Tools). Android quedó sin configurar,
+pero el instalador continuará verificando iOS y las demás dependencias.
+
+Instalá Platform-Tools manualmente desde:
+  https://developer.android.com/tools/releases/platform-tools
+
+Después cerrá esta ventana y volvé a ejecutar INSTALAR.bat.
+'@
 }
 
 Write-Host "`niOS:" -ForegroundColor Magenta
@@ -389,7 +434,7 @@ if ($bunExe -and (Test-Path -LiteralPath (Join-Path $repoRoot 'package.json'))) 
   else { Write-Warning 'bun install falló; el profiler no podrá arrancar.' }
 }
 
-$androidOk = [bool]($bunExe -and $adbExe -and $depsOk)
+$androidOk = [bool]($bunExe -and $adbReady -and $depsOk)
 $iosOk = [bool]($pmdOk -and $appleOk)
 
 Write-Host "`nResumen:" -ForegroundColor Magenta
