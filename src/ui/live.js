@@ -22,6 +22,7 @@
   var isEmbeddedPane = searchParams.has('pane')
   var dualInspectorStyle = null
   var dualFrameTimesStyle = null
+  var dualLaunchStatusStyle = null
   var stickyDeviceEnabled = false
   var stickyDeviceCard = null
 
@@ -53,6 +54,18 @@
     } else if (comparable && dualFrameTimesStyle) {
       dualFrameTimesStyle.remove()
       dualFrameTimesStyle = null
+    }
+  }
+
+  function setDualLaunchStatusComparable(comparable) {
+    if (!isEmbeddedPane) return
+    if (!comparable && !dualLaunchStatusStyle) {
+      dualLaunchStatusStyle = document.createElement('style')
+      dualLaunchStatusStyle.textContent = '#appLaunched{display:none!important}'
+      document.head.appendChild(dualLaunchStatusStyle)
+    } else if (comparable && dualLaunchStatusStyle) {
+      dualLaunchStatusStyle.remove()
+      dualLaunchStatusStyle = null
     }
   }
 
@@ -104,6 +117,7 @@
         return
       setDualInspectorHidden(event.data.hideInspector === true)
       setDualFrameTimesComparable(event.data.frameTimesComparable !== false)
+      setDualLaunchStatusComparable(event.data.launchStatusComparable !== false)
       setStickyDeviceEnabled(event.data.stickyDevices === true)
     })
   }
@@ -194,6 +208,7 @@
                 type: 'dual-layout',
                 hideInspector: true,
                 frameTimesComparable: state.frameTimesComparable,
+                launchStatusComparable: state.launchStatusComparable,
                 stickyDevices: sticky.checked,
               },
               location.origin,

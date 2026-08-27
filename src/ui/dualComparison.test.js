@@ -7,6 +7,7 @@ describe('dual comparison UI state', () => {
       ready: false,
       hasIos: false,
       frameTimesComparable: true,
+      launchStatusComparable: true,
       notice: '',
     })
   })
@@ -24,6 +25,7 @@ describe('dual comparison UI state', () => {
     expect(state.ready).toBe(true)
     expect(state.hasIos).toBe(true)
     expect(state.frameTimesComparable).toBe(false)
+    expect(state.launchStatusComparable).toBe(false)
     expect(state.notice).toBe(IOS_NOTICE)
   })
 })

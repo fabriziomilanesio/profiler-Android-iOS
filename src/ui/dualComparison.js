@@ -4,7 +4,7 @@
  */
 var DualComparison = (function () {
   var IOS_NOTICE =
-    'iOS provides fewer metrics. Frame-time jank, p90 and p99 are unavailable and hidden for this comparison.'
+    'iOS provides fewer metrics. Frame-time jank, p90, p99, Network Data and Data Inspector are unavailable and hidden for this comparison.'
 
   function normalizePlatform(platform) {
     return platform === 'ios' ? 'ios' : platform === 'android' ? 'android' : null
@@ -20,6 +20,7 @@ var DualComparison = (function () {
       ready: ready,
       hasIos: hasIos,
       frameTimesComparable: !hasIos,
+      launchStatusComparable: !hasIos,
       notice: hasIos ? IOS_NOTICE : '',
     }
   }

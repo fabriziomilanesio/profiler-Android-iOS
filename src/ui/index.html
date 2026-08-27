@@ -1857,6 +1857,39 @@
       body.dual-pane .device-card {
         min-height: 64px;
       }
+      body.dual-pane header {
+        display: grid;
+        grid-template-columns: 104px minmax(260px, 1fr) minmax(390px, 420px);
+        align-items: center;
+      }
+      body.dual-pane .header-right {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas:
+          'verdict verdict verdict'
+          'app status menu';
+        width: 100%;
+        min-height: 84px;
+        align-content: center;
+      }
+      body.dual-pane .verdict {
+        grid-area: verdict;
+        justify-self: end;
+      }
+      body.dual-pane .app-name {
+        grid-area: app;
+        min-width: 0;
+      }
+      body.dual-pane button.pkg {
+        width: 100%;
+        max-width: none;
+      }
+      body.dual-pane .rec-badge {
+        grid-area: status;
+      }
+      body.dual-pane .menu-select {
+        grid-area: menu;
+      }
       body.dual-pane .device-name {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1909,6 +1942,18 @@
           grid-template-columns: 1fr;
           grid-template-rows: repeat(2, minmax(720px, 100vh));
           overflow: visible;
+        }
+      }
+
+      @media (max-width: 760px) {
+        body.dual-pane header {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        body.dual-pane .brand {
+          display: none;
+        }
+        body.dual-pane .header-right {
+          grid-template-columns: minmax(0, 1fr) auto auto;
         }
       }
 

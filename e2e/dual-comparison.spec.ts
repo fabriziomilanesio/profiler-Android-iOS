@@ -16,9 +16,11 @@ test.describe('dual comparison QoL', () => {
 
     const notice = page.locator('#dualPlatformNotice')
     await expect(notice).toBeVisible()
-    await expect(notice).toContainText('Frame-time jank, p90 and p99 are unavailable')
+    await expect(notice).toContainText('Frame-time jank, p90, p99, Network Data and Data Inspector')
     await expect(primary.locator('[data-cap="frameTimes"]')).toBeHidden()
     await expect(secondary.locator('[data-cap="frameTimes"]')).toBeHidden()
+    await expect(primary.locator('#appLaunched')).toBeHidden()
+    await expect(secondary.locator('#appLaunched')).toBeHidden()
 
     const primaryCard = await primary.locator('#devSelect').boundingBox()
     const secondaryCard = await secondary.locator('#devSelect').boundingBox()
@@ -26,6 +28,12 @@ test.describe('dual comparison QoL', () => {
     expect(secondaryCard).not.toBeNull()
     expect(Math.abs(primaryCard!.width - secondaryCard!.width)).toBeLessThanOrEqual(1)
     expect(Math.abs(primaryCard!.y - secondaryCard!.y)).toBeLessThanOrEqual(1)
+
+    const primaryApp = await primary.locator('#appSelect').boundingBox()
+    const secondaryApp = await secondary.locator('#appSelect').boundingBox()
+    expect(primaryApp).not.toBeNull()
+    expect(secondaryApp).not.toBeNull()
+    expect(Math.abs(primaryApp!.y - secondaryApp!.y)).toBeLessThanOrEqual(1)
 
     await page.locator('#dualStickyDevices').check()
     await primary.locator('footer').scrollIntoViewIfNeeded()
