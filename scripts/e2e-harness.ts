@@ -92,6 +92,9 @@ function startFeeder(): void {
           '"CurrentCapacity": 82}',
       )
     }
+    for (const s of live('syslog')) {
+      s.onLine('2026-08-27 12:00:00.000000 SampleApp{Unity}[777] <INFO>: dual log visible')
+    }
   }, 500)
 }
 

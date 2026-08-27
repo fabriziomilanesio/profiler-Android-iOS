@@ -16,7 +16,7 @@
  *
  * API para live.js (y para el export del ticket 029):
  *   LogsPanel.onLogs(entries)        — batch nuevo del WS
- *   LogsPanel.bootstrap()            — fetch + merge dedup de /api/logs
+ *   LogsPanel.bootstrap(pane)        — fetch + merge dedup de /api/logs
  *   LogsPanel.clear()                — cambio de app/device: panel limpio
  *   LogsPanel.getFilteredEntries()   — TODAS las entries que pasan el filtro
  *                                      actual, en el orden visible (029: export)
@@ -299,8 +299,9 @@
     appendLive(entries)
   }
 
-  function bootstrap() {
-    fetch('/api/logs?n=' + BOOTSTRAP_N)
+  function bootstrap(pane) {
+    var dataPane = pane === 'secondary' ? 'secondary' : 'primary'
+    fetch('/api/logs?n=' + BOOTSTRAP_N + '&pane=' + dataPane)
       .then(function (res) {
         return res.json()
       })

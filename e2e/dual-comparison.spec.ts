@@ -18,6 +18,8 @@ test.describe('dual comparison QoL', () => {
     await expect(secondary.locator('#devName')).toHaveText(
       await primary.locator('#devName').innerText(),
     )
+    await expect(primary.locator('#logsList .log-row').first()).toContainText('dual log visible')
+    await expect(secondary.locator('#logsList .log-row').first()).toContainText('dual log visible')
 
     const devices = await page.evaluate(async () => (await fetch('/api/devices')).json())
     expect(devices.secondary).toBeNull()
@@ -63,6 +65,7 @@ test.describe('dual comparison QoL', () => {
     await expect(secondary.locator('[data-cap="frameTimes"]')).toBeHidden()
     await expect(primary.locator('#appLaunched')).toBeHidden()
     await expect(secondary.locator('#appLaunched')).toBeHidden()
+    await expect(secondary.locator('#logsList .log-row').first()).toContainText('dual log visible')
 
     const primaryCard = await primary.locator('#devSelect').boundingBox()
     const secondaryCard = await secondary.locator('#devSelect').boundingBox()

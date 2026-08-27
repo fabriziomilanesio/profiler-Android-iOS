@@ -125,10 +125,10 @@
     })
   }
 
-  // Logs e inspector pertenecen a la sesión A; B sólo presenta sus métricas.
+  // El inspector pertenece a la sesión A; los logs siguen el carril de datos de cada panel.
   if (isEmbeddedPane && pane === 'secondary') {
     var secondaryStyle = document.createElement('style')
-    secondaryStyle.textContent = '#logs,#inspToggle,#inspWarn,#inspector{display:none!important}'
+    secondaryStyle.textContent = '#inspToggle,#inspWarn,#inspector{display:none!important}'
     document.head.appendChild(secondaryStyle)
   }
 
@@ -1006,7 +1006,7 @@
       ProfilerDashboard.setConnected(true)
       // bootstrap del panel de logs (últimas N del ring del server); el merge
       // dedupea contra lo que llegue por WS mientras tanto (ticket 028)
-      if (pane === 'primary') LogsPanel.bootstrap()
+      LogsPanel.bootstrap(dataPane)
     })
 
     ws.addEventListener('message', function (ev) {
@@ -1021,12 +1021,13 @@
         (msg.type === 'device' ||
           msg.type === 'sample' ||
           msg.type === 'app' ||
-          msg.type === 'connection') &&
+          msg.type === 'connection' ||
+          msg.type === 'logs') &&
         (msg.pane || 'primary') !== dataPane
       ) {
         return
       }
-      if (pane === 'secondary' && (msg.type === 'flow' || msg.type === 'logs')) return
+      if (pane === 'secondary' && msg.type === 'flow') return
       if (msg.type === 'device') {
         // cambio de device: las series del timeline y los logs son del device anterior
         if (device && device.serial !== msg.device.serial) {

@@ -23,6 +23,7 @@ interface SelectBody {
 
 /** Stream long-running fake (logcat): el test le inyecta líneas a mano. */
 interface FakeStream {
+  serial: string
   command: string
   onLine: (line: string) => void
   stopped: boolean
@@ -51,8 +52,8 @@ function fakeTransport(
       return deviceList
     },
     trackDevices: () => () => {},
-    streamShell: (_serial, command, onLine) => {
-      const s: FakeStream = { command, onLine, stopped: false }
+    streamShell: (serial, command, onLine) => {
+      const s: FakeStream = { serial, command, onLine, stopped: false }
       streams.push(s)
       return () => {
         s.stopped = true
@@ -650,6 +651,53 @@ describe('LiveServer logs (ticket 027)', () => {
       await new Promise((r) => setTimeout(r, 100)) // logFlushMs=20: sobra un flush
       expect(batches).toHaveLength(1)
       expect(batches[0]!.entries.map((e) => e.message)).toEqual(['burst 1', 'burst 2', 'burst 3'])
+      ws.close()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('el carril B conserva y emite únicamente sus propios logs', async () => {
+    const { server, url, streams } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const selected = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(selected.status).toBe(200)
+
+      const ws = new WebSocket(`${url.replace('http', 'ws')}/ws`)
+      const batches: Array<{ pane?: string; entries: Array<{ message: string }> }> = []
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(String(ev.data)) as { type: string }
+        if (msg.type === 'logs') batches.push(msg as never)
+      }
+      await new Promise<void>((resolve) => {
+        ws.onopen = () => resolve()
+      })
+
+      const primary = streams.find(
+        (stream) => stream.serial === 'FAKE-SERIAL' && stream.command.includes('--pid=111'),
+      )!
+      const secondary = streams.find(
+        (stream) => stream.serial === 'SERIAL-B' && stream.command.includes('--pid=111'),
+      )!
+      primary.onLine(UNITY_LINE('solo A'))
+      secondary.onLine(UNITY_LINE('solo B'))
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      const primaryRing = (await (await fetch(`${url}/api/logs?pane=primary`)).json()) as {
+        entries: Array<{ message: string }>
+      }
+      const secondaryRing = (await (await fetch(`${url}/api/logs?pane=secondary`)).json()) as {
+        entries: Array<{ message: string }>
+      }
+      expect(primaryRing.entries.map((entry) => entry.message)).toEqual(['solo A'])
+      expect(secondaryRing.entries.map((entry) => entry.message)).toEqual(['solo B'])
+      expect(batches.map((batch) => [batch.pane ?? 'primary', batch.entries[0]?.message])).toEqual([
+        ['primary', 'solo A'],
+        ['secondary', 'solo B'],
+      ])
       ws.close()
     } finally {
       await server.stop()

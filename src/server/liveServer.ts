@@ -144,8 +144,8 @@ function paneFromUrl(url: URL): DashboardPane {
   return url.searchParams.get('pane') === 'secondary' ? 'secondary' : 'primary'
 }
 
-/** Estado deliberadamente acotado del segundo panel: métricas en vivo, sin duplicar
- * exportes, inspector HTTP ni captura de logs (que siguen perteneciendo a la sesión A). */
+/** Estado deliberadamente acotado del segundo panel: métricas y logs en vivo, sin
+ * duplicar exportes ni el inspector HTTP (que siguen perteneciendo a la sesión A). */
 interface SecondaryLane {
   serial: string | null
   device: DeviceInfo | null
@@ -155,6 +155,10 @@ interface SecondaryLane {
   capabilities: Capabilities
   timer: ReturnType<typeof setInterval> | null
   iosProcessTimer: ReturnType<typeof setInterval> | null
+  logCapture: LogcatCapture | null
+  iosLogCapture: IosLogCapture | null
+  logRing: LogRing
+  pendingLogs: LogEntry[]
   ticking: boolean
 }
 
@@ -260,6 +264,10 @@ export class LiveServer {
     capabilities: capabilitiesFor('android'),
     timer: null,
     iosProcessTimer: null,
+    logCapture: null,
+    iosLogCapture: null,
+    logRing: new LogRing(),
+    pendingLogs: [],
     ticking: false,
   }
 
@@ -604,11 +612,22 @@ export class LiveServer {
     if (this.pendingWsLogs.length >= LOG_BATCH_MAX) this.flushLogs()
   }
 
+  /** Los logs de B tienen ring y canal WS propios. No se persisten en la sesión A. */
+  private onSecondaryLogEntry(e: LogEntry): void {
+    this.secondary.logRing.push(e)
+    this.secondary.pendingLogs.push(e)
+    if (this.secondary.pendingLogs.length >= LOG_BATCH_MAX) this.flushLogs()
+  }
+
   /** Batch por tick del flush timer: un mensaje WS con N entries + un append NDJSON. */
   private flushLogs(): void {
     if (this.pendingWsLogs.length > 0) {
       this.server?.broadcast(logsMessage(this.pendingWsLogs))
       this.pendingWsLogs = []
+    }
+    if (this.secondary.pendingLogs.length > 0) {
+      this.server?.broadcast(logsMessage(this.secondary.pendingLogs, 'secondary'))
+      this.secondary.pendingLogs = []
     }
     if (this.pendingSinkLogs.length > 0) {
       this.logSink?.append(this.pendingSinkLogs)
@@ -626,7 +645,8 @@ export class LiveServer {
         return Response.json({ error: 'n inválido' }, { status: 400 })
       }
     }
-    return Response.json({ entries: this.logRing.last(n) })
+    const ring = paneFromUrl(url) === 'secondary' ? this.secondary.logRing : this.logRing
+    return Response.json({ entries: ring.last(n) })
   }
 
   /**
@@ -790,6 +810,7 @@ export class LiveServer {
     lane.ticking = true
     try {
       await lane.sampler.refreshPid()
+      lane.logCapture?.setPid(lane.sampler.processId > 0 ? lane.sampler.processId : null)
       const sample = await lane.sampler.sampleOnce()
       this.server?.broadcast(sampleMessage(sample, 'secondary'))
     } catch {
@@ -812,6 +833,12 @@ export class LiveServer {
     this.stopSecondaryTimer()
     this.secondary.iosSource?.stop()
     this.secondary.iosSource = null
+    this.secondary.logCapture?.stop()
+    this.secondary.logCapture = null
+    this.secondary.iosLogCapture?.stop()
+    this.secondary.iosLogCapture = null
+    this.secondary.logRing = new LogRing()
+    this.secondary.pendingLogs = []
     const sampler = this.secondary.sampler
     this.secondary.sampler = null
     await sampler?.dispose()
@@ -855,6 +882,18 @@ export class LiveServer {
         ...(this.opts.iosStaleMs !== undefined ? { staleMs: this.opts.iosStaleMs } : {}),
       })
       this.secondary.iosSource.start()
+      if (this.opts.iosTransport?.stream) {
+        this.secondary.iosLogCapture = new IosLogCapture({
+          transport: { stream: this.opts.iosTransport.stream.bind(this.opts.iosTransport) },
+          serial,
+          pid: proc?.pid ?? null,
+          processName: proc?.name ?? executable,
+          onEntries: (entries) => {
+            for (const entry of entries) this.onSecondaryLogEntry(entry)
+          },
+        })
+        this.secondary.iosLogCapture.start()
+      }
       // iOS no tiene equivalente a monkey: si la app B se abre después, enganchar el
       // proceso sin recrear Instruments ni bloquear el panel A.
       this.secondary.iosProcessTimer = setInterval(() => {
@@ -875,6 +914,7 @@ export class LiveServer {
               executable,
             )
             this.secondary.iosSource.setProcessName(current?.name ?? '')
+            this.secondary.iosLogCapture?.setPid(current?.pid ?? null)
             if (this.secondary.app.pid !== (current?.pid ?? null)) {
               this.secondary.app = { ...this.secondary.app, pid: current?.pid ?? null }
               this.server?.broadcast(appMessage(this.secondary.app, 'secondary'))
@@ -904,6 +944,10 @@ export class LiveServer {
       await sampler.init()
       this.secondary.sampler = sampler
       this.secondary.app = { packageName: pkg, pid, launched: false }
+      this.secondary.logCapture = new LogcatCapture(this.opts.transport, serial, pkg, (entry) =>
+        this.onSecondaryLogEntry(entry),
+      )
+      this.secondary.logCapture.start(pid)
       this.secondary.timer = setInterval(() => void this.tickSecondary(), this.intervalMs)
       void this.tickSecondary()
     }
