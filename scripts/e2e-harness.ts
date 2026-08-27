@@ -23,6 +23,13 @@ const IOS_DEVICE: AdbDevice = {
   platform: 'ios',
 }
 
+const IOS_DEVICE_B: AdbDevice = {
+  serial: 'UDID-E2E-B',
+  state: 'device',
+  description: 'model:iPhone16,2 ios:26.6 transport:USB',
+  platform: 'ios',
+}
+
 /** adb que no ve nada: el escenario es 100 % iOS. */
 const noAndroid: AdbTransport = {
   isAvailable: async () => true,
@@ -51,7 +58,7 @@ const live = (cmd: string): FakeStream[] =>
 
 const iosTransport = {
   isAvailable: async () => true,
-  devices: async () => (plugged ? [IOS_DEVICE] : []),
+  devices: async () => (plugged ? [IOS_DEVICE, IOS_DEVICE_B] : []),
   processes: async () => (plugged ? [{ pid: 777, name: 'SampleApp' }] : null),
   appExecutable: async () => 'SampleApp',
   apps: async () => [{ id: PKG, label: 'Sample App', executable: 'SampleApp' }],

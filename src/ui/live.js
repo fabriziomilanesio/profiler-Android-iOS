@@ -13,13 +13,21 @@
   var pkg = null
   var device = null
   var reconnectDelay = 1000
-  // El mismo dashboard se reutiliza dentro de cada mitad del split. Cada iframe sólo
-  // procesa su propio carril y nunca puede cambiar el sampler de la otra mitad.
-  var pane =
-    new URLSearchParams(location.search).get('pane') === 'secondary' ? 'secondary' : 'primary'
+  // El dashboard se reutiliza dentro de cada mitad del split. Cada iframe procesa un
+  // carril independiente y reporta su plataforma al contenedor para decidir qué métricas
+  // son realmente comparables.
+  var searchParams = new URLSearchParams(location.search)
+  var pane = searchParams.get('pane') === 'secondary' ? 'secondary' : 'primary'
   var paneQuery = 'pane=' + pane
-  var isEmbeddedPane = new URLSearchParams(location.search).has('pane')
+  var isEmbeddedPane = searchParams.has('pane')
   var dualInspectorStyle = null
+  var dualFrameTimesStyle = null
+  var stickyDeviceEnabled = false
+  var stickyDeviceCard = null
+
+  if (isEmbeddedPane) {
+    document.body.classList.add('dual-pane', 'dual-pane-' + pane)
+  }
 
   function setDualInspectorHidden(hidden) {
     if (!isEmbeddedPane) return
@@ -34,11 +42,69 @@
     }
   }
 
+  /** En Android+iOS no alcanza con que el iframe iOS oculte sus nulls: las tres métricas
+   * también se ocultan en Android porque ya no existe un par que comparar. */
+  function setDualFrameTimesComparable(comparable) {
+    if (!isEmbeddedPane) return
+    if (!comparable && !dualFrameTimesStyle) {
+      dualFrameTimesStyle = document.createElement('style')
+      dualFrameTimesStyle.textContent = '[data-cap="frameTimes"]{display:none!important}'
+      document.head.appendChild(dualFrameTimesStyle)
+    } else if (comparable && dualFrameTimesStyle) {
+      dualFrameTimesStyle.remove()
+      dualFrameTimesStyle = null
+    }
+  }
+
+  function stripIds(root) {
+    root.removeAttribute('id')
+    var withIds = root.querySelectorAll('[id]')
+    for (var i = 0; i < withIds.length; i++) withIds[i].removeAttribute('id')
+  }
+
+  function syncStickyDeviceCard() {
+    if (!isEmbeddedPane || !stickyDeviceEnabled) return
+    var source = document.getElementById('devBtn')
+    if (!source) return
+    if (!stickyDeviceCard) {
+      stickyDeviceCard = document.createElement('div')
+      stickyDeviceCard.className = 'device-card card dual-sticky-card'
+      document.body.appendChild(stickyDeviceCard)
+    }
+    var clone = source.cloneNode(true)
+    stripIds(clone)
+    clone.title = 'Back to device controls'
+    clone.setAttribute('aria-label', 'Back to device controls')
+    clone.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+    stickyDeviceCard.replaceChildren(clone)
+  }
+
+  function updateStickyDeviceCard() {
+    if (!stickyDeviceCard) return
+    var source = document.getElementById('devSelect')
+    var pastSource = source && source.getBoundingClientRect().bottom <= 8
+    stickyDeviceCard.classList.toggle('visible', stickyDeviceEnabled && Boolean(pastSource))
+  }
+
+  function setStickyDeviceEnabled(enabled) {
+    if (!isEmbeddedPane) return
+    stickyDeviceEnabled = enabled === true
+    document.body.classList.toggle('dual-sticky-device', stickyDeviceEnabled)
+    if (stickyDeviceEnabled) syncStickyDeviceCard()
+    updateStickyDeviceCard()
+  }
+
   if (isEmbeddedPane) {
+    window.addEventListener('scroll', updateStickyDeviceCard, { passive: true })
+    window.addEventListener('resize', updateStickyDeviceCard)
     window.addEventListener('message', function (event) {
-      if (event.origin !== location.origin || !event.data || event.data.type !== 'dual-inspector')
+      if (event.origin !== location.origin || !event.data || event.data.type !== 'dual-layout')
         return
-      setDualInspectorHidden(event.data.hidden === true)
+      setDualInspectorHidden(event.data.hideInspector === true)
+      setDualFrameTimesComparable(event.data.frameTimesComparable !== false)
+      setStickyDeviceEnabled(event.data.stickyDevices === true)
     })
   }
 
@@ -49,8 +115,21 @@
     document.head.appendChild(secondaryStyle)
   }
 
-  /** Activa dos instancias del dashboard existente en iframes del mismo origen. Así cada
-   * panel conserva sus charts, resize handlers y estado sin copiar miles de líneas de UI. */
+  function stickyPreference() {
+    try {
+      return localStorage.getItem('dualStickyDevices') === 'true'
+    } catch (e) {
+      return false
+    }
+  }
+
+  function saveStickyPreference(enabled) {
+    try {
+      localStorage.setItem('dualStickyDevices', String(enabled))
+    } catch (e) {}
+  }
+
+  /** Activa dos instancias del dashboard existente en iframes del mismo origen. */
   function installDualToggle() {
     if (isEmbeddedPane) return
     var button = document.createElement('button')
@@ -63,10 +142,14 @@
     if (!header) return
     header.insertBefore(button, header.firstChild)
 
+    var onPaneDevice = null
+
     function closeDual() {
       fetch('/api/dual', { method: 'POST', body: JSON.stringify({ enabled: false }) }).catch(
         function () {},
       )
+      if (onPaneDevice) window.removeEventListener('message', onPaneDevice)
+      onPaneDevice = null
       var root = document.getElementById('dualRoot')
       if (root) root.remove()
       document.body.style.overflow = ''
@@ -76,26 +159,87 @@
 
     function openDual() {
       fetch('/api/dual', { method: 'POST', body: JSON.stringify({ enabled: true }) })
-        .then(function (r) {
-          if (!r.ok) throw new Error('could not enable dual mode')
+        .then(function (response) {
+          if (!response.ok) throw new Error('could not enable dual mode')
+
           var root = document.createElement('div')
           root.id = 'dualRoot'
           root.innerHTML =
-            '<div class="dual-toolbar"><strong>Dual comparison</strong><span>Device A and B stream independently</span><button type="button">Exit dual mode</button></div>' +
-            '<div class="dual-panels"><iframe title="Device A metrics" src="/?pane=primary"></iframe><iframe title="Device B metrics" src="/?pane=secondary"></iframe></div>'
-          root.querySelector('button').addEventListener('click', closeDual)
-          document.body.appendChild(root)
-          // El panel A puede ser Android y anunciarse antes que B: ocultarlo desde el
-          // primer frame, sin depender de la plataforma de los devices.
-          var frames = root.querySelectorAll('iframe')
+            '<div class="dual-toolbar">' +
+            '<div class="dual-toolbar-title"><strong>Dual comparison</strong><span>independent live streams</span></div>' +
+            '<div class="dual-platform-notice" id="dualPlatformNotice" role="status" hidden></div>' +
+            '<span class="dual-toolbar-spacer"></span>' +
+            '<label class="dual-sticky-toggle" title="Keep a compact device card visible while each metrics panel scrolls">' +
+            '<input id="dualStickyDevices" type="checkbox"><span class="dual-sticky-track"></span><span>Pin device cards</span></label>' +
+            '<button class="dual-exit" type="button">Exit dual mode</button></div>' +
+            '<div class="dual-panels">' +
+            '<section class="dual-panel"><div class="dual-panel-label">Device A</div><iframe data-pane="primary" title="Device A metrics" src="/?pane=primary"></iframe></section>' +
+            '<section class="dual-panel"><div class="dual-panel-label">Device B</div><iframe data-pane="secondary" title="Device B metrics" src="/?pane=secondary"></iframe></section>' +
+            '</div>'
+
+          var platforms = { primary: null, secondary: null }
+          var sticky = root.querySelector('#dualStickyDevices')
+          var notice = root.querySelector('#dualPlatformNotice')
+          var frames = root.querySelectorAll('iframe[data-pane]')
+          sticky.checked = stickyPreference()
+
+          function comparisonState() {
+            return DualComparison.stateFor(platforms)
+          }
+
+          function postLayout(frame) {
+            var state = comparisonState()
+            frame.contentWindow.postMessage(
+              {
+                type: 'dual-layout',
+                hideInspector: true,
+                frameTimesComparable: state.frameTimesComparable,
+                stickyDevices: sticky.checked,
+              },
+              location.origin,
+            )
+          }
+
+          function updateComparison() {
+            var state = comparisonState()
+            notice.hidden = !state.hasIos
+            notice.textContent = state.notice
+            for (var i = 0; i < frames.length; i++) postLayout(frames[i])
+          }
+
+          onPaneDevice = function (event) {
+            if (
+              event.origin !== location.origin ||
+              !event.data ||
+              event.data.type !== 'dual-device'
+            )
+              return
+            var reportedPane =
+              event.data.pane === 'secondary'
+                ? 'secondary'
+                : event.data.pane === 'primary'
+                  ? 'primary'
+                  : null
+            if (!reportedPane) return
+            var frame = root.querySelector('iframe[data-pane="' + reportedPane + '"]')
+            if (!frame || event.source !== frame.contentWindow) return
+            platforms[reportedPane] = event.data.platform
+            updateComparison()
+          }
+          window.addEventListener('message', onPaneDevice)
+
+          sticky.addEventListener('change', function () {
+            saveStickyPreference(sticky.checked)
+            updateComparison()
+          })
+          root.querySelector('.dual-exit').addEventListener('click', closeDual)
           for (var i = 0; i < frames.length; i++) {
             frames[i].addEventListener('load', function () {
-              this.contentWindow.postMessage(
-                { type: 'dual-inspector', hidden: true },
-                location.origin,
-              )
+              postLayout(this)
             })
           }
+
+          document.body.appendChild(root)
           document.body.style.overflow = 'hidden'
           button.textContent = 'Dual comparison active'
           button.classList.add('active')
@@ -110,18 +254,7 @@
     })
   }
 
-  if (!isEmbeddedPane) {
-    var dualStyle = document.createElement('style')
-    dualStyle.textContent =
-      '#dualRoot{position:fixed;inset:0;z-index:10000;background:var(--bg,#10151c);display:grid;grid-template-rows:48px minmax(0,1fr)}' +
-      '.dual-toolbar{display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.15);font:600 13px Inter,system-ui,sans-serif}' +
-      '.dual-toolbar span{opacity:.72;font-weight:400;flex:1}.dual-toolbar button{border:0;border-radius:7px;padding:7px 10px;cursor:pointer}' +
-      '.dual-panels{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px;background:rgba(255,255,255,.2);min-height:0}' +
-      '.dual-panels iframe{border:0;width:100%;height:100%;background:#10151c}' +
-      '@media(max-width:900px){.dual-panels{grid-template-columns:1fr;overflow:auto}.dual-panels iframe{min-height:760px}}'
-    document.head.appendChild(dualStyle)
-    installDualToggle()
-  }
+  if (!isEmbeddedPane) installDualToggle()
 
   // --- Micro-animaciones (Motion vendoreado; feedback HITL 2026-08-01) ---
   // Guardas: sin window.Motion (archivo faltante) o con prefers-reduced-motion
@@ -861,6 +994,20 @@
         }
         // el package lo anuncia el server con {type:"app"} — acá solo la ficha
         ProfilerDashboard.setDevice(device, pkg)
+        if (isEmbeddedPane) {
+          syncStickyDeviceCard()
+          updateStickyDeviceCard()
+          window.parent.postMessage(
+            {
+              type: 'dual-device',
+              pane: pane,
+              // Compatibilidad con fichas Android históricas: plataforma ausente = Android.
+              platform: device.platform === 'ios' ? 'ios' : 'android',
+              serial: device.serial,
+            },
+            location.origin,
+          )
+        }
       } else if (msg.type === 'sample') {
         ProfilerDashboard.render(msg.sample)
       } else if (msg.type === 'flow') {
