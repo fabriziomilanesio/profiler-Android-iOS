@@ -1,6 +1,24 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('dual comparison QoL', () => {
+  test('keeps connected devices visible during a slow refresh', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('#dualToggle').click()
+    const secondary = page.locator('iframe[data-pane="secondary"]').contentFrame()
+    await secondary.locator('#devBtn').click()
+    await expect(secondary.locator('#devList')).toContainText('UDID-E2E-B')
+
+    await fetch('http://localhost:8789/slow-devices')
+    try {
+      await secondary.locator('#devRefresh').click()
+      await expect(secondary.locator('#devRefresh')).toContainText('Searching')
+      await expect(secondary.locator('#devList')).toContainText('UDID-E2E-B')
+      await expect(secondary.locator('#devRefresh')).toHaveText('⟳ Refresh', { timeout: 3000 })
+    } finally {
+      await fetch('http://localhost:8789/normal-devices')
+    }
+  })
+
   test('mirrors device A in B without starting a secondary lane', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('#recLabel')).toHaveText('LIVE')

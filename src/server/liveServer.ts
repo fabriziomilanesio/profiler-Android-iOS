@@ -1201,9 +1201,12 @@ export class LiveServer {
    */
   private refreshDeviceList(): Promise<AdbDevice[]> {
     if (this.deviceListRefresh) return this.deviceListRefresh
+    const cached = this.deviceListCache?.devices ?? this.knownDevices()
+    const cachedAndroid = cached.filter((device) => device.platform !== 'ios')
+    const cachedIos = cached.filter((device) => device.platform === 'ios')
     const refresh = Promise.all([
-      this.opts.transport.devices().catch(() => [] as AdbDevice[]),
-      this.opts.iosTransport?.devices().catch(() => [] as AdbDevice[]) ?? Promise.resolve([]),
+      this.opts.transport.devices().catch(() => cachedAndroid),
+      this.opts.iosTransport?.devices().catch(() => cachedIos) ?? Promise.resolve([]),
     ])
       .then(([android, ios]) => {
         const devices = [...android, ...ios]
@@ -1245,7 +1248,8 @@ export class LiveServer {
       this.deviceListCache !== null && Date.now() - this.deviceListCache.updatedAt < 3000
     let devices: AdbDevice[]
     if (force) {
-      devices = await this.refreshDeviceList()
+      void this.refreshDeviceList()
+      devices = this.deviceListCache?.devices ?? this.knownDevices()
     } else if (cacheFresh) {
       devices = this.deviceListCache!.devices
     } else {

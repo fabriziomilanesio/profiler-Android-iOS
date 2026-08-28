@@ -50,6 +50,7 @@ interface FakeStream {
 const streams: FakeStream[] = []
 /** el cable: con false, ni `devices()` ni `processes()` ven al iPhone. */
 let plugged = true
+let deviceDiscoveryDelayMs = 0
 /** empuja datos a los canales vivos para que el dashboard muestre valores reales. */
 let feeder: ReturnType<typeof setInterval> | null = null
 
@@ -58,7 +59,12 @@ const live = (cmd: string): FakeStream[] =>
 
 const iosTransport = {
   isAvailable: async () => true,
-  devices: async () => (plugged ? [IOS_DEVICE, IOS_DEVICE_B] : []),
+  devices: async () => {
+    if (deviceDiscoveryDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, deviceDiscoveryDelayMs))
+    }
+    return plugged ? [IOS_DEVICE, IOS_DEVICE_B] : []
+  },
   processes: async () => (plugged ? [{ pid: 777, name: 'SampleApp' }] : null),
   appExecutable: async () => 'SampleApp',
   apps: async () => [{ id: PKG, label: 'Sample App', executable: 'SampleApp' }],
@@ -137,6 +143,14 @@ Bun.serve({
     }
     if (pathname === '/plug') {
       plugged = true
+      return new Response('ok')
+    }
+    if (pathname === '/slow-devices') {
+      deviceDiscoveryDelayMs = 1500
+      return new Response('ok')
+    }
+    if (pathname === '/normal-devices') {
+      deviceDiscoveryDelayMs = 0
       return new Response('ok')
     }
     return new Response('not found', { status: 404 })

@@ -124,7 +124,7 @@ async function startServer(
     sessionsDir: extra.sessionsDir,
   })
   const { url } = await server.start()
-  return { server, url, cmds, streams, deviceQueries, store }
+  return { server, url, cmds, streams, deviceQueries, store, transport: t }
 }
 
 describe('LiveServer /api/packages', () => {
@@ -235,11 +235,49 @@ describe('LiveServer /api/devices', () => {
   test('lista los devices de adb en el momento + el activo', async () => {
     const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
     try {
-      const res = await fetch(`${url}/api/devices?refresh=1`)
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as DevicesBody
+      const initial = await fetch(`${url}/api/devices?refresh=1`)
+      expect(initial.status).toBe(200)
+      const initialBody = (await initial.json()) as DevicesBody
+      expect(initialBody.devices.map((device) => device.serial)).toContain('FAKE-SERIAL')
+      expect(initialBody.refreshing).toBe(true)
+
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      const body = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
       expect(body.devices).toEqual(DEVICES)
       expect(body.current).toBe('FAKE-SERIAL')
+      expect(body.refreshing).toBe(false)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('refresh responde con el snapshot anterior sin borrar devices mientras busca', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      await fetch(`${url}/api/devices?refresh=1`)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+
+      const refreshing = (await (await fetch(`${url}/api/devices?refresh=1`)).json()) as DevicesBody
+      expect(refreshing.devices).toEqual(DEVICES)
+      expect(refreshing.refreshing).toBe(true)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('un fallo transitorio de discovery conserva el último resultado por plataforma', async () => {
+    const { server, url, transport } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      await fetch(`${url}/api/devices?refresh=1`)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      transport.devices = async () => {
+        throw new Error('adb temporalmente no responde')
+      }
+
+      await fetch(`${url}/api/devices?refresh=1`)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      const body = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(body.devices).toEqual(DEVICES)
     } finally {
       await server.stop()
     }

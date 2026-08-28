@@ -457,18 +457,27 @@
   var devSwitching = false
   var devRefreshTimer = null
 
+  function setDeviceRefreshing(refreshing) {
+    devSel.refresh.disabled = refreshing
+    devSel.refresh.textContent = refreshing ? '⟳ Searching…' : '⟳ Refresh'
+    devSel.list.setAttribute('aria-busy', refreshing ? 'true' : 'false')
+    if (refreshing && devSel.list.children.length === 0) {
+      devSel.empty.hidden = false
+      devSel.empty.textContent = 'Looking for devices…'
+    }
+  }
+
   function loadDevices(force) {
     if (devRefreshTimer) clearTimeout(devRefreshTimer)
     devRefreshTimer = null
-    devSel.empty.hidden = false
-    devSel.empty.textContent = 'Looking for devices…'
-    devSel.list.innerHTML = ''
+    setDeviceRefreshing(true)
     fetch('/api/devices' + (force === true ? '?refresh=1' : ''))
       .then(function (r) {
         return r.json()
       })
       .then(function (data) {
         renderDeviceList(data)
+        setDeviceRefreshing(data.refreshing === true)
         if (data.refreshing && !devSel.pop.hidden) {
           devRefreshTimer = setTimeout(function () {
             loadDevices(false)
@@ -476,7 +485,11 @@
         }
       })
       .catch(function () {
-        devSel.empty.textContent = 'Could not list the devices.'
+        setDeviceRefreshing(false)
+        if (devSel.list.children.length === 0) {
+          devSel.empty.hidden = false
+          devSel.empty.textContent = 'Could not list the devices.'
+        }
       })
   }
 
