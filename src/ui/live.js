@@ -237,6 +237,18 @@
               )
               return
             }
+            if (event.data.type === 'dual-detach-secondary-mirror') {
+              var detachPrimaryFrame = root.querySelector('iframe[data-pane="primary"]')
+              var detachSecondaryFrame = root.querySelector('iframe[data-pane="secondary"]')
+              if (
+                !detachPrimaryFrame ||
+                !detachSecondaryFrame ||
+                event.source !== detachPrimaryFrame.contentWindow
+              )
+                return
+              detachSecondaryFrame.contentWindow.location.replace('/?pane=secondary&slot=secondary')
+              return
+            }
             if (event.data.type !== 'dual-device') return
             var reportedPane =
               event.data.pane === 'secondary'
@@ -547,8 +559,12 @@
         return r.json()
       })
       .then(function (body) {
-        if (pane === 'primary' && body.mirrorSecondary === true && isEmbeddedPane) {
-          window.parent.postMessage({ type: 'dual-mirror-secondary' }, location.origin)
+        if (pane === 'primary' && isEmbeddedPane) {
+          if (body.detachSecondaryMirror === true) {
+            window.parent.postMessage({ type: 'dual-detach-secondary-mirror' }, location.origin)
+          } else if (body.mirrorSecondary === true) {
+            window.parent.postMessage({ type: 'dual-mirror-secondary' }, location.origin)
+          }
         }
         if (pane !== 'secondary') return
         if (body.mirror === true && !isMirrorPane) {

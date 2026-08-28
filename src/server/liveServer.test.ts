@@ -346,6 +346,33 @@ describe('LiveServer /api/device', () => {
     }
   })
 
+  test('si A cambia, B conserva el device que espejaba como carril independiente', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const mirror = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'FAKE-SERIAL', pane: 'secondary' }),
+      })
+      expect(mirror.status).toBe(200)
+
+      const switched = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'primary' }),
+      })
+      expect(switched.status).toBe(200)
+      const body = (await switched.json()) as DeviceSwitchBody & {
+        detachSecondaryMirror: boolean
+      }
+      expect(body.detachSecondaryMirror).toBe(true)
+
+      const devices = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(devices.current).toBe('SERIAL-B')
+      expect(devices.secondary).toBe('FAKE-SERIAL')
+    } finally {
+      await server.stop()
+    }
+  })
+
   test('si A cambia al device de B, B se convierte en espejo y libera su carril', async () => {
     const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
     try {

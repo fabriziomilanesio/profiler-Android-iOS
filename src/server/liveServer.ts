@@ -270,6 +270,8 @@ export class LiveServer {
     pendingLogs: [],
     ticking: false,
   }
+  /** Serial concreto que B está espejando. El mirror no debe seguir a A si A cambia. */
+  private secondaryMirrorSerial: string | null = null
 
   constructor(private readonly opts: LiveServerOptions) {
     this.serial = opts.serial ?? null
@@ -1292,6 +1294,7 @@ export class LiveServer {
       return Response.json({ error: 'enabled debe ser boolean' }, { status: 400 })
     if (!enabled) {
       await this.stopSecondary()
+      this.secondaryMirrorSerial = null
       this.server?.broadcast(connectionMessage('lost', null, 'secondary'))
     }
     return Response.json({ ok: true, enabled, secondary: this.secondary.serial })
@@ -1326,6 +1329,7 @@ export class LiveServer {
         // sampler/stream contra el teléfono. La UI recarga B leyendo el carril primario.
         if (serial === this.serial) {
           await this.stopSecondary()
+          this.secondaryMirrorSerial = serial
           return Response.json({
             ok: true,
             mirror: true,
@@ -1342,23 +1346,47 @@ export class LiveServer {
           return Response.json({ error: `device en estado "${target.state}"` }, { status: 409 })
         }
         const result = await this.startSecondary(serial, undefined, target)
+        this.secondaryMirrorSerial = null
         return Response.json({ ok: true, ...result })
       }
       if (serial === this.serial) {
         return Response.json({ ok: true, device: this.device, app: this.appStatus })
       }
+      const mirroredSerial =
+        this.secondaryMirrorSerial === this.serial ? this.secondaryMirrorSerial : null
+      const mirroredPackage = this.appStatus?.packageName ?? this.opts.packageName
+      const mirroredDevice = mirroredSerial
+        ? this.knownDevices().find((device) => device.serial === mirroredSerial)
+        : undefined
       const target = await this.resolveConnectedDevice(serial)
       if (!target) return Response.json({ error: 'device no conectado' }, { status: 404 })
       if (target.state !== 'device') {
         return Response.json({ error: `device en estado "${target.state}"` }, { status: 409 })
       }
       const mirrorSecondary = serial === this.secondary.serial
-      if (mirrorSecondary) await this.stopSecondary()
+      if (mirrorSecondary) {
+        await this.stopSecondary()
+        this.secondaryMirrorSerial = serial
+      }
       const result =
         target.platform === 'ios'
           ? await this.switchToIosDevice(target)
           : await this.switchDevice(serial)
-      return Response.json({ ok: true, mirrorSecondary, ...result })
+      let detachSecondaryMirror = false
+      if (mirroredSerial && mirroredDevice) {
+        // B estaba espejando el device anterior de A. Al mover A, conservar ese device
+        // como B independiente en vez de hacer que el mirror siga al nuevo A.
+        this.secondaryMirrorSerial = null
+        detachSecondaryMirror = true
+        try {
+          await this.startSecondary(mirroredSerial, mirroredPackage, mirroredDevice)
+        } catch {
+          // El switch de A ya terminó y no debe revertirse porque el device anterior se
+          // haya desconectado. B vuelve igual a modo independiente, mostrando espera.
+          await this.stopSecondary()
+        }
+      }
+      return Response.json({ ok: true, mirrorSecondary, detachSecondaryMirror, ...result })
     } catch (err) {
       return Response.json({ error: String(err) }, { status: 500 })
     } finally {

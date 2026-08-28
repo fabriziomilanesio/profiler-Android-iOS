@@ -45,6 +45,13 @@ test.describe('dual comparison QoL', () => {
 
     const devices = await page.evaluate(async () => (await fetch('/api/devices')).json())
     expect(devices.secondary).toBeNull()
+
+    await primary.locator('#devBtn').click()
+    await primary.locator('#devList button').filter({ hasText: 'UDID-E2E-B' }).click()
+    await expect(page.locator('[data-pane-label="secondary"]')).toHaveText('Device B')
+    await expect(secondary.locator('body')).not.toHaveClass(/dual-pane-mirror/)
+    await expect(primary.locator('#devName')).toContainText('iPhone 15 Pro Max')
+    await expect(secondary.locator('#devName')).toContainText('iPhone 14 Pro Max')
   })
 
   test('also mirrors B when A switches to the device already selected there', async ({ page }) => {
