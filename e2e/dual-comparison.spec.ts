@@ -114,5 +114,18 @@ test.describe('dual comparison QoL', () => {
     await secondary.locator('footer').scrollIntoViewIfNeeded()
     await expect(primary.locator('.dual-sticky-card')).toHaveClass(/visible/)
     await expect(secondary.locator('.dual-sticky-card')).toHaveClass(/visible/)
+
+    await expect(page.locator('#dualSettingsToggle')).toBeVisible()
+    await page.locator('#dualSettingsToggle').click()
+    await expect(page.locator('#dualSettingsDrawer')).toBeVisible()
+    await expect(page.locator('#dualComparisonExport')).toContainText('Export Comparison Report')
+    await expect(page.locator('#dualAppFilter')).toBeVisible()
+    await expect(page.locator('#dualSampling')).toBeVisible()
+    await expect(page.locator('#dualTargetFps')).toBeVisible()
+    await page.locator('.dual-settings-close').click()
+
+    await primary.locator('#menuBtn').click()
+    await expect(primary.locator('#panelAppearance')).toBeVisible()
+    await expect(primary.locator('#exportRow')).toBeHidden()
   })
 })

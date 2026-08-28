@@ -27,6 +27,62 @@
   var dualLaunchStatusStyle = null
   var stickyDeviceEnabled = false
   var stickyDeviceCard = null
+  var panelAppearance = null
+  var ACCENTS = {
+    magenta: '#eb008b',
+    cyan: '#00a89e',
+    violet: '#7c5ce6',
+    amber: '#d88a00',
+  }
+
+  function defaultAppearance(whichPane) {
+    return { theme: 'dark', accent: whichPane === 'secondary' ? 'cyan' : 'magenta' }
+  }
+
+  function appearanceStorageKey(whichPane) {
+    return 'dualAppearance.' + whichPane
+  }
+
+  function readAppearance(whichPane) {
+    try {
+      var value = JSON.parse(localStorage.getItem(appearanceStorageKey(whichPane)) || 'null')
+      if (value && (value.theme === 'dark' || value.theme === 'light') && ACCENTS[value.accent]) {
+        return value
+      }
+    } catch (e) {}
+    return defaultAppearance(whichPane)
+  }
+
+  function applyPanelAppearance(next, announce) {
+    if (!isEmbeddedPane || !next) return
+    panelAppearance = {
+      theme: next.theme === 'light' ? 'light' : 'dark',
+      accent: ACCENTS[next.accent] ? next.accent : defaultAppearance(pane).accent,
+    }
+    ProfilerDashboard.setTheme(panelAppearance.theme)
+    var color = ACCENTS[panelAppearance.accent]
+    document.body.style.setProperty('--accent', color)
+    document.body.style.setProperty('--accent2', color)
+    document.body.style.setProperty('--accent2-ink', color)
+    try {
+      localStorage.setItem(appearanceStorageKey(pane), JSON.stringify(panelAppearance))
+    } catch (e) {}
+    var themeInput = document.getElementById('panelTheme')
+    if (themeInput) themeInput.checked = panelAppearance.theme === 'dark'
+    var choices = document.querySelectorAll('#panelAccents [data-accent]')
+    for (var i = 0; i < choices.length; i++) {
+      choices[i].classList.toggle(
+        'active',
+        choices[i].getAttribute('data-accent') === panelAppearance.accent,
+      )
+    }
+    if (announce !== false) {
+      window.parent.postMessage(
+        { type: 'dual-appearance', pane: pane, appearance: panelAppearance },
+        location.origin,
+      )
+    }
+  }
 
   if (isEmbeddedPane) {
     document.body.classList.add('dual-pane', 'dual-pane-' + pane)
@@ -116,12 +172,20 @@
     window.addEventListener('scroll', updateStickyDeviceCard, { passive: true })
     window.addEventListener('resize', updateStickyDeviceCard)
     window.addEventListener('message', function (event) {
-      if (event.origin !== location.origin || !event.data || event.data.type !== 'dual-layout')
-        return
-      setDualInspectorHidden(event.data.hideInspector === true)
-      setDualFrameTimesComparable(event.data.frameTimesComparable !== false)
-      setDualLaunchStatusComparable(event.data.launchStatusComparable !== false)
-      setStickyDeviceEnabled(event.data.stickyDevices === true)
+      if (event.origin !== location.origin || !event.data) return
+      if (event.data.type === 'dual-layout') {
+        setDualInspectorHidden(event.data.hideInspector === true)
+        setDualFrameTimesComparable(event.data.frameTimesComparable !== false)
+        setDualLaunchStatusComparable(event.data.launchStatusComparable !== false)
+        setStickyDeviceEnabled(event.data.stickyDevices === true)
+        applyPanelAppearance(event.data.appearance, false)
+      } else if (event.data.type === 'dual-shared-config' && event.data.config) {
+        ProfilerDashboard.setFpsTarget(event.data.config.fpsTarget)
+        appSel.chip.textContent =
+          event.data.config.filterTerm.charAt(0).toUpperCase() +
+          event.data.config.filterTerm.slice(1)
+        appData = null
+      }
     })
   }
 
@@ -188,13 +252,35 @@
             '<span class="dual-toolbar-spacer"></span>' +
             '<label class="dual-sticky-toggle" title="Keep a compact device card visible while each metrics panel scrolls">' +
             '<input id="dualStickyDevices" type="checkbox"><span class="dual-sticky-track"></span><span>Pin device cards</span></label>' +
+            '<button class="dual-settings-toggle" id="dualSettingsToggle" type="button">⚙ Dual Settings</button>' +
             '<button class="dual-exit" type="button">Exit dual mode</button></div>' +
+            '<div class="dual-settings-backdrop" id="dualSettingsBackdrop" hidden></div>' +
+            '<aside class="dual-settings-drawer" id="dualSettingsDrawer" aria-label="Dual Settings" hidden>' +
+            '<div class="dual-settings-head"><strong>Dual Settings</strong><button class="dual-settings-close" type="button" aria-label="Close">×</button></div>' +
+            '<section class="dual-settings-section"><div class="dual-settings-title">Report</div>' +
+            '<div class="dual-control-label">Export dual report</div>' +
+            '<div class="dual-export-row" id="dualExportRow"><button class="chip" data-window="full" type="button">Full session</button><button class="chip" data-window="5" type="button">5 min</button><button class="chip" data-window="15" type="button">15 min</button><button class="chip" data-window="30" type="button">30 min</button><button class="chip" data-window="60" type="button">1 h</button></div>' +
+            '<div class="menu-status" id="dualExportStatus"></div>' +
+            '<div class="dual-records" id="dualRecords" hidden><div class="dual-records-title">Dual session records</div><div id="dualRecordsList"></div></div>' +
+            '<div class="dual-settings-grid" style="margin-top:12px"><label for="dualReportsFolder">Reports folder</label><input id="dualReportsFolder" type="text" spellcheck="false"></div>' +
+            '<div class="dual-folder-hint" id="dualFolderHint"></div>' +
+            '<button class="dual-comparison-placeholder" id="dualComparisonExport" type="button">Export Comparison Report 📊</button></section>' +
+            '<section class="dual-settings-section"><div class="dual-settings-title">Shared comparison</div>' +
+            '<div class="dual-settings-grid"><label for="dualAppFilter">App filter</label><input id="dualAppFilter" type="text" spellcheck="false">' +
+            '<label for="dualSampling">Sampling</label><select id="dualSampling"><option value="auto">Auto (shared)</option><option value="500">0.5 s</option><option value="1000">1 s</option><option value="2000">2 s</option><option value="5000">5 s</option></select>' +
+            '<label for="dualTargetFps">Target FPS</label><input id="dualTargetFps" type="number" min="1" max="240" step="1"></div>' +
+            '<div class="cfg-actions"><button class="cfg-save" id="dualSettingsSave" type="button">Save</button><span class="menu-status" id="dualSettingsStatus"></span></div></section>' +
+            '</aside>' +
             '<div class="dual-panels">' +
             '<section class="dual-panel"><div class="dual-panel-label" data-pane-label="primary">Device A</div><iframe data-pane="primary" title="Device A metrics" src="/?pane=primary"></iframe></section>' +
             '<section class="dual-panel"><div class="dual-panel-label" data-pane-label="secondary">Device B</div><iframe data-pane="secondary" title="Device B metrics" src="/?pane=secondary"></iframe></section>' +
             '</div>'
 
           var platforms = { primary: null, secondary: null }
+          var appearances = {
+            primary: readAppearance('primary'),
+            secondary: readAppearance('secondary'),
+          }
           var sticky = root.querySelector('#dualStickyDevices')
           var notice = root.querySelector('#dualPlatformNotice')
           var frames = root.querySelectorAll('iframe[data-pane]')
@@ -213,6 +299,7 @@
                 frameTimesComparable: state.frameTimesComparable,
                 launchStatusComparable: state.launchStatusComparable,
                 stickyDevices: sticky.checked,
+                appearance: appearances[frame.getAttribute('data-pane')],
               },
               location.origin,
             )
@@ -227,6 +314,19 @@
 
           onPaneDevice = function (event) {
             if (event.origin !== location.origin || !event.data) return
+            if (event.data.type === 'dual-appearance') {
+              var appearancePane =
+                event.data.pane === 'secondary'
+                  ? 'secondary'
+                  : event.data.pane === 'primary'
+                    ? 'primary'
+                    : null
+              if (!appearancePane) return
+              var appearanceFrame = root.querySelector('iframe[data-pane="' + appearancePane + '"]')
+              if (!appearanceFrame || event.source !== appearanceFrame.contentWindow) return
+              appearances[appearancePane] = event.data.appearance
+              return
+            }
             if (event.data.type === 'dual-mirror-secondary') {
               var primaryFrame = root.querySelector('iframe[data-pane="primary"]')
               var secondaryFrame = root.querySelector('iframe[data-pane="secondary"]')
@@ -273,6 +373,181 @@
             updateComparison()
           })
           root.querySelector('.dual-exit').addEventListener('click', closeDual)
+
+          var settingsToggle = root.querySelector('#dualSettingsToggle')
+          var settingsDrawer = root.querySelector('#dualSettingsDrawer')
+          var settingsBackdrop = root.querySelector('#dualSettingsBackdrop')
+          var settingsStatus = root.querySelector('#dualSettingsStatus')
+          var exportStatus = root.querySelector('#dualExportStatus')
+          var records = root.querySelector('#dualRecords')
+          var recordsList = root.querySelector('#dualRecordsList')
+          var reportsInput = root.querySelector('#dualReportsFolder')
+          var folderHint = root.querySelector('#dualFolderHint')
+          var filterInput = root.querySelector('#dualAppFilter')
+          var samplingInput = root.querySelector('#dualSampling')
+          var fpsInput = root.querySelector('#dualTargetFps')
+
+          function setDualStatus(el, message, kind) {
+            el.textContent = message || ''
+            el.className = 'menu-status' + (kind ? ' ' + kind : '')
+          }
+
+          function dualFolder(base) {
+            if (!base) return 'Dual session'
+            var slash = /\\/.test(base) ? '\\' : '/'
+            return base.replace(/[\\/]$/, '') + slash + 'Dual session'
+          }
+
+          function fillDualConfig(data) {
+            var cfg = data.config
+            reportsInput.value = cfg.reportsDir
+            folderHint.textContent = 'Dual reports: ' + dualFolder(cfg.reportsDir)
+            filterInput.value = cfg.filterTerm
+            samplingInput.value = cfg.intervalAuto ? 'auto' : String(cfg.intervalMs)
+            if (cfg.intervalAuto && typeof data.effectiveIntervalMs === 'number') {
+              samplingInput.options[0].textContent =
+                'Auto shared (' + data.effectiveIntervalMs / 1000 + ' s)'
+            }
+            fpsInput.value = cfg.fpsTarget
+          }
+
+          function downloadDualReport(query) {
+            setDualStatus(exportStatus, 'Generating both reports…')
+            var appearanceQuery =
+              '&themeA=' +
+              encodeURIComponent(appearances.primary.theme) +
+              '&themeB=' +
+              encodeURIComponent(appearances.secondary.theme)
+            fetch('/api/dual/report?' + query + appearanceQuery)
+              .then(function (response) {
+                if (!response.ok) {
+                  return errorFromResponse(response).then(function (error) {
+                    throw error
+                  })
+                }
+                var disposition = response.headers.get('content-disposition') || ''
+                var match = disposition.match(/filename="([^"]+)"/)
+                return response.blob().then(function (blob) {
+                  var anchor = document.createElement('a')
+                  anchor.href = URL.createObjectURL(blob)
+                  anchor.download = match ? match[1] : 'sample-dual-report.html'
+                  root.appendChild(anchor)
+                  anchor.click()
+                  anchor.remove()
+                  setTimeout(function () {
+                    URL.revokeObjectURL(anchor.href)
+                  }, 10000)
+                  setDualStatus(exportStatus, 'Dual report downloaded.', 'ok')
+                })
+              })
+              .catch(function (error) {
+                setDualStatus(exportStatus, 'Export failed: ' + error.message, 'err')
+              })
+          }
+
+          function loadDualRecords() {
+            return fetch('/api/dual/sessions')
+              .then(function (response) {
+                if (!response.ok) throw new Error('Could not load dual records')
+                return response.json()
+              })
+              .then(function (data) {
+                recordsList.innerHTML = ''
+                records.hidden = !data.sessions.length
+                data.sessions.forEach(function (session) {
+                  var recordButton = document.createElement('button')
+                  recordButton.type = 'button'
+                  recordButton.className = 'dual-record'
+                  var details = document.createElement('span')
+                  details.appendChild(
+                    document.createTextNode(new Date(session.startedAt).toLocaleString()),
+                  )
+                  details.appendChild(document.createElement('br'))
+                  var devices = document.createElement('small')
+                  devices.textContent =
+                    (session.primaryDevice || 'Device A') +
+                    ' ↔ ' +
+                    (session.secondaryDevice || 'Device B')
+                  details.appendChild(devices)
+                  var action = document.createElement('span')
+                  action.textContent = '⬇ report'
+                  recordButton.appendChild(details)
+                  recordButton.appendChild(action)
+                  recordButton.addEventListener('click', function () {
+                    downloadDualReport('session=' + encodeURIComponent(session.id))
+                  })
+                  recordsList.appendChild(recordButton)
+                })
+              })
+              .catch(function () {
+                records.hidden = true
+              })
+          }
+
+          function loadDualSettings() {
+            setDualStatus(settingsStatus, '')
+            return Promise.all([
+              fetch('/api/config')
+                .then(function (response) {
+                  return response.json()
+                })
+                .then(fillDualConfig),
+              loadDualRecords(),
+            ])
+          }
+
+          function toggleDualSettings(open) {
+            settingsDrawer.hidden = !open
+            settingsBackdrop.hidden = !open
+            if (open) void loadDualSettings()
+          }
+
+          settingsToggle.addEventListener('click', function () {
+            toggleDualSettings(settingsDrawer.hidden)
+          })
+          settingsBackdrop.addEventListener('click', function () {
+            toggleDualSettings(false)
+          })
+          root.querySelector('.dual-settings-close').addEventListener('click', function () {
+            toggleDualSettings(false)
+          })
+          root.querySelector('#dualExportRow').addEventListener('click', function (event) {
+            var target = event.target
+            var windowValue = target && target.getAttribute && target.getAttribute('data-window')
+            if (windowValue) downloadDualReport('window=' + windowValue)
+          })
+          root.querySelector('#dualComparisonExport').addEventListener('click', function () {
+            setDualStatus(exportStatus, 'Comparison report is ready for the next iteration.')
+          })
+          root.querySelector('#dualSettingsSave').addEventListener('click', function () {
+            var patch = {
+              filterTerm: filterInput.value.trim(),
+              reportsDir: reportsInput.value.trim(),
+              fpsTarget: Number(fpsInput.value),
+            }
+            if (samplingInput.value === 'auto') patch.intervalAuto = true
+            else patch.intervalMs = Number(samplingInput.value)
+            setDualStatus(settingsStatus, 'Saving…')
+            fetch('/api/config', { method: 'PUT', body: JSON.stringify(patch) })
+              .then(function (response) {
+                if (!response.ok) throw new Error('error ' + response.status)
+                return response.json()
+              })
+              .then(function (data) {
+                fillDualConfig(data)
+                for (var i = 0; i < frames.length; i++) {
+                  frames[i].contentWindow.postMessage(
+                    { type: 'dual-shared-config', config: data.config },
+                    location.origin,
+                  )
+                }
+                setDualStatus(settingsStatus, 'Saved ✓', 'ok')
+              })
+              .catch(function (error) {
+                setDualStatus(settingsStatus, 'Could not save: ' + error.message, 'err')
+              })
+          })
+
           for (var i = 0; i < frames.length; i++) {
             frames[i].addEventListener('load', function () {
               postLayout(this)
@@ -624,6 +899,36 @@
     cfgStatus: document.getElementById('cfgStatus'),
   }
 
+  if (isEmbeddedPane) {
+    var regularSections = menu.pop.querySelectorAll('.menu-section:not(.panel-appearance-section)')
+    for (var rs = 0; rs < regularSections.length; rs++) regularSections[rs].hidden = true
+    var appearanceSection = document.getElementById('panelAppearance')
+    var appearanceTheme = document.getElementById('panelTheme')
+    var appearanceAccents = document.getElementById('panelAccents')
+    appearanceSection.hidden = false
+    menu.btn.textContent = '🎨'
+    menu.btn.title = 'Panel appearance'
+    menu.btn.setAttribute('aria-label', 'Panel appearance')
+    applyPanelAppearance(readAppearance(pane), false)
+    appearanceTheme.addEventListener('change', function () {
+      applyPanelAppearance(
+        {
+          theme: appearanceTheme.checked ? 'dark' : 'light',
+          accent: panelAppearance ? panelAppearance.accent : defaultAppearance(pane).accent,
+        },
+        true,
+      )
+    })
+    appearanceAccents.addEventListener('click', function (event) {
+      var accent = event.target && event.target.getAttribute('data-accent')
+      if (!ACCENTS[accent]) return
+      applyPanelAppearance(
+        { theme: panelAppearance ? panelAppearance.theme : 'dark', accent: accent },
+        true,
+      )
+    })
+  }
+
   function setStatus(el, msg, kind) {
     el.textContent = msg || ''
     el.className = 'menu-status' + (kind ? ' ' + kind : '')
@@ -854,8 +1159,10 @@
     slideMenu(true)
     setStatus(menu.exportStatus, '')
     setStatus(menu.cfgStatus, '')
-    loadSessions()
-    void loadConfig(false)
+    if (!isEmbeddedPane) {
+      loadSessions()
+      void loadConfig(false)
+    }
   }
   function closeMenuPop() {
     if (menu.pop.hidden) return
@@ -881,7 +1188,7 @@
   // Tema persistido: aplicar el guardado al cargar. El control vive en ☰
   // Settings (switch "Dark mode" — feedback HITL 2026-08-01, revierte el toggle
   // ☀️ del header): aplica y persiste al instante vía /api/config (sin Guardar).
-  void loadConfig(true)
+  if (!isEmbeddedPane) void loadConfig(true)
   function persistTheme(theme) {
     ProfilerDashboard.setTheme(theme)
     fetch('/api/config', { method: 'PUT', body: JSON.stringify({ theme: theme }) }).catch(

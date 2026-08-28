@@ -84,6 +84,7 @@ export class IosMetricSource {
   /** canal de batería, con reintento propio (lockdown: reponerlo es barato). */
   private battery: ResilientStream | null = null
   private timer: ReturnType<typeof setInterval> | null = null
+  private intervalMs: number
   private readonly assembler = new SysmonAssembler()
   private readonly last: LastValues = { graphics: null, process: null, battery: null }
   private processName: string | null = null
@@ -102,6 +103,7 @@ export class IosMetricSource {
   constructor(private readonly opts: IosMetricSourceOptions) {
     this.staleMs = opts.staleMs ?? DEFAULT_STALE_MS
     this.now = opts.now ?? Date.now
+    this.intervalMs = opts.intervalMs ?? 1000
   }
 
   start(): void {
@@ -145,7 +147,16 @@ export class IosMetricSource {
     this.battery.start()
 
     if (this.opts.processName !== undefined) this.setProcessName(this.opts.processName)
-    this.timer = setInterval(() => this.emit(), this.opts.intervalMs ?? 1000)
+    this.timer = setInterval(() => this.emit(), this.intervalMs)
+  }
+
+  /** Cambia la cadencia sin recrear los costosos streams de Instruments. */
+  setIntervalMs(intervalMs: number): void {
+    if (!Number.isFinite(intervalMs) || intervalMs < 250 || intervalMs === this.intervalMs) return
+    this.intervalMs = Math.round(intervalMs)
+    if (this.timer === null) return
+    clearInterval(this.timer)
+    this.timer = setInterval(() => this.emit(), this.intervalMs)
   }
 
   /**

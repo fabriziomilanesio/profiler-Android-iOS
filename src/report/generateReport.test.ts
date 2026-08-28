@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { Sample } from '../core/schema'
 import type { LogEntry, LogLevel } from '../core/logs/logEntry'
 import { buildReportSession } from '../core/session/stats'
-import { generateReportHtml, reportFilename } from './generateReport'
+import { generateDualReportHtml, generateReportHtml, reportFilename } from './generateReport'
 
 function sample(t: number): Sample {
   return {
@@ -150,6 +150,21 @@ describe('generateReportHtml', () => {
     expect(reportFilename(SESSION, new Date('2026-07-20T18:05:30Z'))).toBe(
       'sample-report-com.sample.oda.qa-2026-07-20T18-05-30.html',
     )
+  })
+
+  test('apila dos reportes independientes en un solo HTML standalone', () => {
+    const html = generateDualReportHtml(
+      SESSION,
+      { ...SESSION, bundleId: 'com.sample.device-b' },
+      { primary: 'dark', secondary: 'light' },
+      new Date('2026-07-20T18:05:30Z'),
+    )
+    expect(html).toContain('Dual performance report')
+    expect(html).toContain('Device A report')
+    expect(html).toContain('Device B report')
+    expect(html).toContain('com.sample.device-b')
+    expect(html.match(/<iframe/g)).toHaveLength(2)
+    expect(html).toContain('srcdoc="&lt;!doctype html&gt;')
   })
 })
 

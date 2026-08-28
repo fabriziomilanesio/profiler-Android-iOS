@@ -106,7 +106,7 @@ async function startServer(
   installed: string[],
   deviceList: AdbDevice[] = [],
   serial: string | null = 'FAKE-SERIAL',
-  extra: { sessionsDir?: string; reportsDir?: string } = {},
+  extra: { sessionsDir?: string; reportsDir?: string; intervalMs?: number } = {},
 ) {
   const { t, cmds, streams, deviceQueries } = fakeTransport(running, installed, deviceList)
   const store = memoryStore()
@@ -117,7 +117,7 @@ async function startServer(
     packageName: PKG,
     uiRoot: UI_ROOT,
     port: 0, // puerto libre: los tests no chocan con un live real
-    intervalMs: 3_600_000, // sin ticks periódicos durante el test (el primero corre igual)
+    intervalMs: extra.intervalMs ?? 3_600_000, // sin ticks periódicos salvo que el test lo pida
     devicePollMs: 25, // watcher rápido para el test de modo espera
     logFlushMs: 20, // batches de logs rápidos para los tests
     appStore: store,
@@ -487,6 +487,54 @@ describe('LiveServer /api/device', () => {
 })
 
 describe('LiveServer export/config/sesiones', () => {
+  test('reporte dual apila A y B, guarda en Dual session y lista el record pareado', async () => {
+    const { existsSync, mkdtempSync, readdirSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const reportsDir = mkdtempSync(join(tmpdir(), 'dual-reports-'))
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'dual-sessions-'))
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES, 'SERIAL-A', {
+      reportsDir,
+      sessionsDir,
+      intervalMs: 20,
+    })
+    try {
+      await fetch(`${url}/api/dual`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled: true }),
+      })
+      const selected = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(selected.status).toBe(200)
+
+      let history: { sessions: Array<{ primaryPackage: string; secondaryPackage: string }> } = {
+        sessions: [],
+      }
+      for (let attempt = 0; attempt < 20 && history.sessions.length === 0; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        history = (await (await fetch(`${url}/api/dual/sessions`)).json()) as typeof history
+      }
+      const report = await fetch(`${url}/api/dual/report?window=full`)
+      expect(report.status).toBe(200)
+      expect(report.headers.get('content-disposition')).toContain('sample-dual-report-')
+      const html = await report.text()
+      expect(html).toContain('Device A report')
+      expect(html).toContain('Device B report')
+
+      const folder = join(reportsDir, 'Dual session')
+      expect(existsSync(folder)).toBe(true)
+      expect(readdirSync(folder).some((file) => file.endsWith('.html'))).toBe(true)
+      expect(history.sessions).toHaveLength(1)
+      expect(history.sessions[0]!.primaryPackage).toBe(PKG)
+      expect(history.sessions[0]!.secondaryPackage).toBe(PKG)
+    } finally {
+      await server.stop()
+      rmSync(reportsDir, { recursive: true, force: true })
+      rmSync(sessionsDir, { recursive: true, force: true })
+    }
+  })
+
   test('GET /api/report?window=full descarga HTML con datos y guarda copia', async () => {
     const { mkdtempSync, readdirSync, rmSync } = await import('node:fs')
     const { tmpdir } = await import('node:os')
