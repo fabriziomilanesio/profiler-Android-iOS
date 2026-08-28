@@ -257,7 +257,8 @@
             '<div class="dual-settings-backdrop" id="dualSettingsBackdrop" hidden></div>' +
             '<aside class="dual-settings-drawer" id="dualSettingsDrawer" aria-label="Dual Settings" hidden>' +
             '<div class="dual-settings-head"><strong>Dual Settings</strong><button class="dual-settings-close" type="button" aria-label="Close">×</button></div>' +
-            '<section class="dual-settings-section"><div class="dual-settings-title">Report</div>' +
+            '<div class="dual-mirror-notice" id="dualMirrorNotice" role="status" hidden>Both panels are mirroring the same device. Dual reports and session records are disabled until Device B is independent.</div>' +
+            '<section class="dual-settings-section" id="dualReportSettings"><div class="dual-settings-title">Report</div>' +
             '<div class="dual-control-label">Export dual report</div>' +
             '<div class="dual-export-row" id="dualExportRow"><button class="chip" data-window="full" type="button">Full session</button><button class="chip" data-window="5" type="button">5 min</button><button class="chip" data-window="15" type="button">15 min</button><button class="chip" data-window="30" type="button">30 min</button><button class="chip" data-window="60" type="button">1 h</button></div>' +
             '<div class="menu-status" id="dualExportStatus"></div>' +
@@ -277,6 +278,7 @@
             '</div>'
 
           var platforms = { primary: null, secondary: null }
+          var mirrorActive = false
           var appearances = {
             primary: readAppearance('primary'),
             secondary: readAppearance('secondary'),
@@ -332,6 +334,7 @@
               var secondaryFrame = root.querySelector('iframe[data-pane="secondary"]')
               if (!primaryFrame || !secondaryFrame || event.source !== primaryFrame.contentWindow)
                 return
+              setMirrorMode(true)
               secondaryFrame.contentWindow.location.replace(
                 '/?pane=primary&slot=secondary&mirror=1',
               )
@@ -346,6 +349,7 @@
                 event.source !== detachPrimaryFrame.contentWindow
               )
                 return
+              setMirrorMode(false)
               detachSecondaryFrame.contentWindow.location.replace('/?pane=secondary&slot=secondary')
               return
             }
@@ -363,6 +367,7 @@
             if (reportedPane === 'secondary') {
               var paneLabel = root.querySelector('[data-pane-label="secondary"]')
               paneLabel.textContent = event.data.mirror ? 'Device B · Mirror of A' : 'Device B'
+              setMirrorMode(event.data.mirror === true)
             }
             updateComparison()
           }
@@ -379,6 +384,8 @@
           var settingsBackdrop = root.querySelector('#dualSettingsBackdrop')
           var settingsStatus = root.querySelector('#dualSettingsStatus')
           var exportStatus = root.querySelector('#dualExportStatus')
+          var mirrorNotice = root.querySelector('#dualMirrorNotice')
+          var reportSettings = root.querySelector('#dualReportSettings')
           var records = root.querySelector('#dualRecords')
           var recordsList = root.querySelector('#dualRecordsList')
           var reportsInput = root.querySelector('#dualReportsFolder')
@@ -390,6 +397,21 @@
           function setDualStatus(el, message, kind) {
             el.textContent = message || ''
             el.className = 'menu-status' + (kind ? ' ' + kind : '')
+          }
+
+          function setMirrorMode(enabled) {
+            mirrorActive = enabled === true
+            mirrorNotice.hidden = !mirrorActive
+            reportSettings.classList.toggle('mirror-disabled', mirrorActive)
+            var controls = reportSettings.querySelectorAll('button, input, select')
+            for (var i = 0; i < controls.length; i++) controls[i].disabled = mirrorActive
+            if (mirrorActive) {
+              records.hidden = true
+              recordsList.innerHTML = ''
+              setDualStatus(exportStatus, '')
+            } else if (!settingsDrawer.hidden) {
+              void loadDualRecords()
+            }
           }
 
           function dualFolder(base) {
@@ -412,6 +434,10 @@
           }
 
           function downloadDualReport(query) {
+            if (mirrorActive) {
+              setDualStatus(exportStatus, 'Dual reports are unavailable while mirroring.', 'err')
+              return
+            }
             setDualStatus(exportStatus, 'Generating both reports…')
             var appearanceQuery =
               '&themeA=' +
@@ -446,12 +472,21 @@
           }
 
           function loadDualRecords() {
+            if (mirrorActive) {
+              records.hidden = true
+              recordsList.innerHTML = ''
+              return Promise.resolve()
+            }
             return fetch('/api/dual/sessions')
               .then(function (response) {
                 if (!response.ok) throw new Error('Could not load dual records')
                 return response.json()
               })
               .then(function (data) {
+                if (data.mirror === true) {
+                  setMirrorMode(true)
+                  return
+                }
                 recordsList.innerHTML = ''
                 records.hidden = !data.sessions.length
                 data.sessions.forEach(function (session) {

@@ -1868,6 +1868,24 @@
         padding: 15px 4px;
         border-top: 1px solid var(--line);
       }
+      .dual-settings-section.mirror-disabled > * {
+        opacity: 0.52;
+      }
+      .dual-settings-section.mirror-disabled button,
+      .dual-settings-section.mirror-disabled input,
+      .dual-settings-section.mirror-disabled select {
+        cursor: not-allowed;
+      }
+      .dual-mirror-notice {
+        margin: 2px 4px 13px;
+        border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line));
+        border-radius: 9px;
+        padding: 10px 12px;
+        color: var(--text);
+        background: color-mix(in srgb, var(--warn) 10%, var(--card2));
+        font-size: 11.5px;
+        line-height: 1.45;
+      }
       .dual-settings-title {
         margin-bottom: 10px;
         color: var(--muted);

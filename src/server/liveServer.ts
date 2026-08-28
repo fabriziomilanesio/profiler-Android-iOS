@@ -1846,6 +1846,12 @@ export class LiveServer {
 
   /** GET /api/dual/report — dos reportes individuales completos dentro de un solo HTML. */
   private async handleDualReport(url: URL): Promise<Response> {
+    if (this.secondaryMirrorSerial !== null) {
+      return Response.json(
+        { error: 'los reportes duales no están disponibles mientras Device B refleja a Device A' },
+        { status: 409 },
+      )
+    }
     const sessionParam = url.searchParams.get('session')
     const windowParam = url.searchParams.get('window') ?? 'full'
     let windowMs: number | undefined
@@ -1958,10 +1964,14 @@ export class LiveServer {
   }
 
   private handleDualSessions(): Response {
+    if (this.secondaryMirrorSerial !== null) {
+      return Response.json({ sessions: [], current: null, mirror: true })
+    }
     const dir = this.dualSessionsDir()
     return Response.json({
       sessions: dir ? DualSessionLog.list(dir) : [],
       current: this.dualSessionLog?.id ?? null,
+      mirror: false,
     })
   }
 

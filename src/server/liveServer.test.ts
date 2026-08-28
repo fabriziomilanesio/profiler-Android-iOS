@@ -487,6 +487,44 @@ describe('LiveServer /api/device', () => {
 })
 
 describe('LiveServer export/config/sesiones', () => {
+  test('mirror bloquea únicamente reportes e historial dual hasta que B vuelve a ser independiente', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      await fetch(`${url}/api/dual`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled: true }),
+      })
+      const mirrored = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'FAKE-SERIAL', pane: 'secondary' }),
+      })
+      expect(mirrored.status).toBe(200)
+
+      const blockedReport = await fetch(`${url}/api/dual/report?window=full`)
+      expect(blockedReport.status).toBe(409)
+      expect(((await blockedReport.json()) as { error: string }).error).toContain('refleja')
+
+      const blockedSessions = (await (await fetch(`${url}/api/dual/sessions`)).json()) as {
+        sessions: unknown[]
+        current: string | null
+        mirror: boolean
+      }
+      expect(blockedSessions).toEqual({ sessions: [], current: null, mirror: true })
+
+      const independent = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(independent.status).toBe(200)
+      const restoredSessions = (await (await fetch(`${url}/api/dual/sessions`)).json()) as {
+        mirror: boolean
+      }
+      expect(restoredSessions.mirror).toBe(false)
+    } finally {
+      await server.stop()
+    }
+  })
+
   test('reporte dual apila A y B, guarda en Dual session y lista el record pareado', async () => {
     const { existsSync, mkdtempSync, readdirSync, rmSync } = await import('node:fs')
     const { tmpdir } = await import('node:os')
