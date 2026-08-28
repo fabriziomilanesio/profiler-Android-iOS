@@ -13,6 +13,10 @@ test.describe('dual comparison QoL', () => {
       await secondary.locator('#devRefresh').click()
       await expect(secondary.locator('#devRefresh')).toContainText('Searching')
       await expect(secondary.locator('#devList')).toContainText('UDID-E2E-B')
+      await secondary.locator('#devList button').filter({ hasText: 'UDID-E2E-B' }).click()
+      await expect(secondary.locator('#devName')).toContainText('iPhone 15 Pro Max', {
+        timeout: 800,
+      })
       await expect(secondary.locator('#devRefresh')).toHaveText('⟳ Refresh', { timeout: 3000 })
     } finally {
       await fetch('http://localhost:8789/normal-devices')

@@ -852,17 +852,18 @@ export class LiveServer {
   private async startSecondary(
     serial: string,
     packageName = this.appStatus?.packageName ?? this.opts.packageName,
+    selectedDevice?: AdbDevice,
   ): Promise<{ device: DeviceInfo; app: AppStatus }> {
-    await this.stopSecondary()
     if (serial === this.serial) throw new Error('el dispositivo B debe ser distinto del A')
     const pkg = packageName
-    const [android, ios] = await Promise.all([
-      this.opts.transport.devices().catch(() => [] as AdbDevice[]),
-      this.opts.iosTransport?.devices().catch(() => [] as AdbDevice[]) ?? Promise.resolve([]),
-    ])
-    const androidDevice = android.find((d) => d.serial === serial && d.state === 'device')
-    const iosDevice = ios.find((d) => d.serial === serial && d.state === 'device')
-    if (!androidDevice && !iosDevice) throw new Error('device no conectado')
+    const target = selectedDevice ?? (await this.resolveConnectedDevice(serial))
+    if (!target) throw new Error('device no conectado')
+    if (target.state !== 'device') throw new Error(`device en estado "${target.state}"`)
+
+    // Resolver y validar ANTES de liberar B: un discovery lento/fallido no debe dejar el
+    // panel vacío ni cortar sus streams actuales.
+    await this.stopSecondary()
+    const iosDevice = target.platform === 'ios' ? target : null
 
     this.secondary.serial = serial
     if (iosDevice) {
@@ -1242,6 +1243,17 @@ export class LiveServer {
       }))
   }
 
+  /** Resuelve un serial desde el snapshot que la UI acaba de mostrar. Sólo si es un
+   * serial desconocido paga discovery; así seleccionar un item visible nunca vuelve a
+   * lanzar adb + usbmux ni queda detrás de una búsqueda lenta en background. */
+  private async resolveConnectedDevice(serial: string): Promise<AdbDevice | null> {
+    const snapshot = [...(this.deviceListCache?.devices ?? []), ...this.knownDevices()]
+    const cached = snapshot.find((device) => device.serial === serial)
+    if (cached) return cached
+    const refreshed = await this.refreshDeviceList()
+    return refreshed.find((device) => device.serial === serial) ?? null
+  }
+
   private async handleListDevices(url: URL): Promise<Response> {
     const force = url.searchParams.get('refresh') === '1'
     const cacheFresh =
@@ -1297,8 +1309,8 @@ export class LiveServer {
     } catch {
       return Response.json({ error: 'body inválido' }, { status: 400 })
     }
-    // Se valida contra la lista real de adb: solo un device presente y autorizado
-    // es elegible (y de paso nunca viaja un serial arbitrario a adb).
+    // Se valida contra el snapshot producido por discovery: sólo un serial observado y
+    // autorizado es elegible, sin volver a pagar adb + usbmux al hacer clic.
     const serial = body.serial
     const pane: DashboardPane = body.pane === 'secondary' ? 'secondary' : 'primary'
     if (typeof serial !== 'string' || !serial) {
@@ -1324,35 +1336,28 @@ export class LiveServer {
         if (serial === this.secondary.serial) {
           return Response.json({ ok: true, device: this.secondary.device, app: this.secondary.app })
         }
-        const result = await this.startSecondary(serial)
-        return Response.json({ ok: true, ...result })
-      }
-      const devices = await this.opts.transport.devices()
-      const target = devices.find((d) => d.serial === serial)
-      if (!target) {
-        // Puede ser un iPhone: no está en `adb devices` pero sí en usbmux (ticket 038).
-        const iosDevices = (await this.opts.iosTransport?.devices().catch(() => [])) ?? []
-        const iosTarget = iosDevices.find((d) => d.serial === serial)
-        if (iosTarget) {
-          if (serial === this.serial) {
-            return Response.json({ ok: true, device: this.device, app: this.appStatus })
-          }
-          const mirrorSecondary = serial === this.secondary.serial
-          if (mirrorSecondary) await this.stopSecondary()
-          const result = await this.switchToIosDevice(iosTarget)
-          return Response.json({ ok: true, mirrorSecondary, ...result })
+        const target = await this.resolveConnectedDevice(serial)
+        if (!target) return Response.json({ error: 'device no conectado' }, { status: 404 })
+        if (target.state !== 'device') {
+          return Response.json({ error: `device en estado "${target.state}"` }, { status: 409 })
         }
-        return Response.json({ error: 'device no conectado' }, { status: 404 })
-      }
-      if (target.state !== 'device') {
-        return Response.json({ error: `device en estado "${target.state}"` }, { status: 409 })
+        const result = await this.startSecondary(serial, undefined, target)
+        return Response.json({ ok: true, ...result })
       }
       if (serial === this.serial) {
         return Response.json({ ok: true, device: this.device, app: this.appStatus })
       }
+      const target = await this.resolveConnectedDevice(serial)
+      if (!target) return Response.json({ error: 'device no conectado' }, { status: 404 })
+      if (target.state !== 'device') {
+        return Response.json({ error: `device en estado "${target.state}"` }, { status: 409 })
+      }
       const mirrorSecondary = serial === this.secondary.serial
       if (mirrorSecondary) await this.stopSecondary()
-      const result = await this.switchDevice(serial)
+      const result =
+        target.platform === 'ios'
+          ? await this.switchToIosDevice(target)
+          : await this.switchDevice(serial)
       return Response.json({ ok: true, mirrorSecondary, ...result })
     } catch (err) {
       return Response.json({ error: String(err) }, { status: 500 })

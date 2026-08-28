@@ -298,6 +298,31 @@ describe('LiveServer /api/devices', () => {
 })
 
 describe('LiveServer /api/device', () => {
+  test('seleccionar devices ya listados no vuelve a ejecutar discovery', async () => {
+    const { server, url, deviceQueries } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      await fetch(`${url}/api/devices?refresh=1`)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      const queriesAfterList = deviceQueries.length
+
+      const secondary = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(secondary.status).toBe(200)
+      expect(deviceQueries).toHaveLength(queriesAfterList)
+
+      const primary = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-A', pane: 'primary' }),
+      })
+      expect(primary.status).toBe(200)
+      expect(deviceQueries).toHaveLength(queriesAfterList)
+    } finally {
+      await server.stop()
+    }
+  })
+
   test('el mismo device en B activa un espejo sin comandos ni streams adicionales', async () => {
     const { server, url, cmds, streams } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
     try {
@@ -359,6 +384,27 @@ describe('LiveServer /api/device', () => {
         body: JSON.stringify({ serial: 'SERIAL-C' }),
       })
       expect(unauthorized.status).toBe(409)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('un destino B inválido no libera el carril que ya estaba funcionando', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const selected = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(selected.status).toBe(200)
+
+      const invalid = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'NO-EXISTE', pane: 'secondary' }),
+      })
+      expect(invalid.status).toBe(404)
+      const devices = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(devices.secondary).toBe('SERIAL-B')
     } finally {
       await server.stop()
     }
