@@ -6,6 +6,7 @@ import indexHtml from '../ui/index.html' with { type: 'file' }
 import renderJs from '../ui/render.js' with { type: 'file' }
 import liveJs from '../ui/live.js' with { type: 'file' }
 import capabilitiesJs from '../ui/capabilities.js' with { type: 'file' }
+import dualComparisonJs from '../ui/dualComparison.js' with { type: 'file' }
 import logsCoreJs from '../ui/logsCore.js' with { type: 'file' }
 import logsPanelJs from '../ui/logsPanel.js' with { type: 'file' }
 import echarts from '../ui/vendor/echarts.min.js' with { type: 'file' }
@@ -26,6 +27,7 @@ export const EMBEDDED_UI: Record<string, string> = {
   'render.js': renderJs,
   'live.js': liveJs,
   'capabilities.js': capabilitiesJs,
+  'dualComparison.js': dualComparisonJs,
   'logsCore.js': logsCoreJs,
   'logsPanel.js': logsPanelJs,
   'vendor/echarts.min.js': echarts,

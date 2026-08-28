@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { appMessage, deviceMessage, sampleMessage } from './messages'
+import { appMessage, deviceMessage, logsMessage, sampleMessage } from './messages'
+import type { LogEntry } from '../core/logs/logEntry'
 import type { DeviceInfo, Sample } from '../core/schema'
 
 describe('protocolo WS', () => {
@@ -59,6 +60,16 @@ describe('protocolo WS', () => {
     expect(JSON.parse(sampleMessage(sample, 'secondary'))).toEqual({
       type: 'sample',
       sample,
+      pane: 'secondary',
+    })
+  })
+
+  test('los logs se enrutan por carril sin alterar el protocolo primario', () => {
+    const entries = [{ ts: 1, pid: 2, tid: 3, level: 'I', tag: 'App', message: 'ok' }] as LogEntry[]
+    expect(JSON.parse(logsMessage(entries))).toEqual({ type: 'logs', entries })
+    expect(JSON.parse(logsMessage(entries, 'secondary'))).toEqual({
+      type: 'logs',
+      entries,
       pane: 'secondary',
     })
   })

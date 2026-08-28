@@ -144,8 +144,8 @@ function paneFromUrl(url: URL): DashboardPane {
   return url.searchParams.get('pane') === 'secondary' ? 'secondary' : 'primary'
 }
 
-/** Estado deliberadamente acotado del segundo panel: métricas en vivo, sin duplicar
- * exportes, inspector HTTP ni captura de logs (que siguen perteneciendo a la sesión A). */
+/** Estado deliberadamente acotado del segundo panel: métricas y logs en vivo, sin
+ * duplicar exportes ni el inspector HTTP (que siguen perteneciendo a la sesión A). */
 interface SecondaryLane {
   serial: string | null
   device: DeviceInfo | null
@@ -155,6 +155,10 @@ interface SecondaryLane {
   capabilities: Capabilities
   timer: ReturnType<typeof setInterval> | null
   iosProcessTimer: ReturnType<typeof setInterval> | null
+  logCapture: LogcatCapture | null
+  iosLogCapture: IosLogCapture | null
+  logRing: LogRing
+  pendingLogs: LogEntry[]
   ticking: boolean
 }
 
@@ -208,6 +212,10 @@ export class LiveServer {
   /** debounce: recién tras N refresh consecutivos sin proceso se declara muerta. */
   private deadTicks = 0
   private switching = false
+  /** Snapshot compartido por todos los paneles: evita lanzar varios procesos de discovery
+   * iOS cuando A y B abren el selector al mismo tiempo. */
+  private deviceListCache: { devices: AdbDevice[]; updatedAt: number } | null = null
+  private deviceListRefresh: Promise<AdbDevice[]> | null = null
   /** serial del device activo; null = modo espera (el watcher engancha al primero). */
   private serial: string | null
   private deviceWatch: ReturnType<typeof setInterval> | null = null
@@ -256,8 +264,14 @@ export class LiveServer {
     capabilities: capabilitiesFor('android'),
     timer: null,
     iosProcessTimer: null,
+    logCapture: null,
+    iosLogCapture: null,
+    logRing: new LogRing(),
+    pendingLogs: [],
     ticking: false,
   }
+  /** Serial concreto que B está espejando. El mirror no debe seguir a A si A cambia. */
+  private secondaryMirrorSerial: string | null = null
 
   constructor(private readonly opts: LiveServerOptions) {
     this.serial = opts.serial ?? null
@@ -337,7 +351,7 @@ export class LiveServer {
           return this.handleSelectApp(req)
         }
         if (url.pathname === '/api/devices' && req.method === 'GET') {
-          return this.handleListDevices()
+          return this.handleListDevices(url)
         }
         if (url.pathname === '/api/device' && req.method === 'POST') {
           return this.handleSelectDevice(req)
@@ -600,11 +614,22 @@ export class LiveServer {
     if (this.pendingWsLogs.length >= LOG_BATCH_MAX) this.flushLogs()
   }
 
+  /** Los logs de B tienen ring y canal WS propios. No se persisten en la sesión A. */
+  private onSecondaryLogEntry(e: LogEntry): void {
+    this.secondary.logRing.push(e)
+    this.secondary.pendingLogs.push(e)
+    if (this.secondary.pendingLogs.length >= LOG_BATCH_MAX) this.flushLogs()
+  }
+
   /** Batch por tick del flush timer: un mensaje WS con N entries + un append NDJSON. */
   private flushLogs(): void {
     if (this.pendingWsLogs.length > 0) {
       this.server?.broadcast(logsMessage(this.pendingWsLogs))
       this.pendingWsLogs = []
+    }
+    if (this.secondary.pendingLogs.length > 0) {
+      this.server?.broadcast(logsMessage(this.secondary.pendingLogs, 'secondary'))
+      this.secondary.pendingLogs = []
     }
     if (this.pendingSinkLogs.length > 0) {
       this.logSink?.append(this.pendingSinkLogs)
@@ -622,7 +647,8 @@ export class LiveServer {
         return Response.json({ error: 'n inválido' }, { status: 400 })
       }
     }
-    return Response.json({ entries: this.logRing.last(n) })
+    const ring = paneFromUrl(url) === 'secondary' ? this.secondary.logRing : this.logRing
+    return Response.json({ entries: ring.last(n) })
   }
 
   /**
@@ -786,6 +812,7 @@ export class LiveServer {
     lane.ticking = true
     try {
       await lane.sampler.refreshPid()
+      lane.logCapture?.setPid(lane.sampler.processId > 0 ? lane.sampler.processId : null)
       const sample = await lane.sampler.sampleOnce()
       this.server?.broadcast(sampleMessage(sample, 'secondary'))
     } catch {
@@ -808,6 +835,12 @@ export class LiveServer {
     this.stopSecondaryTimer()
     this.secondary.iosSource?.stop()
     this.secondary.iosSource = null
+    this.secondary.logCapture?.stop()
+    this.secondary.logCapture = null
+    this.secondary.iosLogCapture?.stop()
+    this.secondary.iosLogCapture = null
+    this.secondary.logRing = new LogRing()
+    this.secondary.pendingLogs = []
     const sampler = this.secondary.sampler
     this.secondary.sampler = null
     await sampler?.dispose()
@@ -821,17 +854,18 @@ export class LiveServer {
   private async startSecondary(
     serial: string,
     packageName = this.appStatus?.packageName ?? this.opts.packageName,
+    selectedDevice?: AdbDevice,
   ): Promise<{ device: DeviceInfo; app: AppStatus }> {
-    await this.stopSecondary()
     if (serial === this.serial) throw new Error('el dispositivo B debe ser distinto del A')
     const pkg = packageName
-    const [android, ios] = await Promise.all([
-      this.opts.transport.devices().catch(() => [] as AdbDevice[]),
-      this.opts.iosTransport?.devices().catch(() => [] as AdbDevice[]) ?? Promise.resolve([]),
-    ])
-    const androidDevice = android.find((d) => d.serial === serial && d.state === 'device')
-    const iosDevice = ios.find((d) => d.serial === serial && d.state === 'device')
-    if (!androidDevice && !iosDevice) throw new Error('device no conectado')
+    const target = selectedDevice ?? (await this.resolveConnectedDevice(serial))
+    if (!target) throw new Error('device no conectado')
+    if (target.state !== 'device') throw new Error(`device en estado "${target.state}"`)
+
+    // Resolver y validar ANTES de liberar B: un discovery lento/fallido no debe dejar el
+    // panel vacío ni cortar sus streams actuales.
+    await this.stopSecondary()
+    const iosDevice = target.platform === 'ios' ? target : null
 
     this.secondary.serial = serial
     if (iosDevice) {
@@ -851,6 +885,18 @@ export class LiveServer {
         ...(this.opts.iosStaleMs !== undefined ? { staleMs: this.opts.iosStaleMs } : {}),
       })
       this.secondary.iosSource.start()
+      if (this.opts.iosTransport?.stream) {
+        this.secondary.iosLogCapture = new IosLogCapture({
+          transport: { stream: this.opts.iosTransport.stream.bind(this.opts.iosTransport) },
+          serial,
+          pid: proc?.pid ?? null,
+          processName: proc?.name ?? executable,
+          onEntries: (entries) => {
+            for (const entry of entries) this.onSecondaryLogEntry(entry)
+          },
+        })
+        this.secondary.iosLogCapture.start()
+      }
       // iOS no tiene equivalente a monkey: si la app B se abre después, enganchar el
       // proceso sin recrear Instruments ni bloquear el panel A.
       this.secondary.iosProcessTimer = setInterval(() => {
@@ -871,6 +917,7 @@ export class LiveServer {
               executable,
             )
             this.secondary.iosSource.setProcessName(current?.name ?? '')
+            this.secondary.iosLogCapture?.setPid(current?.pid ?? null)
             if (this.secondary.app.pid !== (current?.pid ?? null)) {
               this.secondary.app = { ...this.secondary.app, pid: current?.pid ?? null }
               this.server?.broadcast(appMessage(this.secondary.app, 'secondary'))
@@ -900,6 +947,10 @@ export class LiveServer {
       await sampler.init()
       this.secondary.sampler = sampler
       this.secondary.app = { packageName: pkg, pid, launched: false }
+      this.secondary.logCapture = new LogcatCapture(this.opts.transport, serial, pkg, (entry) =>
+        this.onSecondaryLogEntry(entry),
+      )
+      this.secondary.logCapture.start(pid)
       this.secondary.timer = setInterval(() => void this.tickSecondary(), this.intervalMs)
       void this.tickSecondary()
     }
@@ -1151,15 +1202,79 @@ export class LiveServer {
    * plataforma. Los iOS llegan con `platform: 'ios'`; los de adb no traen el campo y la
    * UI los asume Android.
    */
-  private async handleListDevices(): Promise<Response> {
-    const [android, ios] = await Promise.all([
-      this.opts.transport.devices().catch(() => [] as AdbDevice[]),
-      this.opts.iosTransport?.devices().catch(() => [] as AdbDevice[]) ?? Promise.resolve([]),
+  private refreshDeviceList(): Promise<AdbDevice[]> {
+    if (this.deviceListRefresh) return this.deviceListRefresh
+    const cached = this.deviceListCache?.devices ?? this.knownDevices()
+    const cachedAndroid = cached.filter((device) => device.platform !== 'ios')
+    const cachedIos = cached.filter((device) => device.platform === 'ios')
+    const refresh = Promise.all([
+      this.opts.transport.devices().catch(() => cachedAndroid),
+      this.opts.iosTransport?.devices().catch(() => cachedIos) ?? Promise.resolve([]),
     ])
+      .then(([android, ios]) => {
+        const devices = [...android, ...ios]
+        this.deviceListCache = { devices, updatedAt: Date.now() }
+        return devices
+      })
+      .finally(() => {
+        if (this.deviceListRefresh === refresh) this.deviceListRefresh = null
+      })
+    this.deviceListRefresh = refresh
+    return refresh
+  }
+
+  /** Fichas ya conocidas: permiten abrir el selector inmediatamente mientras discovery
+   * actualiza la lista completa en background. */
+  private knownDevices(): AdbDevice[] {
+    const known = [this.device, this.secondary.device].filter(
+      (device): device is DeviceInfo => device !== null,
+    )
+    return known
+      .filter(
+        (device, index) => known.findIndex((other) => other.serial === device.serial) === index,
+      )
+      .map((device) => ({
+        serial: device.serial,
+        state: 'device',
+        description:
+          `model:${(device.model ?? device.serial).replace(/\s+/g, '_')}` +
+          (device.platform === 'ios' && device.androidRelease
+            ? ` ios:${device.androidRelease}`
+            : ''),
+        ...(device.platform ? { platform: device.platform } : {}),
+      }))
+  }
+
+  /** Resuelve un serial desde el snapshot que la UI acaba de mostrar. Sólo si es un
+   * serial desconocido paga discovery; así seleccionar un item visible nunca vuelve a
+   * lanzar adb + usbmux ni queda detrás de una búsqueda lenta en background. */
+  private async resolveConnectedDevice(serial: string): Promise<AdbDevice | null> {
+    const snapshot = [...(this.deviceListCache?.devices ?? []), ...this.knownDevices()]
+    const cached = snapshot.find((device) => device.serial === serial)
+    if (cached) return cached
+    const refreshed = await this.refreshDeviceList()
+    return refreshed.find((device) => device.serial === serial) ?? null
+  }
+
+  private async handleListDevices(url: URL): Promise<Response> {
+    const force = url.searchParams.get('refresh') === '1'
+    const cacheFresh =
+      this.deviceListCache !== null && Date.now() - this.deviceListCache.updatedAt < 3000
+    let devices: AdbDevice[]
+    if (force) {
+      void this.refreshDeviceList()
+      devices = this.deviceListCache?.devices ?? this.knownDevices()
+    } else if (cacheFresh) {
+      devices = this.deviceListCache!.devices
+    } else {
+      void this.refreshDeviceList()
+      devices = this.deviceListCache?.devices ?? this.knownDevices()
+    }
     return Response.json({
-      devices: [...android, ...ios],
+      devices,
       current: this.serial,
       secondary: this.secondary.serial,
+      refreshing: this.deviceListRefresh !== null,
     })
   }
 
@@ -1179,6 +1294,7 @@ export class LiveServer {
       return Response.json({ error: 'enabled debe ser boolean' }, { status: 400 })
     if (!enabled) {
       await this.stopSecondary()
+      this.secondaryMirrorSerial = null
       this.server?.broadcast(connectionMessage('lost', null, 'secondary'))
     }
     return Response.json({ ok: true, enabled, secondary: this.secondary.serial })
@@ -1196,8 +1312,8 @@ export class LiveServer {
     } catch {
       return Response.json({ error: 'body inválido' }, { status: 400 })
     }
-    // Se valida contra la lista real de adb: solo un device presente y autorizado
-    // es elegible (y de paso nunca viaja un serial arbitrario a adb).
+    // Se valida contra el snapshot producido por discovery: sólo un serial observado y
+    // autorizado es elegible, sin volver a pagar adb + usbmux al hacer clic.
     const serial = body.serial
     const pane: DashboardPane = body.pane === 'secondary' ? 'secondary' : 'primary'
     if (typeof serial !== 'string' || !serial) {
@@ -1209,35 +1325,68 @@ export class LiveServer {
     this.switching = true
     try {
       if (pane === 'secondary') {
+        // QA mirror: B puede apuntar al mismo device que A, pero nunca abrimos un segundo
+        // sampler/stream contra el teléfono. La UI recarga B leyendo el carril primario.
+        if (serial === this.serial) {
+          await this.stopSecondary()
+          this.secondaryMirrorSerial = serial
+          return Response.json({
+            ok: true,
+            mirror: true,
+            device: this.device,
+            app: this.appStatus,
+          })
+        }
         if (serial === this.secondary.serial) {
           return Response.json({ ok: true, device: this.secondary.device, app: this.secondary.app })
         }
-        const result = await this.startSecondary(serial)
-        return Response.json({ ok: true, ...result })
-      }
-      const devices = await this.opts.transport.devices()
-      const target = devices.find((d) => d.serial === serial)
-      if (!target) {
-        // Puede ser un iPhone: no está en `adb devices` pero sí en usbmux (ticket 038).
-        const iosDevices = (await this.opts.iosTransport?.devices().catch(() => [])) ?? []
-        const iosTarget = iosDevices.find((d) => d.serial === serial)
-        if (iosTarget) {
-          if (serial === this.serial) {
-            return Response.json({ ok: true, device: this.device, app: this.appStatus })
-          }
-          const result = await this.switchToIosDevice(iosTarget)
-          return Response.json({ ok: true, ...result })
+        const target = await this.resolveConnectedDevice(serial)
+        if (!target) return Response.json({ error: 'device no conectado' }, { status: 404 })
+        if (target.state !== 'device') {
+          return Response.json({ error: `device en estado "${target.state}"` }, { status: 409 })
         }
-        return Response.json({ error: 'device no conectado' }, { status: 404 })
-      }
-      if (target.state !== 'device') {
-        return Response.json({ error: `device en estado "${target.state}"` }, { status: 409 })
+        const result = await this.startSecondary(serial, undefined, target)
+        this.secondaryMirrorSerial = null
+        return Response.json({ ok: true, ...result })
       }
       if (serial === this.serial) {
         return Response.json({ ok: true, device: this.device, app: this.appStatus })
       }
-      const result = await this.switchDevice(serial)
-      return Response.json({ ok: true, ...result })
+      const mirroredSerial =
+        this.secondaryMirrorSerial === this.serial ? this.secondaryMirrorSerial : null
+      const mirroredPackage = this.appStatus?.packageName ?? this.opts.packageName
+      const mirroredDevice = mirroredSerial
+        ? this.knownDevices().find((device) => device.serial === mirroredSerial)
+        : undefined
+      const target = await this.resolveConnectedDevice(serial)
+      if (!target) return Response.json({ error: 'device no conectado' }, { status: 404 })
+      if (target.state !== 'device') {
+        return Response.json({ error: `device en estado "${target.state}"` }, { status: 409 })
+      }
+      const mirrorSecondary = serial === this.secondary.serial
+      if (mirrorSecondary) {
+        await this.stopSecondary()
+        this.secondaryMirrorSerial = serial
+      }
+      const result =
+        target.platform === 'ios'
+          ? await this.switchToIosDevice(target)
+          : await this.switchDevice(serial)
+      let detachSecondaryMirror = false
+      if (mirroredSerial && mirroredDevice) {
+        // B estaba espejando el device anterior de A. Al mover A, conservar ese device
+        // como B independiente en vez de hacer que el mirror siga al nuevo A.
+        this.secondaryMirrorSerial = null
+        detachSecondaryMirror = true
+        try {
+          await this.startSecondary(mirroredSerial, mirroredPackage, mirroredDevice)
+        } catch {
+          // El switch de A ya terminó y no debe revertirse porque el device anterior se
+          // haya desconectado. B vuelve igual a modo independiente, mostrando espera.
+          await this.stopSecondary()
+        }
+      }
+      return Response.json({ ok: true, mirrorSecondary, detachSecondaryMirror, ...result })
     } catch (err) {
       return Response.json({ error: String(err) }, { status: 500 })
     } finally {

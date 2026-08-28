@@ -1708,6 +1708,255 @@
         color: var(--text);
       }
 
+      /* ================= DUAL COMPARISON ================= */
+      #dualRoot {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        background: var(--bg);
+      }
+      .dual-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px 14px;
+        min-height: 52px;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+        box-shadow: 0 3px 14px rgba(0, 0, 0, 0.22);
+        font-size: 12px;
+      }
+      .dual-toolbar-title {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        white-space: nowrap;
+      }
+      .dual-toolbar-title strong {
+        font: 800 15px var(--font-title);
+      }
+      .dual-toolbar-title span {
+        color: var(--muted);
+        font-size: 10.5px;
+      }
+      .dual-platform-notice {
+        flex: 1 1 360px;
+        max-width: 720px;
+        color: var(--warn);
+        background: color-mix(in srgb, var(--warn) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--warn) 36%, transparent);
+        border-radius: 8px;
+        padding: 5px 9px;
+        font-size: 10.5px;
+        line-height: 1.3;
+      }
+      .dual-toolbar-spacer {
+        flex: 1 1 auto;
+      }
+      .dual-sticky-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+      }
+      .dual-sticky-toggle input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .dual-sticky-track {
+        position: relative;
+        width: 30px;
+        height: 17px;
+        flex: 0 0 auto;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--track);
+        transition:
+          background 0.16s ease,
+          border-color 0.16s ease;
+      }
+      .dual-sticky-track::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition:
+          transform 0.16s ease,
+          background 0.16s ease;
+      }
+      .dual-sticky-toggle input:checked + .dual-sticky-track {
+        border-color: var(--accent2-ink);
+        background: color-mix(in srgb, var(--accent2) 15%, var(--track));
+      }
+      .dual-sticky-toggle input:checked + .dual-sticky-track::after {
+        transform: translateX(13px);
+        background: var(--accent2-ink);
+      }
+      .dual-sticky-toggle input:focus-visible + .dual-sticky-track {
+        outline: 2px solid var(--accent2-ink);
+        outline-offset: 2px;
+      }
+      .dual-exit {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 10px;
+        color: var(--text);
+        background: var(--chip-bg);
+        font: 600 11.5px var(--font-body);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .dual-exit:hover {
+        border-color: var(--accent);
+      }
+      .dual-panels {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        min-height: 0;
+        gap: 1px;
+        background: var(--line);
+      }
+      .dual-panel {
+        display: grid;
+        grid-template-rows: 27px minmax(0, 1fr);
+        min-width: 0;
+        min-height: 0;
+        background: var(--bg);
+      }
+      .dual-panel-label {
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        background: var(--card2);
+        font: 700 9.5px var(--font-body);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .dual-panel iframe {
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        border: 0;
+        background: var(--bg);
+      }
+
+      /* Dentro de cada iframe ambas fichas conservan exactamente la misma caja, aunque
+         una plataforma tenga menos chips de hardware. */
+      body.dual-pane .device-card {
+        min-height: 64px;
+      }
+      body.dual-pane header {
+        display: grid;
+        grid-template-columns: 104px minmax(260px, 1fr) minmax(390px, 420px);
+        align-items: center;
+      }
+      body.dual-pane .header-right {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas:
+          'verdict verdict verdict'
+          'app status menu';
+        width: 100%;
+        min-height: 84px;
+        align-content: center;
+      }
+      body.dual-pane .verdict {
+        grid-area: verdict;
+        justify-self: end;
+      }
+      body.dual-pane .app-name {
+        grid-area: app;
+        min-width: 0;
+      }
+      body.dual-pane button.pkg {
+        width: 100%;
+        max-width: none;
+      }
+      body.dual-pane .rec-badge {
+        grid-area: status;
+      }
+      body.dual-pane .menu-select {
+        grid-area: menu;
+      }
+      body.dual-pane .device-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .dual-sticky-card {
+        position: fixed;
+        z-index: 9000;
+        top: 8px;
+        left: 12px;
+        right: 12px;
+        width: min(420px, calc(100% - 24px));
+        margin: 0 auto;
+        padding: 7px 12px;
+        opacity: 0;
+        transform: translateY(-10px);
+        pointer-events: none;
+        box-shadow: var(--shadow);
+        transition:
+          opacity 0.16s ease,
+          transform 0.16s ease;
+      }
+      .dual-sticky-card.visible {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      .dual-sticky-card .dev-btn {
+        width: 100%;
+      }
+
+      @media (max-width: 900px) {
+        #dualRoot {
+          overflow: auto;
+        }
+        .dual-toolbar {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          flex-wrap: wrap;
+        }
+        .dual-toolbar-title span {
+          display: none;
+        }
+        .dual-platform-notice {
+          order: 4;
+          flex-basis: 100%;
+          max-width: none;
+        }
+        .dual-panels {
+          grid-template-columns: 1fr;
+          grid-template-rows: repeat(2, minmax(720px, 100vh));
+          overflow: visible;
+        }
+      }
+
+      @media (max-width: 760px) {
+        body.dual-pane header {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        body.dual-pane .brand {
+          display: none;
+        }
+        body.dual-pane .header-right {
+          grid-template-columns: minmax(0, 1fr) auto auto;
+        }
+      }
+
       /* ================= RESPONSIVE ================= */
       @media (max-width: 1180px) {
         .perf-grid {
@@ -1896,7 +2145,6 @@
             </div>
           </div>
         </div>
-
       </div>
     </header>
 
@@ -2182,13 +2430,12 @@
       </div>
     </section>
 
-    <footer class="credits">
-      Live data from Android &amp; iOS · <b>Mobile Profiler</b>
-    </footer>
+    <footer class="credits">Live data from Android &amp; iOS · <b>Mobile Profiler</b></footer>
 
     <script src="vendor/echarts.min.js"></script>
     <script src="vendor/motion.min.js"></script>
     <script src="capabilities.js"></script>
+    <script src="dualComparison.js"></script>
     <script src="collapsiblePanels.js"></script>
     <script src="render.js"></script>
     <script src="logsCore.js"></script>

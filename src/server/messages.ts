@@ -37,7 +37,7 @@ export type ServerMessage =
   | { type: 'sample'; sample: Sample; pane?: DashboardPane }
   | { type: 'flow'; flow: InspectorFlow }
   | { type: 'app'; app: AppStatus; pane?: DashboardPane }
-  | { type: 'logs'; entries: LogEntry[] }
+  | { type: 'logs'; entries: LogEntry[]; pane?: DashboardPane }
   | { type: 'connection'; state: ConnectionState; serial: string | null; pane?: DashboardPane }
 
 /**
@@ -78,6 +78,6 @@ export function connectionMessage(
   return JSON.stringify({ type: 'connection', state, serial, pane } satisfies ServerMessage)
 }
 
-export function logsMessage(entries: LogEntry[]): string {
-  return JSON.stringify({ type: 'logs', entries } satisfies ServerMessage)
+export function logsMessage(entries: LogEntry[], pane?: DashboardPane): string {
+  return JSON.stringify({ type: 'logs', entries, pane } satisfies ServerMessage)
 }

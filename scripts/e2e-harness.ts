@@ -23,6 +23,13 @@ const IOS_DEVICE: AdbDevice = {
   platform: 'ios',
 }
 
+const IOS_DEVICE_B: AdbDevice = {
+  serial: 'UDID-E2E-B',
+  state: 'device',
+  description: 'model:iPhone16,2 ios:26.6 transport:USB',
+  platform: 'ios',
+}
+
 /** adb que no ve nada: el escenario es 100 % iOS. */
 const noAndroid: AdbTransport = {
   isAvailable: async () => true,
@@ -43,6 +50,7 @@ interface FakeStream {
 const streams: FakeStream[] = []
 /** el cable: con false, ni `devices()` ni `processes()` ven al iPhone. */
 let plugged = true
+let deviceDiscoveryDelayMs = 0
 /** empuja datos a los canales vivos para que el dashboard muestre valores reales. */
 let feeder: ReturnType<typeof setInterval> | null = null
 
@@ -51,7 +59,12 @@ const live = (cmd: string): FakeStream[] =>
 
 const iosTransport = {
   isAvailable: async () => true,
-  devices: async () => (plugged ? [IOS_DEVICE] : []),
+  devices: async () => {
+    if (deviceDiscoveryDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, deviceDiscoveryDelayMs))
+    }
+    return plugged ? [IOS_DEVICE, IOS_DEVICE_B] : []
+  },
   processes: async () => (plugged ? [{ pid: 777, name: 'SampleApp' }] : null),
   appExecutable: async () => 'SampleApp',
   apps: async () => [{ id: PKG, label: 'Sample App', executable: 'SampleApp' }],
@@ -84,6 +97,9 @@ function startFeeder(): void {
         '{"InstantAmperage": -180, "Temperature": 3120, "IsCharging": false, ' +
           '"CurrentCapacity": 82}',
       )
+    }
+    for (const s of live('syslog')) {
+      s.onLine('2026-08-27 12:00:00.000000 SampleApp{Unity}[777] <INFO>: dual log visible')
     }
   }, 500)
 }
@@ -127,6 +143,14 @@ Bun.serve({
     }
     if (pathname === '/plug') {
       plugged = true
+      return new Response('ok')
+    }
+    if (pathname === '/slow-devices') {
+      deviceDiscoveryDelayMs = 1500
+      return new Response('ok')
+    }
+    if (pathname === '/normal-devices') {
+      deviceDiscoveryDelayMs = 0
       return new Response('ok')
     }
     return new Response('not found', { status: 404 })

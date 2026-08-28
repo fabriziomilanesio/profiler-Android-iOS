@@ -23,6 +23,7 @@ interface SelectBody {
 
 /** Stream long-running fake (logcat): el test le inyecta líneas a mano. */
 interface FakeStream {
+  serial: string
   command: string
   onLine: (line: string) => void
   stopped: boolean
@@ -37,16 +38,22 @@ function fakeTransport(
   t: AdbTransport
   cmds: string[]
   streams: FakeStream[]
+  deviceQueries: string[]
 } {
   const cmds: string[] = []
   const streams: FakeStream[] = []
+  const deviceQueries: string[] = []
   const t: AdbTransport = {
     isAvailable: async () => true,
     version: async () => '1.0.41',
-    devices: async () => deviceList,
+    devices: async () => {
+      deviceQueries.push('devices')
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      return deviceList
+    },
     trackDevices: () => () => {},
-    streamShell: (_serial, command, onLine) => {
-      const s: FakeStream = { command, onLine, stopped: false }
+    streamShell: (serial, command, onLine) => {
+      const s: FakeStream = { serial, command, onLine, stopped: false }
       streams.push(s)
       return () => {
         s.stopped = true
@@ -71,7 +78,7 @@ function fakeTransport(
       return ok('')
     },
   }
-  return { t, cmds, streams }
+  return { t, cmds, streams, deviceQueries }
 }
 
 function memoryStore(): {
@@ -101,7 +108,7 @@ async function startServer(
   serial: string | null = 'FAKE-SERIAL',
   extra: { sessionsDir?: string; reportsDir?: string } = {},
 ) {
-  const { t, cmds, streams } = fakeTransport(running, installed, deviceList)
+  const { t, cmds, streams, deviceQueries } = fakeTransport(running, installed, deviceList)
   const store = memoryStore()
   if (extra.reportsDir) store.data.reportsDir = extra.reportsDir
   const server = new LiveServer({
@@ -117,7 +124,7 @@ async function startServer(
     sessionsDir: extra.sessionsDir,
   })
   const { url } = await server.start()
-  return { server, url, cmds, streams, store }
+  return { server, url, cmds, streams, deviceQueries, store, transport: t }
 }
 
 describe('LiveServer /api/packages', () => {
@@ -214,9 +221,12 @@ const DEVICES: AdbDevice[] = [
 interface DevicesBody {
   devices: AdbDevice[]
   current: string
+  secondary: string | null
+  refreshing: boolean
 }
 interface DeviceSwitchBody {
   ok: boolean
+  mirror?: boolean
   device: { serial: string }
   app: { packageName: string; pid: number | null; launched: boolean }
 }
@@ -225,11 +235,62 @@ describe('LiveServer /api/devices', () => {
   test('lista los devices de adb en el momento + el activo', async () => {
     const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
     try {
-      const res = await fetch(`${url}/api/devices`)
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as DevicesBody
+      const initial = await fetch(`${url}/api/devices?refresh=1`)
+      expect(initial.status).toBe(200)
+      const initialBody = (await initial.json()) as DevicesBody
+      expect(initialBody.devices.map((device) => device.serial)).toContain('FAKE-SERIAL')
+      expect(initialBody.refreshing).toBe(true)
+
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      const body = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
       expect(body.devices).toEqual(DEVICES)
       expect(body.current).toBe('FAKE-SERIAL')
+      expect(body.refreshing).toBe(false)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('refresh responde con el snapshot anterior sin borrar devices mientras busca', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      await fetch(`${url}/api/devices?refresh=1`)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+
+      const refreshing = (await (await fetch(`${url}/api/devices?refresh=1`)).json()) as DevicesBody
+      expect(refreshing.devices).toEqual(DEVICES)
+      expect(refreshing.refreshing).toBe(true)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('un fallo transitorio de discovery conserva el último resultado por plataforma', async () => {
+    const { server, url, transport } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      await fetch(`${url}/api/devices?refresh=1`)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      transport.devices = async () => {
+        throw new Error('adb temporalmente no responde')
+      }
+
+      await fetch(`${url}/api/devices?refresh=1`)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      const body = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(body.devices).toEqual(DEVICES)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('dos selectores concurrentes comparten una sola consulta de discovery', async () => {
+    const { server, url, deviceQueries } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      await Promise.all([
+        fetch(`${url}/api/devices?refresh=1`),
+        fetch(`${url}/api/devices?refresh=1`),
+      ])
+      expect(deviceQueries).toEqual(['devices'])
     } finally {
       await server.stop()
     }
@@ -237,6 +298,109 @@ describe('LiveServer /api/devices', () => {
 })
 
 describe('LiveServer /api/device', () => {
+  test('seleccionar devices ya listados no vuelve a ejecutar discovery', async () => {
+    const { server, url, deviceQueries } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      await fetch(`${url}/api/devices?refresh=1`)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      const queriesAfterList = deviceQueries.length
+
+      const secondary = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(secondary.status).toBe(200)
+      expect(deviceQueries).toHaveLength(queriesAfterList)
+
+      const primary = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-A', pane: 'primary' }),
+      })
+      expect(primary.status).toBe(200)
+      expect(deviceQueries).toHaveLength(queriesAfterList)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('el mismo device en B activa un espejo sin comandos ni streams adicionales', async () => {
+    const { server, url, cmds, streams } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      // El primer tick del carril principal arranca en background durante server.start().
+      // Dejarlo terminar evita atribuir sus comandos al switch de B.
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      const commandsBefore = cmds.length
+      const streamsBefore = streams.filter((stream) => !stream.stopped).length
+      const res = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'FAKE-SERIAL', pane: 'secondary' }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as DeviceSwitchBody
+      expect(body.mirror).toBe(true)
+      expect(body.device.serial).toBe('FAKE-SERIAL')
+      expect(cmds.length).toBe(commandsBefore)
+      expect(streams.filter((stream) => !stream.stopped).length).toBe(streamsBefore)
+
+      const devices = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(devices.secondary).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('si A cambia, B conserva el device que espejaba como carril independiente', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const mirror = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'FAKE-SERIAL', pane: 'secondary' }),
+      })
+      expect(mirror.status).toBe(200)
+
+      const switched = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'primary' }),
+      })
+      expect(switched.status).toBe(200)
+      const body = (await switched.json()) as DeviceSwitchBody & {
+        detachSecondaryMirror: boolean
+      }
+      expect(body.detachSecondaryMirror).toBe(true)
+
+      const devices = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(devices.current).toBe('SERIAL-B')
+      expect(devices.secondary).toBe('FAKE-SERIAL')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('si A cambia al device de B, B se convierte en espejo y libera su carril', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const secondary = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(secondary.status).toBe(200)
+
+      const primary = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'primary' }),
+      })
+      expect(primary.status).toBe(200)
+      const body = (await primary.json()) as DeviceSwitchBody & { mirrorSecondary: boolean }
+      expect(body.mirrorSecondary).toBe(true)
+
+      const devices = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(devices.current).toBe('SERIAL-B')
+      expect(devices.secondary).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
   test('serial no conectado ⇒ 404; unauthorized ⇒ 409', async () => {
     const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
     try {
@@ -250,6 +414,27 @@ describe('LiveServer /api/device', () => {
         body: JSON.stringify({ serial: 'SERIAL-C' }),
       })
       expect(unauthorized.status).toBe(409)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('un destino B inválido no libera el carril que ya estaba funcionando', async () => {
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const selected = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(selected.status).toBe(200)
+
+      const invalid = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'NO-EXISTE', pane: 'secondary' }),
+      })
+      expect(invalid.status).toBe(404)
+      const devices = (await (await fetch(`${url}/api/devices`)).json()) as DevicesBody
+      expect(devices.secondary).toBe('SERIAL-B')
     } finally {
       await server.stop()
     }
@@ -580,6 +765,53 @@ describe('LiveServer logs (ticket 027)', () => {
       await new Promise((r) => setTimeout(r, 100)) // logFlushMs=20: sobra un flush
       expect(batches).toHaveLength(1)
       expect(batches[0]!.entries.map((e) => e.message)).toEqual(['burst 1', 'burst 2', 'burst 3'])
+      ws.close()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  test('el carril B conserva y emite únicamente sus propios logs', async () => {
+    const { server, url, streams } = await startServer(new Map([[PKG, 111]]), [], DEVICES)
+    try {
+      const selected = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(selected.status).toBe(200)
+
+      const ws = new WebSocket(`${url.replace('http', 'ws')}/ws`)
+      const batches: Array<{ pane?: string; entries: Array<{ message: string }> }> = []
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(String(ev.data)) as { type: string }
+        if (msg.type === 'logs') batches.push(msg as never)
+      }
+      await new Promise<void>((resolve) => {
+        ws.onopen = () => resolve()
+      })
+
+      const primary = streams.find(
+        (stream) => stream.serial === 'FAKE-SERIAL' && stream.command.includes('--pid=111'),
+      )!
+      const secondary = streams.find(
+        (stream) => stream.serial === 'SERIAL-B' && stream.command.includes('--pid=111'),
+      )!
+      primary.onLine(UNITY_LINE('solo A'))
+      secondary.onLine(UNITY_LINE('solo B'))
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      const primaryRing = (await (await fetch(`${url}/api/logs?pane=primary`)).json()) as {
+        entries: Array<{ message: string }>
+      }
+      const secondaryRing = (await (await fetch(`${url}/api/logs?pane=secondary`)).json()) as {
+        entries: Array<{ message: string }>
+      }
+      expect(primaryRing.entries.map((entry) => entry.message)).toEqual(['solo A'])
+      expect(secondaryRing.entries.map((entry) => entry.message)).toEqual(['solo B'])
+      expect(batches.map((batch) => [batch.pane ?? 'primary', batch.entries[0]?.message])).toEqual([
+        ['primary', 'solo A'],
+        ['secondary', 'solo B'],
+      ])
       ws.close()
     } finally {
       await server.stop()
