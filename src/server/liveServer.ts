@@ -27,6 +27,7 @@ import {
 } from '../core/appStore'
 import { SessionBuffer } from '../core/session/sessionBuffer'
 import { SessionLog, sessionId } from '../core/session/sessionLog'
+import { DualSessionLog } from '../core/session/dualSessionLog'
 import { LogcatCapture } from '../core/logs/logcatCapture'
 import { LogRing, DEFAULT_LOG_CAP } from '../core/logs/logRing'
 import { LogSink } from '../core/logs/logSink'
@@ -38,7 +39,12 @@ import {
   serializeLogsTxt,
 } from '../core/logs/exportLogs'
 import { buildReportSession } from '../core/session/stats'
-import { generateReportHtml, reportFilename } from '../report/generateReport'
+import {
+  dualReportFilename,
+  generateDualReportHtml,
+  generateReportHtml,
+  reportFilename,
+} from '../report/generateReport'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -222,6 +228,10 @@ export class LiveServer {
   /** buffer de sesión en memoria (export) + espejo en disco (historial). */
   private readonly buffer = new SessionBuffer()
   private sessionLog: SessionLog | null = null
+  private dualActive = false
+  private dualPrimaryBuffer = new SessionBuffer()
+  private dualSecondaryBuffer = new SessionBuffer()
+  private dualSessionLog: DualSessionLog | null = null
   private intervalMs: number
   /** captura de logcat (ticket 027): app stream + crash stream, fuera del tick. */
   private logCapture: LogcatCapture | null = null
@@ -291,6 +301,10 @@ export class LiveServer {
     return this.opts.appStore?.data ?? defaultAppStoreData()
   }
 
+  private dualSessionsDir(): string | null {
+    return this.opts.sessionsDir ? join(this.opts.sessionsDir, 'dual') : null
+  }
+
   /**
    * Intervalo efectivo del carril rápido: flag del CLI (opts) > config manual del
    * usuario > auto según la RAM del device (ticket 023: gama baja → 2 s). Se
@@ -300,7 +314,10 @@ export class LiveServer {
     if (this.opts.intervalMs !== undefined) return this.opts.intervalMs
     const cfg = this.config()
     if (!cfg.intervalAuto) return cfg.intervalMs
-    return autoIntervalMs(this.device?.ramTotalMb ?? null)
+    return Math.max(
+      autoIntervalMs(this.device?.ramTotalMb ?? null),
+      this.dualActive ? autoIntervalMs(this.secondary.device?.ramTotalMb ?? null) : 1000,
+    )
   }
 
   /** Aplica el intervalo resuelto; reinicia el loop solo si cambió y ya corre. */
@@ -309,6 +326,12 @@ export class LiveServer {
     if (effective === this.intervalMs) return
     this.intervalMs = effective
     if (this.timer) this.startTimer()
+    if (this.secondary.timer) {
+      clearInterval(this.secondary.timer)
+      this.secondary.timer = setInterval(() => void this.tickSecondary(), this.intervalMs)
+    }
+    this.iosSource?.setIntervalMs(this.intervalMs)
+    this.secondary.iosSource?.setIntervalMs(this.intervalMs)
   }
 
   /**
@@ -358,6 +381,12 @@ export class LiveServer {
         }
         if (url.pathname === '/api/dual' && req.method === 'POST') {
           return this.handleDualMode(req)
+        }
+        if (url.pathname === '/api/dual/report' && req.method === 'GET') {
+          return this.handleDualReport(url)
+        }
+        if (url.pathname === '/api/dual/sessions' && req.method === 'GET') {
+          return this.handleDualSessions()
         }
         if (url.pathname === '/api/report' && req.method === 'GET') {
           return this.handleReport(url)
@@ -792,6 +821,10 @@ export class LiveServer {
       const entry = { sample, pkg: this.appStatus.packageName, serial: this.serial }
       this.buffer.push(entry)
       this.sessionLog?.appendSample(entry)
+      if (this.dualActive) {
+        this.dualPrimaryBuffer.push(entry)
+        this.dualSessionLog?.appendSample('primary', entry.pkg, entry.serial, sample)
+      }
     }
     this.server?.broadcast(sampleMessage(sample))
     if (this.opts.jsonlPath) {
@@ -814,12 +847,22 @@ export class LiveServer {
       await lane.sampler.refreshPid()
       lane.logCapture?.setPid(lane.sampler.processId > 0 ? lane.sampler.processId : null)
       const sample = await lane.sampler.sampleOnce()
-      this.server?.broadcast(sampleMessage(sample, 'secondary'))
+      this.pushSecondarySample(sample)
     } catch {
       /* un device B desconectado no debe afectar el muestreo principal */
     } finally {
       lane.ticking = false
     }
+  }
+
+  private pushSecondarySample(sample: Sample): void {
+    const lane = this.secondary
+    if (this.dualActive && lane.app && lane.serial) {
+      const entry = { sample, pkg: lane.app.packageName, serial: lane.serial }
+      this.dualSecondaryBuffer.push(entry)
+      this.dualSessionLog?.appendSample('secondary', entry.pkg, entry.serial, sample)
+    }
+    this.server?.broadcast(sampleMessage(sample, 'secondary'))
   }
 
   private stopSecondaryTimer(): void {
@@ -881,7 +924,7 @@ export class LiveServer {
         serial,
         ...(proc ? { processName: proc.name } : {}),
         intervalMs: this.intervalMs,
-        onSample: (sample) => this.server?.broadcast(sampleMessage(sample, 'secondary')),
+        onSample: (sample) => this.pushSecondarySample(sample),
         ...(this.opts.iosStaleMs !== undefined ? { staleMs: this.opts.iosStaleMs } : {}),
       })
       this.secondary.iosSource.start()
@@ -933,9 +976,17 @@ export class LiveServer {
           ramTotalMb: sys.ramTotalMb,
           cores: sys.cores,
         }
+        this.applyInterval()
         this.server?.broadcast(
           deviceMessage(this.secondary.device, this.secondary.capabilities, 'secondary'),
         )
+        if (this.dualActive && this.secondary.app) {
+          this.dualSessionLog?.appendDevice(
+            'secondary',
+            this.secondary.device,
+            this.secondary.app.packageName,
+          )
+        }
       })
     } else {
       this.secondary.capabilities = capabilitiesFor('android')
@@ -959,6 +1010,14 @@ export class LiveServer {
     )
     this.server?.broadcast(appMessage(this.secondary.app, 'secondary'))
     this.server?.broadcast(connectionMessage('connected', serial, 'secondary'))
+    if (this.dualActive) {
+      this.dualSessionLog?.appendDevice(
+        'secondary',
+        this.secondary.device,
+        this.secondary.app.packageName,
+      )
+      this.applyInterval()
+    }
     return { device: this.secondary.device, app: this.secondary.app }
   }
 
@@ -1292,9 +1351,25 @@ export class LiveServer {
     }
     if (typeof enabled !== 'boolean')
       return Response.json({ error: 'enabled debe ser boolean' }, { status: 400 })
-    if (!enabled) {
+    if (enabled && !this.dualActive) {
+      this.dualActive = true
+      this.dualPrimaryBuffer = new SessionBuffer()
+      this.dualSecondaryBuffer = new SessionBuffer()
+      const started = new Date()
+      const dir = this.dualSessionsDir()
+      this.dualSessionLog = dir
+        ? new DualSessionLog(dir, sessionId(started), started.toISOString())
+        : null
+      if (this.device && this.appStatus) {
+        this.dualSessionLog?.appendDevice('primary', this.device, this.appStatus.packageName)
+      }
+      this.applyInterval()
+    } else if (!enabled) {
+      this.dualActive = false
+      this.dualSessionLog = null
       await this.stopSecondary()
       this.secondaryMirrorSerial = null
+      this.applyInterval()
       this.server?.broadcast(connectionMessage('lost', null, 'secondary'))
     }
     return Response.json({ ok: true, enabled, secondary: this.secondary.serial })
@@ -1445,6 +1520,9 @@ export class LiveServer {
         this.applyInterval()
         this.server?.broadcast(deviceMessage(this.device, this.capabilities))
         this.sessionLog?.appendDevice(this.device)
+        if (this.dualActive && this.appStatus) {
+          this.dualSessionLog?.appendDevice('primary', this.device, this.appStatus.packageName)
+        }
       })
       .catch(() => {
         /* sin RAM total el dashboard degrada a valores absolutos, no rompe */
@@ -1467,6 +1545,9 @@ export class LiveServer {
     this.buffer.addEvent(ev)
     this.sessionLog?.appendEvent(ev)
     this.sessionLog?.appendDevice(this.device)
+    if (this.dualActive && this.appStatus) {
+      this.dualSessionLog?.appendDevice('primary', this.device, this.appStatus.packageName)
+    }
 
     if (transport?.stream) {
       // Arranca SIEMPRE, con la app abierta o cerrada: FPS y GPU son del compositor del
@@ -1651,6 +1732,9 @@ export class LiveServer {
     this.buffer.addEvent(ev)
     this.sessionLog?.appendEvent(ev)
     this.sessionLog?.appendDevice(this.device)
+    if (this.dualActive && this.appStatus) {
+      this.dualSessionLog?.appendDevice('primary', this.device, this.appStatus.packageName)
+    }
     // en modo espera con el inspector prendido nunca llegó a arrancar: acá se cablea
     if (this.inspectorEnabled) await this.startInspector()
     const app = await this.switchApp(pkg, false)
@@ -1757,6 +1841,137 @@ export class LiveServer {
         'content-type': 'text/html; charset=utf-8',
         'content-disposition': `attachment; filename="${filename}"`,
       },
+    })
+  }
+
+  /** GET /api/dual/report — dos reportes individuales completos dentro de un solo HTML. */
+  private async handleDualReport(url: URL): Promise<Response> {
+    if (this.secondaryMirrorSerial !== null) {
+      return Response.json(
+        { error: 'los reportes duales no están disponibles mientras Device B refleja a Device A' },
+        { status: 409 },
+      )
+    }
+    const sessionParam = url.searchParams.get('session')
+    const windowParam = url.searchParams.get('window') ?? 'full'
+    let windowMs: number | undefined
+    if (windowParam !== 'full') {
+      const minutes = Number(windowParam)
+      if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 480) {
+        return Response.json({ error: 'window inválida' }, { status: 400 })
+      }
+      windowMs = minutes * 60_000
+    }
+
+    let aSamples: Sample[]
+    let bSamples: Sample[]
+    let aPkg: string
+    let bPkg: string
+    let aDevice: DeviceInfo | null
+    let bDevice: DeviceInfo | null
+    const crop = (samples: Sample[]): Sample[] => {
+      if (windowMs === undefined || samples.length === 0) return samples
+      const lastTs = samples[samples.length - 1]!.ts
+      return samples.filter((sample) => lastTs - sample.ts <= windowMs!)
+    }
+
+    if (sessionParam) {
+      const dir = this.dualSessionsDir()
+      const stored = dir ? DualSessionLog.read(dir, sessionParam) : null
+      if (!stored) return Response.json({ error: 'sesión dual no encontrada' }, { status: 404 })
+      aSamples = crop(stored.primary.samples)
+      bSamples = crop(stored.secondary.samples)
+      aPkg = stored.primary.packageName ?? 'device-a'
+      bPkg = stored.secondary.packageName ?? 'device-b'
+      aDevice = stored.primary.device
+      bDevice = stored.secondary.device
+    } else {
+      if (
+        !this.dualActive ||
+        !this.serial ||
+        !this.appStatus ||
+        !this.secondary.serial ||
+        !this.secondary.app
+      ) {
+        return Response.json({ error: 'la comparación dual no está lista' }, { status: 409 })
+      }
+      const a = this.dualPrimaryBuffer.currentSegment(
+        this.appStatus.packageName,
+        this.serial,
+        windowMs,
+      )
+      const b = this.dualSecondaryBuffer.currentSegment(
+        this.secondary.app.packageName,
+        this.secondary.serial,
+        windowMs,
+      )
+      aSamples = a.samples
+      bSamples = b.samples
+      aPkg = this.appStatus.packageName
+      bPkg = this.secondary.app.packageName
+      aDevice = this.device
+      bDevice = this.secondary.device
+    }
+    if (!aSamples.length || !bSamples.length) {
+      return Response.json(
+        { error: 'ambos dispositivos necesitan muestras en la ventana pedida' },
+        { status: 409 },
+      )
+    }
+
+    const intervalOf = (samples: Sample[]): number =>
+      samples.length >= 2 ? Math.max(250, samples[1]!.ts - samples[0]!.ts) : this.intervalMs
+    const primary = buildReportSession({
+      samples: aSamples,
+      packageName: aPkg,
+      device: aDevice,
+      intervalMs: intervalOf(aSamples),
+      trimmed: false,
+      fpsTarget: this.config().fpsTarget,
+      logEntries: sessionParam ? null : this.logRing.last(DEFAULT_LOG_CAP),
+    })
+    const secondary = buildReportSession({
+      samples: bSamples,
+      packageName: bPkg,
+      device: bDevice,
+      intervalMs: intervalOf(bSamples),
+      trimmed: false,
+      fpsTarget: this.config().fpsTarget,
+    })
+    const themeOf = (name: string): 'light' | 'dark' =>
+      url.searchParams.get(name) === 'light' ? 'light' : 'dark'
+    const generatedAt = new Date()
+    const html = generateDualReportHtml(
+      primary,
+      secondary,
+      { primary: themeOf('themeA'), secondary: themeOf('themeB') },
+      generatedAt,
+    )
+    const filename = dualReportFilename(generatedAt)
+    try {
+      const dir = join(this.config().reportsDir, 'Dual session')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, filename), html)
+    } catch {
+      /* la descarga no depende de la copia local */
+    }
+    return new Response(html, {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'content-disposition': `attachment; filename="${filename}"`,
+      },
+    })
+  }
+
+  private handleDualSessions(): Response {
+    if (this.secondaryMirrorSerial !== null) {
+      return Response.json({ sessions: [], current: null, mirror: true })
+    }
+    const dir = this.dualSessionsDir()
+    return Response.json({
+      sessions: dir ? DualSessionLog.list(dir) : [],
+      current: this.dualSessionLog?.id ?? null,
+      mirror: false,
     })
   }
 

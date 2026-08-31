@@ -43,6 +43,16 @@ test.describe('dual comparison QoL', () => {
     await expect(primary.locator('#logsList .log-row').first()).toContainText('dual log visible')
     await expect(secondary.locator('#logsList .log-row').first()).toContainText('dual log visible')
 
+    await page.locator('#dualSettingsToggle').click()
+    await expect(page.locator('#dualMirrorNotice')).toBeVisible()
+    await expect(page.locator('#dualExportRow button').first()).toBeDisabled()
+    await expect(page.locator('#dualReportsFolder')).toBeDisabled()
+    await expect(page.locator('#dualComparisonExport')).toBeDisabled()
+    await expect(page.locator('#dualAppFilter')).toBeEnabled()
+    await expect(page.locator('#dualSampling')).toBeEnabled()
+    await expect(page.locator('#dualTargetFps')).toBeEnabled()
+    await page.locator('.dual-settings-close').click()
+
     const devices = await page.evaluate(async () => (await fetch('/api/devices')).json())
     expect(devices.secondary).toBeNull()
 
@@ -52,6 +62,12 @@ test.describe('dual comparison QoL', () => {
     await expect(secondary.locator('body')).not.toHaveClass(/dual-pane-mirror/)
     await expect(primary.locator('#devName')).toContainText('iPhone 15 Pro Max')
     await expect(secondary.locator('#devName')).toContainText('iPhone 14 Pro Max')
+
+    await page.locator('#dualSettingsToggle').click()
+    await expect(page.locator('#dualMirrorNotice')).toBeHidden()
+    await expect(page.locator('#dualExportRow button').first()).toBeEnabled()
+    await expect(page.locator('#dualReportsFolder')).toBeEnabled()
+    await expect(page.locator('#dualComparisonExport')).toBeEnabled()
   })
 
   test('also mirrors B when A switches to the device already selected there', async ({ page }) => {
@@ -114,5 +130,18 @@ test.describe('dual comparison QoL', () => {
     await secondary.locator('footer').scrollIntoViewIfNeeded()
     await expect(primary.locator('.dual-sticky-card')).toHaveClass(/visible/)
     await expect(secondary.locator('.dual-sticky-card')).toHaveClass(/visible/)
+
+    await expect(page.locator('#dualSettingsToggle')).toBeVisible()
+    await page.locator('#dualSettingsToggle').click()
+    await expect(page.locator('#dualSettingsDrawer')).toBeVisible()
+    await expect(page.locator('#dualComparisonExport')).toContainText('Export Comparison Report')
+    await expect(page.locator('#dualAppFilter')).toBeVisible()
+    await expect(page.locator('#dualSampling')).toBeVisible()
+    await expect(page.locator('#dualTargetFps')).toBeVisible()
+    await page.locator('.dual-settings-close').click()
+
+    await primary.locator('#menuBtn').click()
+    await expect(primary.locator('#panelAppearance')).toBeVisible()
+    await expect(primary.locator('#exportRow')).toBeHidden()
   })
 })
