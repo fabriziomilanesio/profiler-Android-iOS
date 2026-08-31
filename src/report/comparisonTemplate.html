@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mobile Profiler — __TITLE__</title>
+    <style>
+      __FONTS_CSS__ :root {
+        --bg: #f4f4f9;
+        --card: #ffffff;
+        --card2: #fbfbfe;
+        --text: #1c1c28;
+        --muted: #66667a;
+        --line: #e2e2ec;
+        --a: #eb008b;
+        --b: #009e96;
+        --ok: #0fa968;
+        --chip: rgba(28, 28, 40, 0.05);
+      }
+      body[data-theme='dark'] {
+        --bg: #0b0b10;
+        --card: #15151d;
+        --card2: #1b1b25;
+        --text: #f2f2f6;
+        --muted: #9b9bab;
+        --line: #2a2a38;
+        --b: #00e6da;
+        --ok: #2ee59d;
+        --chip: rgba(255, 255, 255, 0.05);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+      body {
+        color: var(--text);
+        background:
+          radial-gradient(900px 420px at 8% -8%, rgba(235, 0, 139, 0.09), transparent 62%),
+          radial-gradient(900px 420px at 92% -8%, rgba(0, 230, 218, 0.08), transparent 62%),
+          var(--bg);
+        font-family: 'Inter', system-ui, sans-serif;
+        padding: 20px 24px 32px;
+      }
+      header,
+      main,
+      footer {
+        width: min(1440px, 100%);
+        margin-inline: auto;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 6px 2px 18px;
+      }
+      .brand {
+        font:
+          800 25px/1 'Baloo 2',
+          system-ui;
+      }
+      .brand span {
+        color: var(--a);
+      }
+      .badge {
+        color: var(--a);
+        border: 1px solid rgba(235, 0, 139, 0.35);
+        background: rgba(235, 0, 139, 0.08);
+        border-radius: 999px;
+        padding: 4px 11px;
+        font:
+          800 11px/1 'Baloo 2',
+          system-ui;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+      .theme {
+        margin-left: auto;
+        border: 1px solid var(--line);
+        color: var(--text);
+        background: var(--card2);
+        border-radius: 999px;
+        padding: 7px 12px;
+        cursor: pointer;
+      }
+      .card {
+        background: linear-gradient(180deg, var(--card2), var(--card));
+        border: 1px solid var(--line);
+        border-radius: 15px;
+      }
+      .lanes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .lane {
+        padding: 17px 19px;
+        position: relative;
+        overflow: hidden;
+      }
+      .lane::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: var(--lane);
+      }
+      .lane-tag {
+        color: var(--lane);
+        font: 800 12px 'Baloo 2';
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+      .device {
+        font: 700 21px/1.15 'Baloo 2';
+        margin-top: 4px;
+      }
+      .app {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 3px;
+        overflow-wrap: anywhere;
+      }
+      .facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 12px;
+      }
+      .fact {
+        background: var(--chip);
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 11px;
+      }
+      .scope {
+        margin: 14px 0;
+        padding: 14px 17px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+      }
+      .scope strong {
+        font: 700 15px 'Baloo 2';
+        white-space: nowrap;
+      }
+      .scope p {
+        color: var(--muted);
+        font-size: 12px;
+        margin: 0;
+        line-height: 1.5;
+      }
+      h2 {
+        font: 700 16px 'Baloo 2';
+        margin: 21px 2px 9px;
+        letter-spacing: 0.03em;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .metric {
+        padding: 15px 16px;
+        min-width: 0;
+      }
+      .metric-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: start;
+      }
+      .metric-name {
+        font: 700 15px 'Baloo 2';
+      }
+      .metric-desc {
+        color: var(--muted);
+        font-size: 10px;
+        margin-top: 1px;
+      }
+      .winner {
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 10px;
+        background: var(--chip);
+        white-space: nowrap;
+      }
+      .values {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+        margin-top: 13px;
+      }
+      .value {
+        border-left: 2px solid var(--lane);
+        padding-left: 9px;
+      }
+      .value-label {
+        color: var(--lane);
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .value-number {
+        font: 700 24px/1.15 'Baloo 2';
+        white-space: nowrap;
+      }
+      .value-sub {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .delta {
+        color: var(--muted);
+        font-size: 11px;
+        margin-top: 11px;
+      }
+      .charts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .chart-card {
+        padding: 14px 15px 8px;
+        min-width: 0;
+        break-inside: avoid;
+      }
+      .chart-title {
+        font: 700 13px 'Baloo 2';
+      }
+      .chart {
+        height: 265px;
+        width: 100%;
+      }
+      .excluded {
+        padding: 7px 17px;
+      }
+      .excluded-row {
+        display: grid;
+        grid-template-columns: minmax(140px, 0.35fr) 1fr;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .excluded-row:last-child {
+        border-bottom: 0;
+      }
+      .excluded-name {
+        font-weight: 600;
+        font-size: 12px;
+      }
+      .excluded-detail {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+      .reason {
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--a);
+        margin-left: 6px;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 18px;
+        text-align: center;
+      }
+      footer {
+        color: var(--muted);
+        font-size: 10px;
+        padding: 20px 2px 0;
+      }
+      @media (max-width: 980px) {
+        .metrics {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 720px) {
+        body {
+          padding: 12px;
+        }
+        .lanes,
+        .charts,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+        .scope {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 5px;
+        }
+      }
+      @media print {
+        body {
+          background: white;
+          color: #1c1c28;
+          padding: 8px;
+        }
+        .theme {
+          display: none;
+        }
+        .card {
+          box-shadow: none;
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="__THEME__">
+    <header>
+      <div class="brand"><span>Mobile</span> Profiler</div>
+      <span class="badge">Comparison Report</span>
+      <button class="theme" id="themeToggle" type="button">Toggle theme</button>
+    </header>
+    <main>
+      <section class="lanes" id="lanes"></section>
+      <section class="scope card">
+        <strong>Comparable evidence only</strong>
+        <p id="scopeText"></p>
+      </section>
+      <h2>Performance comparison</h2>
+      <section class="metrics" id="metrics"></section>
+      <h2>Shared timelines</h2>
+      <section class="charts" id="charts"></section>
+      <h2>Excluded metrics</h2>
+      <section class="excluded card" id="excluded"></section>
+    </main>
+    <footer>Generated __GENERATED__ · standalone report · Mobile Profiler</footer>
+    <script>
+      __ECHARTS__
+    </script>
+    <script>
+      window.ComparisonReportData = __REPORT_DATA__
+    </script>
+    <script>
+      __TEMPLATE_JS__
+    </script>
+  </body>
+</html>

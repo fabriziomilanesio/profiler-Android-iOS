@@ -138,6 +138,11 @@ test.describe('dual comparison QoL', () => {
     await expect(page.locator('#dualAppFilter')).toBeVisible()
     await expect(page.locator('#dualSampling')).toBeVisible()
     await expect(page.locator('#dualTargetFps')).toBeVisible()
+    const downloadPromise = page.waitForEvent('download')
+    await page.locator('#dualComparisonExport').click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toContain('sample-comparison-report-')
+    await expect(page.locator('#dualExportStatus')).toContainText('Comparison report downloaded')
     await page.locator('.dual-settings-close').click()
 
     await primary.locator('#menuBtn').click()

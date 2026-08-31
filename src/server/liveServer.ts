@@ -39,8 +39,11 @@ import {
   serializeLogsTxt,
 } from '../core/logs/exportLogs'
 import { buildReportSession } from '../core/session/stats'
+import { buildComparisonReport } from '../core/session/comparison'
 import {
+  comparisonReportFilename,
   dualReportFilename,
+  generateComparisonReportHtml,
   generateDualReportHtml,
   generateReportHtml,
   reportFilename,
@@ -384,6 +387,9 @@ export class LiveServer {
         }
         if (url.pathname === '/api/dual/report' && req.method === 'GET') {
           return this.handleDualReport(url)
+        }
+        if (url.pathname === '/api/dual/comparison-report' && req.method === 'GET') {
+          return this.handleComparisonReport(url)
         }
         if (url.pathname === '/api/dual/sessions' && req.method === 'GET') {
           return this.handleDualSessions()
@@ -1948,6 +1954,113 @@ export class LiveServer {
       generatedAt,
     )
     const filename = dualReportFilename(generatedAt)
+    try {
+      const dir = join(this.config().reportsDir, 'Dual session')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, filename), html)
+    } catch {
+      /* la descarga no depende de la copia local */
+    }
+    return new Response(html, {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'content-disposition': `attachment; filename="${filename}"`,
+      },
+    })
+  }
+
+  /** GET /api/dual/comparison-report — one shared report over the overlapping live window. */
+  private handleComparisonReport(url: URL): Response {
+    if (this.secondaryMirrorSerial !== null) {
+      return Response.json(
+        { error: 'el reporte comparativo no está disponible mientras Device B refleja a Device A' },
+        { status: 409 },
+      )
+    }
+    if (
+      !this.dualActive ||
+      !this.serial ||
+      !this.device ||
+      !this.appStatus ||
+      !this.secondary.serial ||
+      !this.secondary.device ||
+      !this.secondary.app
+    ) {
+      return Response.json({ error: 'la comparación dual no está lista' }, { status: 409 })
+    }
+
+    const windowParam = url.searchParams.get('window') ?? 'full'
+    let windowMs: number | undefined
+    if (windowParam !== 'full') {
+      const minutes = Number(windowParam)
+      if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 480) {
+        return Response.json({ error: 'window inválida' }, { status: 400 })
+      }
+      windowMs = minutes * 60_000
+    }
+
+    const primarySegment = this.dualPrimaryBuffer.currentSegment(
+      this.appStatus.packageName,
+      this.serial,
+    )
+    const secondarySegment = this.dualSecondaryBuffer.currentSegment(
+      this.secondary.app.packageName,
+      this.secondary.serial,
+    )
+    if (!primarySegment.samples.length || !secondarySegment.samples.length) {
+      return Response.json(
+        { error: 'ambos dispositivos necesitan muestras relevadas con la app activa' },
+        { status: 409 },
+      )
+    }
+
+    const overlapStart = Math.max(primarySegment.samples[0]!.ts, secondarySegment.samples[0]!.ts)
+    const overlapEnd = Math.min(
+      primarySegment.samples[primarySegment.samples.length - 1]!.ts,
+      secondarySegment.samples[secondarySegment.samples.length - 1]!.ts,
+    )
+    if (overlapEnd < overlapStart) {
+      return Response.json(
+        { error: 'las ventanas relevadas todavía no se superponen' },
+        { status: 409 },
+      )
+    }
+    const from =
+      windowMs === undefined ? overlapStart : Math.max(overlapStart, overlapEnd - windowMs)
+    const inSharedWindow = (sample: Sample): boolean => sample.ts >= from && sample.ts <= overlapEnd
+    if (
+      !primarySegment.samples.some(inSharedWindow) ||
+      !secondarySegment.samples.some(inSharedWindow)
+    ) {
+      return Response.json(
+        { error: 'sin muestras de ambos dispositivos en la ventana compartida' },
+        { status: 409 },
+      )
+    }
+
+    const intervalOf = (samples: Sample[]): number =>
+      samples.length >= 2 ? Math.max(250, samples[1]!.ts - samples[0]!.ts) : this.intervalMs
+    const report = buildComparisonReport(
+      {
+        samples: primarySegment.samples,
+        packageName: this.appStatus.packageName,
+        device: this.device,
+        intervalMs: intervalOf(primarySegment.samples),
+        trimmed: primarySegment.trimmed,
+      },
+      {
+        samples: secondarySegment.samples,
+        packageName: this.secondary.app.packageName,
+        device: this.secondary.device,
+        intervalMs: intervalOf(secondarySegment.samples),
+        trimmed: secondarySegment.trimmed,
+      },
+      { startTs: from, endTs: overlapEnd },
+    )
+    const theme: 'light' | 'dark' = url.searchParams.get('theme') === 'light' ? 'light' : 'dark'
+    const generatedAt = new Date()
+    const html = generateComparisonReportHtml(report, theme, generatedAt)
+    const filename = comparisonReportFilename(generatedAt)
     try {
       const dir = join(this.config().reportsDir, 'Dual session')
       mkdirSync(dir, { recursive: true })

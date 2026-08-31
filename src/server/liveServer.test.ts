@@ -507,6 +507,10 @@ describe('LiveServer export/config/sesiones', () => {
       expect(blockedReport.status).toBe(409)
       expect(((await blockedReport.json()) as { error: string }).error).toContain('refleja')
 
+      const blockedComparison = await fetch(`${url}/api/dual/comparison-report?window=full`)
+      expect(blockedComparison.status).toBe(409)
+      expect(((await blockedComparison.json()) as { error: string }).error).toContain('refleja')
+
       const blockedSessions = (await (await fetch(`${url}/api/dual/sessions`)).json()) as {
         sessions: unknown[]
         current: string | null
@@ -569,6 +573,53 @@ describe('LiveServer export/config/sesiones', () => {
       expect(history.sessions).toHaveLength(1)
       expect(history.sessions[0]!.primaryPackage).toBe(PKG)
       expect(history.sessions[0]!.secondaryPackage).toBe(PKG)
+    } finally {
+      await server.stop()
+      rmSync(reportsDir, { recursive: true, force: true })
+      rmSync(sessionsDir, { recursive: true, force: true })
+    }
+  })
+
+  test('reporte comparativo usa las muestras superpuestas de A y B y guarda una copia', async () => {
+    const { existsSync, mkdtempSync, readdirSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const reportsDir = mkdtempSync(join(tmpdir(), 'comparison-reports-'))
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'comparison-sessions-'))
+    const { server, url } = await startServer(new Map([[PKG, 111]]), [], DEVICES, 'SERIAL-A', {
+      reportsDir,
+      sessionsDir,
+      intervalMs: 20,
+    })
+    try {
+      await fetch(`${url}/api/dual`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled: true }),
+      })
+      const selected = await fetch(`${url}/api/device`, {
+        method: 'POST',
+        body: JSON.stringify({ serial: 'SERIAL-B', pane: 'secondary' }),
+      })
+      expect(selected.status).toBe(200)
+
+      let report: Response | null = null
+      for (let attempt = 0; attempt < 20; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        report = await fetch(`${url}/api/dual/comparison-report?window=full&theme=light`)
+        if (report.status === 200) break
+      }
+      expect(report?.status).toBe(200)
+      expect(report?.headers.get('content-disposition')).toContain('sample-comparison-report-')
+      const html = await report!.text()
+      expect(html).toContain('window.ComparisonReportData')
+      expect(html).toContain('data-theme="light"')
+      expect(html).toContain('SERIAL-A')
+      expect(html).toContain('SERIAL-B')
+
+      const folder = join(reportsDir, 'Dual session')
+      expect(existsSync(folder)).toBe(true)
+      expect(readdirSync(folder).some((file) => file.startsWith('sample-comparison-report-'))).toBe(
+        true,
+      )
     } finally {
       await server.stop()
       rmSync(reportsDir, { recursive: true, force: true })

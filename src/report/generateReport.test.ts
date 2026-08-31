@@ -2,7 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import type { Sample } from '../core/schema'
 import type { LogEntry, LogLevel } from '../core/logs/logEntry'
 import { buildReportSession } from '../core/session/stats'
-import { generateDualReportHtml, generateReportHtml, reportFilename } from './generateReport'
+import { buildComparisonReport } from '../core/session/comparison'
+import {
+  comparisonReportFilename,
+  generateComparisonReportHtml,
+  generateDualReportHtml,
+  generateReportHtml,
+  reportFilename,
+} from './generateReport'
 
 function sample(t: number): Sample {
   return {
@@ -165,6 +172,68 @@ describe('generateReportHtml', () => {
     expect(html).toContain('com.sample.device-b')
     expect(html.match(/<iframe/g)).toHaveLength(2)
     expect(html).toContain('srcdoc="&lt;!doctype html&gt;')
+  })
+})
+
+describe('generateComparisonReportHtml', () => {
+  test('embeds both lanes and comparison data in one standalone HTML', () => {
+    const primaryDevice = {
+      serial: 'A',
+      platform: 'android' as const,
+      model: 'SM-A155M',
+      manufacturer: 'Samsung',
+      androidRelease: '16',
+      apiLevel: 36,
+      soc: null,
+      gpu: null,
+      ramTotalMb: 4096,
+      cores: 8,
+      refreshHz: 60,
+    }
+    const comparison = buildComparisonReport(
+      {
+        samples: [sample(0), sample(1), sample(2)],
+        packageName: 'com.sample.a',
+        device: primaryDevice,
+        intervalMs: 1000,
+        trimmed: false,
+      },
+      {
+        samples: [sample(0), sample(1), sample(2)].map((entry) => ({
+          ...entry,
+          cpu: entry.cpu === null ? null : entry.cpu + 5,
+        })),
+        packageName: 'com.sample.b',
+        device: { ...primaryDevice, serial: 'B', model: 'Pixel 9' },
+        intervalMs: 1000,
+        trimmed: false,
+      },
+    )
+    const html = generateComparisonReportHtml(comparison, 'dark', new Date('2026-08-31T12:00:00Z'))
+    expect(html).toContain('Comparison Report')
+    expect(html).toContain('window.ComparisonReportData')
+    expect(html).toContain('com.sample.a')
+    expect(html).toContain('com.sample.b')
+    expect(html).toContain('"id":"fps"')
+    expect(html).toContain('data:font/woff2;base64,')
+    expect(html).toContain('echarts')
+    for (const token of [
+      '__TITLE__',
+      '__THEME__',
+      '__FONTS_CSS__',
+      '__GENERATED__',
+      '__ECHARTS__',
+      '__REPORT_DATA__',
+      '__TEMPLATE_JS__',
+    ]) {
+      expect(html).not.toContain(token)
+    }
+  })
+
+  test('comparisonReportFilename uses a filesystem-safe UTC timestamp', () => {
+    expect(comparisonReportFilename(new Date('2026-08-31T12:34:56Z'))).toBe(
+      'sample-comparison-report-2026-08-31T12-34-56.html',
+    )
   })
 })
 

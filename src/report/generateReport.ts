@@ -5,8 +5,11 @@
 import { readFileSync } from 'node:fs'
 import templateHtmlPath from './template.html' with { type: 'file' }
 import templateJsPath from './template.js' with { type: 'file' }
+import comparisonTemplateHtmlPath from './comparisonTemplate.html' with { type: 'file' }
+import comparisonTemplateJsPath from './comparisonTemplate.js' with { type: 'file' }
 import { EMBEDDED_UI } from '../server/embeddedUi'
 import type { ReportSession } from '../core/session/stats'
+import type { ComparisonReport } from '../core/session/comparison'
 
 function read(path: string): Buffer {
   return readFileSync(path)
@@ -40,6 +43,11 @@ export function dualReportFilename(now: Date): string {
   return `sample-dual-report-${stamp}.html`
 }
 
+export function comparisonReportFilename(now: Date): string {
+  const stamp = now.toISOString().replace(/:/g, '-').replace(/\..*$/, '')
+  return `sample-comparison-report-${stamp}.html`
+}
+
 export function generateReportHtml(
   session: ReportSession,
   theme: 'light' | 'dark',
@@ -65,6 +73,31 @@ export function generateReportHtml(
   out = fill(out, '__ECHARTS__', echarts)
   // </script> dentro del JSON cortaría el <script> del template
   out = fill(out, '__REPORT_DATA__', JSON.stringify({ session }).replace(/<\//g, '<\\/'))
+  out = fill(out, '__TEMPLATE_JS__', js)
+  return out
+}
+
+/** Standalone comparison report with only semantically compatible device metrics. */
+export function generateComparisonReportHtml(
+  report: ComparisonReport,
+  theme: 'light' | 'dark',
+  generatedAt: Date,
+): string {
+  const html = read(comparisonTemplateHtmlPath as unknown as string).toString('utf8')
+  const js = read(comparisonTemplateJsPath).toString('utf8')
+  const echarts = read(EMBEDDED_UI['vendor/echarts.min.js']!).toString('utf8')
+  const fill = (src: string, token: string, value: string): string => src.split(token).join(value)
+  let out = html
+  out = fill(out, '__TITLE__', 'Device performance comparison')
+  out = fill(out, '__THEME__', theme)
+  out = fill(out, '__FONTS_CSS__', fontsCss())
+  out = fill(
+    out,
+    '__GENERATED__',
+    generatedAt.toISOString().replace('T', ' ').slice(0, 16) + ' UTC',
+  )
+  out = fill(out, '__ECHARTS__', echarts)
+  out = fill(out, '__REPORT_DATA__', JSON.stringify({ report }).replace(/<\//g, '<\\/'))
   out = fill(out, '__TEMPLATE_JS__', js)
   return out
 }

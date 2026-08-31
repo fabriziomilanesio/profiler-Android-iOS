@@ -145,6 +145,9 @@ export function comparabilityKey(metric: string, platform: Platform): string {
       return platform === 'ios' ? 'gpu.metal-device' : 'gpu.vendor-busy'
     case 'battery':
       return 'battery.level-percent'
+    case 'battery-temperature':
+      // Both paths expose the physical battery sensor in Celsius (dumpsys vs diagnostics).
+      return 'battery.temperature-celsius'
     default:
       return `${metric}.${platform}`
   }

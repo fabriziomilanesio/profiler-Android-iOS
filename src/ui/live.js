@@ -384,6 +384,7 @@
           var settingsBackdrop = root.querySelector('#dualSettingsBackdrop')
           var settingsStatus = root.querySelector('#dualSettingsStatus')
           var exportStatus = root.querySelector('#dualExportStatus')
+          var comparisonExport = root.querySelector('#dualComparisonExport')
           var mirrorNotice = root.querySelector('#dualMirrorNotice')
           var reportSettings = root.querySelector('#dualReportSettings')
           var records = root.querySelector('#dualRecords')
@@ -471,6 +472,49 @@
               })
           }
 
+          function downloadComparisonReport() {
+            if (mirrorActive) {
+              setDualStatus(
+                exportStatus,
+                'Comparison reports are unavailable while mirroring.',
+                'err',
+              )
+              return
+            }
+            comparisonExport.disabled = true
+            setDualStatus(exportStatus, 'Generating comparison report…')
+            var themeQuery = '&theme=' + encodeURIComponent(appearances.primary.theme)
+            fetch('/api/dual/comparison-report?window=full' + themeQuery)
+              .then(function (response) {
+                if (!response.ok) {
+                  return errorFromResponse(response).then(function (error) {
+                    throw error
+                  })
+                }
+                var disposition = response.headers.get('content-disposition') || ''
+                var match = disposition.match(/filename="([^"]+)"/)
+                return response.blob().then(function (blob) {
+                  var anchor = document.createElement('a')
+                  var href = URL.createObjectURL(blob)
+                  anchor.href = href
+                  anchor.download = match ? match[1] : 'sample-comparison-report.html'
+                  root.appendChild(anchor)
+                  anchor.click()
+                  anchor.remove()
+                  setTimeout(function () {
+                    URL.revokeObjectURL(href)
+                  }, 10000)
+                  setDualStatus(exportStatus, 'Comparison report downloaded.', 'ok')
+                })
+              })
+              .catch(function (error) {
+                setDualStatus(exportStatus, 'Export failed: ' + error.message, 'err')
+              })
+              .finally(function () {
+                comparisonExport.disabled = mirrorActive
+              })
+          }
+
           function loadDualRecords() {
             if (mirrorActive) {
               records.hidden = true
@@ -551,9 +595,7 @@
             var windowValue = target && target.getAttribute && target.getAttribute('data-window')
             if (windowValue) downloadDualReport('window=' + windowValue)
           })
-          root.querySelector('#dualComparisonExport').addEventListener('click', function () {
-            setDualStatus(exportStatus, 'Comparison report is ready for the next iteration.')
-          })
+          comparisonExport.addEventListener('click', downloadComparisonReport)
           root.querySelector('#dualSettingsSave').addEventListener('click', function () {
             var patch = {
               filterTerm: filterInput.value.trim(),

@@ -85,4 +85,10 @@ describe('comparabilityKey', () => {
   test('CPU sí: el spike confirmó que sysmontap reporta porcentaje del proceso', () => {
     expect(comparabilityKey('cpu', 'ios')).toBe(comparabilityKey('cpu', 'android'))
   })
+
+  test('temperatura de batería sí: ambos paths exponen el sensor físico en Celsius', () => {
+    expect(comparabilityKey('battery-temperature', 'ios')).toBe(
+      comparabilityKey('battery-temperature', 'android'),
+    )
+  })
 })

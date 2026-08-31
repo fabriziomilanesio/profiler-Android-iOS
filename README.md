@@ -244,6 +244,15 @@ sólo sus propias métricas en tiempo real, por lo que un device lento no frena 
 pantallas angostas los paneles se apilan verticalmente. Al salir con **Exit dual mode**, se
 elimina el panel B y se liberan sus streams, mientras el panel A queda como estaba.
 
+Desde el menú **Dual Settings**, **Export Comparison Report** descarga un HTML standalone
+con el tramo temporal ya relevado que ambos devices comparten. En vez de apilar dos reportes,
+calcula lado a lado los valores, deltas, cobertura y timelines de cada métrica que tenga la
+misma definición en las dos plataformas. Android–iOS compara FPS del compositor, CPU del
+proceso, drenaje y temperatura de batería; omite explícitamente PSS vs `physFootprint`, GPU
+vendor vs Metal, frame-times/jank, red y totales del device. Android–Android e iOS–iOS agregan
+sus métricas compatibles propias cuando contienen datos. El reporte enumera también todo lo
+excluido y el motivo, para que una ausencia nunca parezca un empate ni una falla del profiler.
+
 **Selector de apps**: no hace falta pasar `--package`. Sin flag, arranca con la **última app
 usada** (primera vez: `com.sample.oda.qa`) y desde el dashboard cambiás en caliente con el
 dropdown del header: lista las apps instaladas del device — `pm list packages -3` en Android,
