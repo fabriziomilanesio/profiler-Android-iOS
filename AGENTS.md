@@ -21,6 +21,33 @@ El nombre de una carpeta local no define la identidad del proyecto; verificar el
 - Conservar cambios locales ajenos a la tarea. No cambiar de rama ni restaurar archivos para
   hacer coincidir el árbol de trabajo con esta revisión.
 
+## Alcance del proyecto y política de ramas
+
+- Trabajar exclusivamente sobre archivos de un checkout del repositorio canónico
+  `https://github.com/fabriziomilanesio/profiler-Android-iOS`. Esta regla abarca exploración,
+  edición, pruebas y operaciones Git del proyecto. No usar copias sueltas, backups, mirrors
+  ni árboles de trabajo asociados a otro repositorio como fuente o destino de cambios.
+- Antes de editar, verificar `git rev-parse --show-toplevel`, `git remote -v` y
+  `git status --short --branch` dentro del checkout. El remoto debe identificar exactamente
+  `fabriziomilanesio/profiler-Android-iOS` (HTTPS o SSH). Si la carpeta inicial no es ese
+  checkout, localizarlo y ejecutar desde allí todos los comandos del proyecto.
+- No combinar el directorio Git de una copia con los archivos de otra mediante `--git-dir`
+  y `--work-tree`. Los worktrees registrados con Git del repositorio canónico sí son válidos.
+- Para funcionalidades, correcciones y refactors, trabajar normalmente en una rama dedicada,
+  por ejemplo `feat/dualReport` o `fixes/0003-installerPathPackage`. Si el usuario indicó una
+  rama, respetarla. Si ya se está en una rama apropiada, continuar allí sin recrearla.
+- Para trabajo nuevo, partir de `main` actualizado salvo que el usuario indique otra base.
+  No incluir cambios locales ajenos al crear o cambiar de rama; usar un worktree del mismo
+  repositorio si es necesario aislar el trabajo.
+- Reservar `main` principalmente para mantener `AGENTS.md`/documentación y para integrar las
+  ramas de cambios. No implementar funcionalidades o fixes directamente en `main` salvo
+  instrucción expresa del usuario. No fusionar ni publicar cambios sin autorización.
+- Antes de integrar una rama, revisar su diff y las validaciones pertinentes; actualizar esta
+  guía si cambia el funcionamiento. Mantener los cambios dentro del repositorio canónico y
+  preservar trabajo ajeno. No usar force-push salvo autorización específica.
+- Las reglas de entrada de la carpeta del proyecto sólo sirven para localizar este checkout;
+  la documentación y las reglas compartidas se mantienen en este `AGENTS.md` versionado.
+
 ## Qué hace la aplicación
 
 Profiler local para aplicaciones Android e iOS, con dashboard web en vivo, selección de
